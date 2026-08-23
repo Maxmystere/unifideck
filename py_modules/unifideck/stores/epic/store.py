@@ -301,29 +301,6 @@ class EpicStore(StoreBase):
         edge.clear_store_cookies("epicgames.com")
         return cast("AuthResult", await self._auth.start_auth())
 
-    async def reconcile_session(self) -> AuthResult:
-        """Re-run the token exchange after the user closed the shop.
-
-        Signing into a different account in the store browser
-        changes the WEB session but leaves our stored tokens on
-        the old account. This re-runs the OAuth exchange so they
-        follow. Because the live web session is still there, the
-        provider redirects straight through with no login form.
-
-        Deliberately NOT ``start_auth``: that clears this store's
-        cookies first, to force a fresh login form. Clearing them
-        here is the one thing that would guarantee this fails.
-        """
-        if self._auth is None:
-            return AuthResult(
-                success=False,
-                error="auth_not_configured",
-                store="epic",
-            )
-        return cast(
-            "AuthResult", await self._auth.start_auth(reconcile=True),
-        )
-
     async def complete_auth(self, code: str = "", **kwargs: Any) -> AuthResult:
         """Complete auth."""
         if await self.is_available():

@@ -114,8 +114,6 @@ CANONICAL_SCHEMA: dict[str, set[str]] = {
     "SHORTCUT_REMOVED":             {"app_id"},
     "STORE_AUTH_COMPLETE":          {"store"},
     "STORE_AUTH_FAILED":            {"error", "store"},
-    "STORE_SESSION_RECONCILED":     {"store"},
-    "STORE_SESSION_RECONCILE_FAILED": {"error", "store"},
     "STORE_AUTH_STARTED":           {"store"},
     "STORE_LOGOUT":                 {"store"},
     "STORE_REGISTERED":             set(),
