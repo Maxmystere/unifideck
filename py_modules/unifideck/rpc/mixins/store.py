@@ -83,42 +83,6 @@ class StoreRPCMixin:
         """
         return self.registry.get_store_infos()
 
-    async def reconcile_store_session(self, store_id: str) -> Any:
-        """Arm a token reconcile for ``store_id`` before its shop opens.
-
-        The user can sign into a *different* account inside the store
-        browser. That changes the web session but leaves our stored
-        tokens on the old account, so the library would keep syncing
-        the wrong one. This re-runs the OAuth exchange in the
-        background: it writes the store's auth-URL file and starts the
-        redirect monitor now, and the launcher redeems it by opening
-        that URL once the user closes the shop window.
-
-        Armed at open time rather than close time because by then the
-        launcher process — and the gamescope session its window needs
-        — is already gone.
-
-        Wrapper stores (Ubisoft, Battle.net) are refused: they have no
-        browser OAuth, and their rotated token is captured by the
-        session monitor that ``store_auth(store, "start")`` arms.
-
-        Never raises for an absent or unsupported store — the cart
-        must still open the shop when the reconcile cannot be armed.
-        """
-        from unifideck.launcher.wrapper_stores import is_wrapper_store
-        tag = f"[StoreRPC:reconcile:{store_id}]"
-        if is_wrapper_store(store_id):
-            return {"success": False, "error": "wrapper_store_uses_monitor"}
-        store = self.registry.get_store(store_id)
-        if store is None:
-            logger.warning("%s store not registered", tag)
-            return {"success": False, "error": "store_not_found"}
-        if not hasattr(store, "reconcile_session"):
-            logger.info("%s store does not support reconcile", tag)
-            return {"success": False, "error": "reconcile_not_supported"}
-        logger.info("%s arming session reconcile", tag)
-        return await store.reconcile_session()
-
     async def clear_store_auths(self) -> Any:
         """Sign out of every store and wipe cached credentials.
 

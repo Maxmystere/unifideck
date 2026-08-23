@@ -8,6 +8,7 @@ from pathlib import Path
 
 from unifideck.launcher.frontend_bridge import launcher_toast
 from unifideck.launcher.game_title import resolve_title
+from unifideck.launcher.proton.handlers import wrapper_clients
 from unifideck.launcher.proton.handlers.ubisoft_recovery import (
     ID_MAP_FILE,
     clone_template_into,
@@ -193,13 +194,10 @@ async def ubisoft_auth_launch(plan: ProtonLaunchPlan) -> int:
         "[launcher.proton.ubisoft] auth launch — opening UPC in %s",
         plan.prefix_path,
     )
-    # Sign-in is NOT a game launch — use a sign-in-specific toast instead of
-    # the generic "Launching Game", which confused users clicking sign-in.
-    launcher_toast(
-        "toasts.launcher.signingInUbisoftMessage",
-        i18n_title_key="toasts.launcher.signingInUbisoft",
-        game_title="Ubisoft Connect",
-    )
+    # NOT a game launch — the generic "Launching Game" confused users.
+    # Shared with Battle.net so the two clients say the same thing, and
+    # worded by action so a cart press doesn't say "sign in".
+    wrapper_clients.announce_client_open(plan, "ubisoft")
     upc_exe = _find_upc_exe(plan)
     if upc_exe is None:
         launcher_toast(

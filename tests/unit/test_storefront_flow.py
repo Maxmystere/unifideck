@@ -67,7 +67,6 @@ class _FakeEdge:
         self.launched: list[str] = []
         self.navigated: list[tuple[int, str]] = []
         self.closed: list[int] = []
-        self.auth_launched: list[str] = []
 
     # ── ports ────────────────────────────────────────────────────
     def xcloud_cdp_port(self) -> int:
@@ -85,8 +84,10 @@ class _FakeEdge:
         return self._launch_ok
 
     def launch_auth(self, url: str) -> bool:
-        self.auth_launched.append(url)
-        return True
+        raise AssertionError(
+            "the shop path opened an OAuth window — it must never touch "
+            "auth state",
+        )
 
     async def navigate_on_port(self, port: int, url: str) -> bool:
         self.navigated.append((port, url))
@@ -117,12 +118,6 @@ def _no_waiting(monkeypatch):
         return None
 
     monkeypatch.setattr(sf, "wait_for_browser_exit", _instant)
-    # No reconcile armed by default; the reconcile tests opt in.
-    monkeypatch.delenv("UNIFIDECK_STOREFRONT_RECONCILE", raising=False)
-    monkeypatch.setattr(
-        sf, "read_auth_url",
-        lambda store: (_ for _ in ()).throw(GameNotFoundError("none")),
-    )
 
 
 # ── Happy path ──────────────────────────────────────────────────────
@@ -134,7 +129,7 @@ def _no_waiting(monkeypatch):
     [
         ("epic", "store.epicgames.com"),
         ("gog", "www.gog.com"),
-        ("amazon", "gaming.amazon.com"),
+        ("amazon", "www.amazon.com"),
         ("microsoft", "www.xbox.com"),
     ],
 )
@@ -239,68 +234,16 @@ async def test_a_failed_reuse_closes_the_stale_targets_and_respawns() -> None:
     assert len(edge.launched) == 1
 
 
-# ── Reconcile tail ──────────────────────────────────────────────────
-
-
 @pytest.mark.asyncio
-async def test_the_reconcile_url_is_opened_after_the_shop_closes(
-    monkeypatch,
-) -> None:
-    """Phase 2: re-run the exchange so tokens follow an account switch."""
-    monkeypatch.setenv("UNIFIDECK_STOREFRONT_RECONCILE", "1")
-    monkeypatch.setattr(sf, "read_auth_url", lambda store: "https://oauth/x")
-    edge = _FakeEdge()
-
-    await sf.handle_store_storefront(_Ctx("epic"), edge)
-
-    assert edge.auth_launched == ["https://oauth/x"]
-
-
-@pytest.mark.asyncio
-async def test_a_stale_auth_url_is_not_opened_when_nothing_was_armed(
-    monkeypatch,
-) -> None:
-    """The URL file survives the LAST sign-in, so its presence proves nothing.
-
-    Without the env gate, closing a shop would open that stale OAuth URL
-    and pop a login window the user never asked for — with nothing left
-    waiting to capture a code.
-    """
-    monkeypatch.setattr(sf, "read_auth_url", lambda store: "https://oauth/stale")
-    edge = _FakeEdge()
-
-    result = await sf.handle_store_storefront(_Ctx("epic"), edge)
-
-    assert result.success is True
-    assert edge.auth_launched == []
-
-
-@pytest.mark.asyncio
-async def test_an_armed_reconcile_with_no_url_file_is_not_an_error(
-    monkeypatch,
-) -> None:
-    """The autouse fixture makes ``read_auth_url`` raise — the shop still wins."""
-    monkeypatch.setenv("UNIFIDECK_STOREFRONT_RECONCILE", "1")
-    edge = _FakeEdge()
-
-    result = await sf.handle_store_storefront(_Ctx("epic"), edge)
-
-    assert result.success is True
-    assert edge.auth_launched == []
-
-
-@pytest.mark.asyncio
-async def test_the_reused_window_is_not_waited_on(monkeypatch) -> None:
+async def test_the_reused_window_is_not_waited_on() -> None:
     """Someone else's launcher owns it and is already waiting.
 
     Waiting here too would hold this Steam shortcut "running" for the
-    full 30-minute ceiling, and would run a second reconcile against a
-    window that is still open.
+    full 30-minute ceiling over a window this process does not own.
     """
-    monkeypatch.setenv("UNIFIDECK_STOREFRONT_RECONCILE", "1")
-    monkeypatch.setattr(sf, "read_auth_url", lambda store: "https://oauth/x")
     edge = _FakeEdge(alive=(_SHOP_PORT,))
 
-    await sf.handle_store_storefront(_Ctx("epic"), edge)
+    result = await sf.handle_store_storefront(_Ctx("epic"), edge)
 
-    assert edge.auth_launched == []
+    assert result.success is True
+    assert edge.launched == []

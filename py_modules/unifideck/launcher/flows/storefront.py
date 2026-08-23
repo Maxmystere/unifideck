@@ -30,7 +30,6 @@ Two properties are load-bearing and easy to break:
 from __future__ import annotations
 
 import logging
-import os
 from typing import TYPE_CHECKING
 
 from unifideck.core.store_urls import storefront_url
@@ -40,7 +39,7 @@ from unifideck.launcher.types.errors import (
     GameNotFoundError,
 )
 
-from .auth import read_auth_url, wait_for_browser_exit
+from .auth import wait_for_browser_exit
 
 if TYPE_CHECKING:
     from unifideck.auth.edge_browser import EdgeBrowser
@@ -58,30 +57,10 @@ logger = logging.getLogger(__name__)
 # one, change the other.
 _MAX_STOREFRONT_SECONDS = 1800
 
-# Ceiling on the reconcile window that follows. With the web session
-# live the provider redirects through in a second or two and the
-# window closes itself; this only bounds the case where the session
-# was gone and the user is looking at a login form they never asked
-# for. Short on purpose — they came to shop, not to sign in.
-_MAX_RECONCILE_SECONDS = 90
-
-
 def _read_config_int(key: str, default: int) -> int:
     """Read an int from the merged config, cold-start safe."""
     from unifideck.utils.config_helpers import read_config_int_cold_start
     return read_config_int_cold_start(key, default)
-
-
-def _reconcile_armed() -> bool:
-    """Whether the frontend armed a token reconcile for this shop run.
-
-    Steam passes launch options as argv, and the dispatcher promotes any
-    ``UNIFIDECK_*`` token into the environment, so this reads what the
-    frontend set only after ``reconcile_store_session`` succeeded.
-    """
-    return os.environ.get(
-        "UNIFIDECK_STOREFRONT_RECONCILE", "",
-    ).strip() in ("1", "true", "yes")
 
 
 def _resolve_storefront_url(store: str | None) -> str:
@@ -150,68 +129,10 @@ async def _reuse_open_storefront(
     return False
 
 
-async def _redeem_reconcile(
-    edge_browser: EdgeBrowser, store: str,
-) -> None:
-    """Re-run the OAuth exchange so stored tokens match the shop's account.
-
-    The user may have signed into a *different* account inside the shop.
-    That changes the web session but leaves our CLI tokens on the old
-    account, so the library would keep syncing the wrong one, and no
-    amount of reading Chromium's encrypted cookie DB can tell us the
-    new identity. Re-running the exchange can.
-
-    ``reconcile_store_session`` armed this before the shop opened: the
-    plugin process wrote the store's auth-URL file and started the
-    redirect monitor. All that is left is to *visit* the URL. Because
-    this path never clears the store's cookies, the provider redirects
-    straight through with no login form — a second or two — and the
-    monitor (which polls this same CDP port) captures the code.
-
-    Gated on ``UNIFIDECK_STOREFRONT_RECONCILE``, which the frontend sets
-    only when the arming RPC actually succeeded. The gate is not
-    belt-and-braces: the auth-URL file persists from the last REAL
-    sign-in, so without it an un-armed shop close would open a stale
-    OAuth URL and pop a login window the user never asked for. Nothing
-    would be waiting to capture the code, either.
-
-    Entirely best-effort beyond that. Every failure is swallowed: the
-    shop window has already served its purpose, and the frontend
-    re-checks auth state regardless.
-    """
-    if not _reconcile_armed():
-        logger.info(
-            "[launcher.storefront] no reconcile armed for %s", store,
-        )
-        return
-    try:
-        auth_url = read_auth_url(store)
-    except Exception as e:
-        logger.info(
-            "[launcher.storefront] no reconcile armed for %s (%s)",
-            store, e,
-        )
-        return
-    logger.info("[launcher.storefront] reconciling %s session", store)
-    if not edge_browser.launch_auth(auth_url):
-        logger.warning(
-            "[launcher.storefront] reconcile browser failed to start",
-        )
-        return
-    await wait_for_browser_exit(
-        edge_browser,
-        _read_config_int(
-            "launcher.storefront_reconcile_max_seconds",
-            _MAX_RECONCILE_SECONDS,
-        ),
-        log_tag="launcher.storefront.reconcile",
-    )
-
-
 async def _spawn_and_wait(
     edge_browser: EdgeBrowser, url: str, store: str,
 ) -> Result:
-    """Spawn the shop window, outlive it, then reconcile the session.
+    """Spawn the shop window and outlive it.
 
     The wait is the point: Steam ends the shortcut's gamescope session
     the moment this process exits, and that destroys the window. Only
@@ -233,7 +154,6 @@ async def _spawn_and_wait(
         log_tag="launcher.storefront",
     )
     logger.info("[launcher.storefront] %s store window closed", store)
-    await _redeem_reconcile(edge_browser, store)
     return Result(success=True, store=store)
 
 

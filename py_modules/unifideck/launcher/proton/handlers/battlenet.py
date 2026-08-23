@@ -463,10 +463,7 @@ async def battlenet_auth_launch(plan: ProtonLaunchPlan) -> int:
             titled=False,
             prefix=str(plan.prefix_path),
         )
-    launcher_toast(
-        "toasts.launcher.signingInBattlenetMessage",
-        i18n_title_key="toasts.launcher.signingInBattlenet",
-    )
+    wrapper_clients.announce_client_open(plan, "battlenet")
     # The same clearing every other path does before starting a client, and
     # for a sharper reason here: this run uses the default
     # ``PROTON_VERB=waitforexitandrun``, whose ``wineserver -w`` blocks on the

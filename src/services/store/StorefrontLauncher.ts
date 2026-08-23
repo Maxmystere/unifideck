@@ -1,6 +1,6 @@
 /**
  * StorefrontLauncher — open a store's shop with the session the user
- * already has, and put the plugin's tokens back in step afterwards.
+ * already has, and refresh the library once they close it.
  *
  * Deliberately NOT part of `AuthDispatcher`. Opening a shop is not a
  * sign-in: it must not take the auth mutex, must not raise the
@@ -14,26 +14,31 @@
  *
  *   Epic / GOG / Amazon / Microsoft — sign in through the bundled Edge
  *     against a persistent profile. The shop opens in that same
- *     profile, so the live web session carries over. Their cookies are
- *     cleared only immediately BEFORE a real sign-in, which is exactly
- *     why this path must never call `store_auth(store, "start")`.
+ *     profile, so the live web session carries over.
  *
  *   Ubisoft / Battle.net — sign in inside a Wine prefix, in the vendor
  *     client. They have no browser session at all; their signed-in shop
  *     is the client's own Store/Shop tab, reached by opening the client
- *     in the auth prefix. Here `store_auth(store, "start")` IS called,
- *     and is load-bearing: it arms the session monitor that captures a
- *     rotated token. Neither wrapper store's `start_auth` touches
- *     cookies or deletes anything.
+ *     in the auth prefix.
+ *
+ * **Nothing here touches auth state.** No cookie clearing, no
+ * `store_auth`, no re-exchange. An earlier version re-ran each store's
+ * OAuth exchange after the shop closed, so the stored tokens would
+ * follow an account switch made in there. It had to go: every armed
+ * flow polls the SAME shared CDP port, so three of them running at once
+ * all captured the same Microsoft authorization code — GOG posted it to
+ * `auth.gog.com` (HTTP 400) and legendary "registered" Epic with it.
+ * Opening a shop must not be able to damage a sign-in. An account
+ * switched inside the shop is now handled the ordinary way: the
+ * post-close status check notices a dead token, and the user signs in
+ * again.
  */
 import { call } from "@decky/api";
 import { EventBusClient } from "../../api/event-bus-client";
 import { rpcRoutes } from "../../api/rpc-routes";
-import { unwrapRpcEnvelope } from "../../api/useRPC";
 import { prepareForSync } from "../../lib/steam-bridge/prepare-sync";
 import { watchAppStopped } from "../../lib/steam-bridge/shortcut-types";
 import { authStore } from "../../stores/auth-store";
-import { Events } from "../../types/events";
 import {
   launchAmazonStorefrontViaShortcut,
   launchEpicStorefrontViaShortcut,
@@ -47,33 +52,9 @@ import { storeReportsConnected } from "../auth/store-status";
 import type { ShortcutLaunchResult } from "../../lib/steam-bridge/shortcut-types";
 import type { StoreId } from "../../types/api";
 
-/**
- * How long to wait after the shop closes for the token reconcile to
- * land before syncing anyway.
- *
- * With the web session live the provider redirects through without a
- * login form, so this normally resolves in a second or two. The wait
- * matters because the sync must use the tokens for whatever account the
- * user ended on — syncing first would pull the OLD account's library.
- */
-const RECONCILE_WAIT_MS = 45 * 1000;
-
-/**
- * Env token telling the launcher a reconcile was armed for THIS run.
- *
- * The launcher must not simply look for the store's auth-URL file: that
- * file survives from the last real sign-in, so an un-armed shop close
- * would open a stale OAuth URL and pop a login window nobody asked for,
- * with nothing waiting to capture the code.
- */
-const RECONCILE_ENV = "UNIFIDECK_STOREFRONT_RECONCILE";
-
 /** Stores whose shop is a web page in the shared Edge profile. */
 const BROWSER_STOREFRONTS: Partial<
-  Record<
-    StoreId,
-    (env: Record<string, string>) => Promise<ShortcutLaunchResult>
-  >
+  Record<StoreId, () => Promise<ShortcutLaunchResult>>
 > = {
   epic: launchEpicStorefrontViaShortcut,
   gog: launchGogStorefrontViaShortcut,
@@ -81,7 +62,16 @@ const BROWSER_STOREFRONTS: Partial<
   microsoft: launchMicrosoftStorefrontViaShortcut,
 };
 
-/** Stores whose shop is a tab inside their own Windows client. */
+/**
+ * Stores whose shop is a tab inside their own Windows client.
+ *
+ * Note what is NOT here: the `store_auth(store, "start")` kick a real
+ * sign-in makes. That call arms the wrapper session monitor and emits
+ * `STORE_AUTH_COMPLETE` when it fires, which on the shop path only
+ * produced a redundant library sync per press — and coincided with a
+ * Ubisoft session going invalid. Opening the client to browse must not
+ * pretend to be a sign-in.
+ */
 const CLIENT_STOREFRONTS: Partial<
   Record<StoreId, () => Promise<ShortcutLaunchResult>>
 > = {
@@ -96,72 +86,18 @@ export function hasStorefront(store: StoreId): boolean {
   return store in BROWSER_STOREFRONTS || store in CLIENT_STOREFRONTS;
 }
 
-/** Resolve one bus event for `store`, or time out. Never rejects. */
-function waitForReconcile(store: StoreId): Promise<void> {
-  return new Promise<void>((resolve) => {
-    const unsubs: Array<() => void> = [];
-    let settled = false;
-    const finish = (): void => {
-      if (settled) return;
-      settled = true;
-      for (const u of unsubs) u();
-      resolve();
-    };
-    const onEvent = (payload: Record<string, unknown>): void => {
-      if (payload.store === store) finish();
-    };
-    unsubs.push(
-      EventBusClient.subscribe(Events.STORE_SESSION_RECONCILED, onEvent),
-      EventBusClient.subscribe(Events.STORE_SESSION_RECONCILE_FAILED, onEvent),
-    );
-    const timer = window.setTimeout(finish, RECONCILE_WAIT_MS);
-    unsubs.push(() => window.clearTimeout(timer));
-  });
-}
-
 /**
- * Arm the token reconcile that runs once the shop window closes.
- *
- * Returns whether it actually took — the launcher only redeems the
- * armed URL when told so explicitly. Best-effort otherwise: a store
- * that cannot reconcile must still get its shop opened.
- */
-async function armReconcile(store: StoreId): Promise<boolean> {
-  try {
-    const raw = await call<[StoreId], unknown>(
-      rpcRoutes.reconcileStoreSession,
-      store,
-    );
-    const data = unwrapRpcEnvelope<{ success?: boolean }>(raw, {
-      route: rpcRoutes.reconcileStoreSession,
-      throwing: false,
-    });
-    return data?.success === true;
-  } catch (e) {
-    console.warn(`[StorefrontLauncher:${store}] reconcile arm failed:`, e);
-    return false;
-  }
-}
-
-/**
- * Bring the plugin back in step with whatever happened in the shop.
+ * Refresh auth + library once the shop window closes.
  *
  * Order matters. Refresh auth status FIRST, so a token that died in
- * there (the user signed out, or switched to an account we could not
- * re-exchange for) flips the row to disconnected. Only then sync — and
- * only if the store still reports connected, because `request_auth_sync`
- * triggers the post-sync reconcile sweep, which REMOVES a logged-out
- * store's shortcuts. Syncing a store we just lost would delete the
- * user's library tiles for it.
+ * there (the user signed out, or switched accounts) flips the row back
+ * to "Sign in". Only then sync — and only if the store still reports
+ * connected, because `request_auth_sync` triggers the post-sync
+ * reconcile sweep, which REMOVES a logged-out store's shortcuts.
+ * Syncing a store we just lost would delete the user's library tiles
+ * for it.
  */
-async function settleAfterClose(
-  store: StoreId,
-  reconciling: boolean,
-): Promise<void> {
-  // Only wait when there is something to wait for. Waiting on a
-  // reconcile that was never armed would just burn the full timeout
-  // before every post-shop sync.
-  if (reconciling) await waitForReconcile(store);
+async function settleAfterClose(store: StoreId): Promise<void> {
   await authStore.refetch();
   if (!(await storeReportsConnected(store))) {
     console.log(
@@ -178,44 +114,25 @@ async function settleAfterClose(
 }
 
 /**
- * Open `store`'s shop, then settle auth + library state once it closes.
+ * Open `store`'s shop, then refresh state once it closes.
  *
- * Resolves as soon as the window has been asked to open — the settle
- * work continues in the background, keyed off Steam's app-stopped
+ * Resolves as soon as the window has been asked to open — the refresh
+ * continues in the background, keyed off Steam's app-stopped
  * notification, so the QAM stays responsive while the user shops.
  */
 export async function openStorefront(
   store: StoreId,
 ): Promise<ShortcutLaunchResult> {
-  const browserLaunch = BROWSER_STOREFRONTS[store];
-  const clientLaunch = CLIENT_STOREFRONTS[store];
-  if (!browserLaunch && !clientLaunch) {
+  const launch = BROWSER_STOREFRONTS[store] ?? CLIENT_STOREFRONTS[store];
+  if (!launch) {
     return { success: false, error: `No storefront for ${store}` };
   }
   EventBusClient.bumpToFast();
-  let result: ShortcutLaunchResult;
-  let reconciling = false;
-  if (browserLaunch) {
-    reconciling = await armReconcile(store);
-    result = await browserLaunch(reconciling ? { [RECONCILE_ENV]: "1" } : {});
-  } else {
-    // The wrapper stores' own arming step. Unlike the browser stores'
-    // reconcile, this is the ordinary sign-in kick — it starts the
-    // session monitor, which is what notices a token the vendor client
-    // rotates while the user is in its shop.
-    await call<[StoreId, string], unknown>(
-      rpcRoutes.storeAuth,
-      store,
-      "start",
-    ).catch((e) => {
-      console.warn(`[StorefrontLauncher:${store}] store_auth kick failed:`, e);
-    });
-    result = await clientLaunch!();
-  }
+  const result = await launch();
   const appId = result.app_id;
   if (result.success && appId) {
     watchAppStopped(appId, () => {
-      void settleAfterClose(store, reconciling);
+      void settleAfterClose(store);
     });
   }
   return result;

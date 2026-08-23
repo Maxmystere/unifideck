@@ -294,3 +294,36 @@ def live_client_prefixes(
         if image_name(proc_field(pid, "cmdline")) in images:
             found[prefix] = Path(prefix)
     return list(found.values())
+
+
+# ── Opening the client: one toast, one wording ──────────────────────
+
+# The client the user actually sees, per store. Interpolated into the
+# shared toast so the two stores differ only by name.
+_CLIENT_NAMES = {"ubisoft": "Ubisoft Connect", "battlenet": "Battle.net"}
+
+
+def announce_client_open(plan: object, store: str) -> None:
+    """Toast that ``store``'s client is opening, worded by why.
+
+    Both wrapper stores open the same client the same way for two
+    different reasons — signing in, and browsing its Store/Shop tab —
+    so the wording must vary by ACTION, not by store. It used to vary
+    by store and not by action: Ubisoft said "Signing in to Ubisoft
+    Connect. Sign in there, then return." while Battle.net said
+    "Battle.net Sign-In / Opening the Battle.net client so you can sign
+    in…", and both said it even when the user had pressed the cart.
+
+    Kept here rather than in either handler so a third wrapper store
+    cannot reintroduce the divergence.
+    """
+    from unifideck.launcher.frontend_bridge import launcher_toast
+
+    context = getattr(plan, "context", None)
+    is_shop = getattr(context, "action", None) == "storefront"
+    key = "wrapperStore" if is_shop else "wrapperSignIn"
+    launcher_toast(
+        f"toasts.launcher.{key}Message",
+        i18n_title_key=f"toasts.launcher.{key}",
+        i18n_params={"client": _CLIENT_NAMES.get(store, store)},
+    )

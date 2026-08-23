@@ -48,11 +48,18 @@ def test_search_url_is_empty_for_an_unknown_store() -> None:
     [
         ("epic", "store.epicgames.com"),
         ("gog", "www.gog.com"),
-        ("amazon", "gaming.amazon.com"),
+        ("amazon", "www.amazon.com"),
         ("microsoft", "www.xbox.com"),
     ],
 )
 def test_every_browser_store_has_a_shop(store: str, host: str) -> None:
+    """Amazon points at the MAIN site, not gaming.amazon.com.
+
+    Measured on device: nile's OAuth plants its session on
+    ``amazon.com``, and ``gaming.amazon.com`` (Prime Gaming / Luna)
+    loaded signed OUT with that cookie. The main site accepts it, and
+    both are one tap away from its nav.
+    """
     url = storefront_url(store)
     assert url.startswith("https://")
     assert host in url

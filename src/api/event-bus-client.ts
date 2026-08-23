@@ -107,13 +107,6 @@ const STALE_ON_RELOAD_EVENTS = new Set<string>([
   "sync_skipped",
   "post_sync_phase_changed",
   "shortcut_reconcile_complete",
-  // A session reconcile only means anything to the ``StorefrontLauncher``
-  // call that is waiting on it right now. A reconcile that resolved in a
-  // prior session belongs to a shop window that is long closed, and
-  // replaying it would make this session run a library sync it has no
-  // reason to run.
-  "store_session_reconciled",
-  "store_session_reconcile_failed",
 ]);
 
 type Handler = (payload: Record<string, unknown>) => void;

@@ -163,7 +163,6 @@ interface AuthShortcutContextRPC {
 export async function launchAuthViaShortcut(
   config: AuthShortcutConfig,
   action: ShortcutAction = "auth",
-  extraEnv: Record<string, string> = {},
 ): Promise<AuthShortcutLaunchResult> {
   const tag = logTag(config);
   const isShop = action === "storefront";
@@ -197,20 +196,7 @@ export async function launchAuthViaShortcut(
     };
   }
   const tempStoreId = `${idPrefix}-${Date.now()}`;
-  // Steam hands launch options to the launcher as argv; the dispatcher
-  // promotes any UNIFIDECK_* token into its environment. That is the
-  // only channel we have for per-run flags.
-  const envTokens = Object.entries(extraEnv)
-    .filter(([, v]) => Boolean(v))
-    .map(([k, v]) => `${k}=${v}`)
-    .join(" ");
-  const tempLaunchOptions = [
-    tempStoreId,
-    `${config.actionEnvVar}=${action}`,
-    envTokens,
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const tempLaunchOptions = `${tempStoreId} ${config.actionEnvVar}=${action}`;
   const tempAppId = await createTemporaryShortcut({
     appName,
     launcherPath: ctx.launcher_path,
@@ -310,25 +296,21 @@ export const launchMicrosoftAuthViaShortcut =
  * what carries the session over — see
  * `py_modules/unifideck/launcher/flows/storefront.py`.
  */
-export const launchEpicStorefrontViaShortcut = (
-  env: Record<string, string> = {},
-): Promise<AuthShortcutLaunchResult> =>
-  launchAuthViaShortcut(EPIC_AUTH_CONFIG, "storefront", env);
+export const launchEpicStorefrontViaShortcut =
+  (): Promise<AuthShortcutLaunchResult> =>
+    launchAuthViaShortcut(EPIC_AUTH_CONFIG, "storefront");
 
 /** GOG shop. See {@link launchEpicStorefrontViaShortcut}. */
-export const launchGogStorefrontViaShortcut = (
-  env: Record<string, string> = {},
-): Promise<AuthShortcutLaunchResult> =>
-  launchAuthViaShortcut(GOG_AUTH_CONFIG, "storefront", env);
+export const launchGogStorefrontViaShortcut =
+  (): Promise<AuthShortcutLaunchResult> =>
+    launchAuthViaShortcut(GOG_AUTH_CONFIG, "storefront");
 
 /** Prime Gaming, where Amazon titles are claimed rather than bought. */
-export const launchAmazonStorefrontViaShortcut = (
-  env: Record<string, string> = {},
-): Promise<AuthShortcutLaunchResult> =>
-  launchAuthViaShortcut(AMAZON_AUTH_CONFIG, "storefront", env);
+export const launchAmazonStorefrontViaShortcut =
+  (): Promise<AuthShortcutLaunchResult> =>
+    launchAuthViaShortcut(AMAZON_AUTH_CONFIG, "storefront");
 
 /** Xbox / Game Pass. See {@link launchEpicStorefrontViaShortcut}. */
-export const launchMicrosoftStorefrontViaShortcut = (
-  env: Record<string, string> = {},
-): Promise<AuthShortcutLaunchResult> =>
-  launchAuthViaShortcut(MICROSOFT_AUTH_CONFIG, "storefront", env);
+export const launchMicrosoftStorefrontViaShortcut =
+  (): Promise<AuthShortcutLaunchResult> =>
+    launchAuthViaShortcut(MICROSOFT_AUTH_CONFIG, "storefront");

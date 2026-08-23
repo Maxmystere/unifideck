@@ -51,16 +51,20 @@ import urllib.parse
 #               cookies reach the store subdomain.
 #   gog       — login lands on auth.gog.com / login.gog.com; .gog.com
 #               cookies reach www.
-#   amazon    — nile's OAuth lands on amazon.com; Prime Gaming (where
-#               Amazon Games titles are *claimed*, not bought) is the
-#               only meaningful shop for this store.
+#   amazon    — www.amazon.com, NOT gaming.amazon.com. Measured on
+#               device: nile's OAuth lands on ``amazon.com/ap/maplanding``
+#               and plants the session there, but gaming.amazon.com
+#               (Prime Gaming / Luna) loaded signed OUT — it does not
+#               accept that cookie. The main site does, and Prime Gaming
+#               and Luna are both one tap away from its nav, so the user
+#               reaches them already signed in.
 #   microsoft — /play is the Game Pass cloud catalogue, and xbox.com is
 #               the domain EdgeProfileManager.has_xbox_session() reads,
 #               i.e. the one we know the session is planted on.
 _STOREFRONT_URLS: dict[str, str] = {
     "epic": "https://store.epicgames.com/",
     "gog": "https://www.gog.com/",
-    "amazon": "https://gaming.amazon.com/home",
+    "amazon": "https://www.amazon.com/",
     "microsoft": "https://www.xbox.com/play",
 }
 
