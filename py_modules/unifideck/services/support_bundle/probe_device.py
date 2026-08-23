@@ -22,6 +22,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+from unifideck.utils.device import detect_device_type
+from unifideck.utils.vulkan import as_dict, detect_32bit_vulkan
+
 from . import procscan
 
 logger = logging.getLogger(__name__)
@@ -66,12 +69,18 @@ def _parse_env_file(text: str) -> dict[str, str]:
 
 
 def device_block() -> dict[str, Any]:
-    """DMI identity: vendor, model, board, BIOS."""
+    """DMI identity: vendor, model, board, BIOS.
+
+    ``device_type`` is the *derived* class (deck/machine/other) rather
+    than another raw field, so a bundle states what the hardware is
+    instead of leaving a reader to recognise a codename.
+    """
     if not _DMI.is_dir():
         return {"available": False, "note": "no DMI (VM, container, or CI)"}
     values: dict[str, Any] = {"available": True}
     for field in _DMI_FIELDS:
         values[field] = _read_line(_DMI / field) or "unknown"
+    values["device_type"] = detect_device_type().value
     # Valve really does export these mixed-case; upper-casing them
     # would read nothing.
     values["steam_deck_env"] = os.environ.get("SteamDeck", "")  # noqa: SIM112
@@ -144,19 +153,26 @@ def cpu_block() -> dict[str, Any]:
 
 
 def gpu_block() -> dict[str, Any]:
-    """DRM driver and PCI id per card, plus attached displays."""
+    """DRM driver and PCI id per card, displays, and the Vulkan ICD inventory.
+
+    The ICD list earns its place the hard way: a Battle.net install was
+    refused for want of a 32-bit Vulkan driver on a machine that had one,
+    and answering "did it really?" meant cross-reading Steam's shader log
+    because this bundle recorded nothing about Vulkan at all.
+    """
     cards: list[dict[str, Any]] = []
     drm = Path("/sys/class/drm")
+    vulkan = as_dict(detect_32bit_vulkan())
     if not drm.is_dir():
-        return {"cards": cards, "displays": []}
+        return {"cards": cards, "displays": [], "vulkan": vulkan}
     try:
         entries = sorted(drm.iterdir())
     except OSError:
-        return {"cards": cards, "displays": []}
+        return {"cards": cards, "displays": [], "vulkan": vulkan}
     for entry in entries:
         if entry.name.startswith("card") and "-" not in entry.name:
             cards.append(_card_info(entry))
-    return {"cards": cards, "displays": _displays(entries)}
+    return {"cards": cards, "displays": _displays(entries), "vulkan": vulkan}
 
 
 def _card_info(entry: Path) -> dict[str, Any]:

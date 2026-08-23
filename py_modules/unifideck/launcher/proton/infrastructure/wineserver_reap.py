@@ -18,9 +18,23 @@ dev=66312 ino=0x3e07ce had four wineservers piled on
 
 This module reaps the wineserver(s) bound to a given prefix (by matching
 the server dir in their open fds), and sweeps server dirs whose owning
-prefix no longer exists. Deliberately *surgical* — it targets the server
-dir of a specific prefix, so a wineserver for a game the user is actually
-running (a different prefix → different server dir) is never touched.
+prefix no longer exists.
+
+**The scope is one prefix, not one process tree. Every process in that
+prefix dies — live or orphaned, whoever started it.** A different prefix
+means a different server dir and is never touched, but that is the only
+thing this is surgical about. Callers must own the prefix.
+
+An earlier version of this docstring promised that "a wineserver for a
+game the user is actually running is never touched", reasoning that a
+running game lives in its own prefix. That holds for every store whose
+prefix hosts exactly one umu run — and is false for Battle.net, where a
+long-lived client and its short-lived ``--exec`` commands share one
+prefix. The launcher's phase-C exec is cancelled on a 60 s timeout,
+which reached here and SIGKILLed the client the *user's own launch* had
+started: the Battle.net Agent died mid-download, and every Diablo II
+install stalled inside a minute. See ``handlers/battlenet.py`` and
+``umu_runtime.run_umu_with_retry``'s ``reap_wineserver`` opt-out.
 """
 from __future__ import annotations
 
@@ -89,6 +103,30 @@ def _pids_holding_server_dir(server_name: str) -> list[int]:
                 pids.append(pid)
                 break
     return pids
+
+
+def prefix_wine_pids(prefix: Path | str) -> list[int]:
+    """PIDs of every Wine process bound to ``prefix``, without killing any.
+
+    The read-only half of :func:`reap_prefix_wineserver`, split out because
+    "is anything alive in this prefix" is a question worth asking on its own —
+    a live wineserver owns the prefix registry and rewrites it from memory
+    when it exits, so a write underneath one is discarded in silence. See
+    ``wine_registry.registry_is_writable``, which takes this count.
+
+    Deliberately here rather than reusing ``handlers/battlenet_watch.scan``:
+    that module is Blizzard-specific (its ``EXCLUDED_IMAGES`` and
+    ``_client_pids`` name Battle.net images), and this is asked from
+    store-agnostic dispatch.
+
+    Empty for a prefix that cannot be stat'd, which is the same answer a
+    prefix with nothing running gives — both mean "nothing owns the
+    registry", and neither is an error.
+    """
+    server_name = server_dir_for_prefix(Path(prefix))
+    if server_name is None:
+        return []
+    return _pids_holding_server_dir(server_name)
 
 
 def reap_prefix_wineserver(prefix: Path) -> int:
