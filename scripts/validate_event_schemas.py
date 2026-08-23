@@ -91,7 +91,6 @@ CANONICAL_SCHEMA: dict[str, set[str]] = {
     "DOWNLOAD_PROGRESS":            {"eta_seconds", "game_id", "progress", "speed_mbps", "store"},
     "DOWNLOAD_QUEUED":              {"item"},
     "DOWNLOAD_STARTED":             {"game_id", "item", "store"},
-    "GAME_INSTALLED":               {"executable", "game_id", "install_path", "store", "title"},
     "GAME_LAUNCHED":                {"app_id", "game_id", "store", "title"},
     "GAME_STOPPED":                 {"app_id", "elapsed_seconds", "exit_code", "game_id", "store", "terminated_by_signal"},
     "GAME_UNINSTALLED":             {"game_id", "store"},

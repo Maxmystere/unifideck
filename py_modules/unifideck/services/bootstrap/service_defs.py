@@ -100,7 +100,7 @@ _SERVICE_DEFS: tuple[tuple[Any, ...], ...] = (
     (
         "proton", "unifideck.services.proton_service",
         "ProtonService",
-        lambda b, r, c, cfg, p, pl: (b, p.config_vdf_path),
+        lambda b, r, c, cfg, p, pl: (b,),
         lambda b, r, c, cfg, p, pl: {},
     ),
     (

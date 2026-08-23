@@ -62,7 +62,6 @@ const WATCHED_EVENTS: EventName[] = [
   // → UPC — works; this allowlist omission was the whole bug).
   "ubisoft_install_launch_requested",
   "battlenet_install_launch_requested",
-  "game_installed",
   "game_uninstalled",
   "game_update_available",
   "game_launched",

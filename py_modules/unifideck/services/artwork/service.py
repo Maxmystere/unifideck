@@ -2,10 +2,12 @@
 
 EventBus subscriber that downloads game artwork from SteamGridDB
 and writes files to Steam's grid/ directory so non-Steam
-shortcuts display rich cover art. Subscribes to GAME_INSTALLED
-(fetch newly-installed game) and SYNC_COMPLETE (bulk-fetch games
-missing artwork). Concurrency capped via ``asyncio.Semaphore``
-to stay under SGDB's rate limit.
+shortcuts display rich cover art. Game covers come from the bulk
+post-sync phase (``POST_SYNC_PHASE_CHANGED``, gated behind
+MetadataService so the three services don't hammer Steam's
+``storesearch`` in parallel), which covers every owned game
+whether installed or not. Concurrency capped via
+``asyncio.Semaphore`` to stay under SGDB's rate limit.
 """
 from __future__ import annotations
 

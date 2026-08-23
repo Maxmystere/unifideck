@@ -60,8 +60,6 @@ validate_i18n  # noqa: F821
 # (call_plugin_method), never by the Python codebase.
 list_supported_verbs  # noqa: F821
 resolve_user_config_path  # noqa: F821
-discover_installed_games  # noqa: F821
-discover_and_log  # noqa: F821
 clear_store_cookies  # noqa: F821
 
 # ── Public utility modules (cross-package consumers) ─────────────

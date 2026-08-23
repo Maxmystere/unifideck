@@ -1,8 +1,11 @@
 """services/artwork/event_handlers.py — EventBus subscribers.
 
-4 ``@subscribe``-decorated handlers driving the artwork
-pipeline. All ultimately call ``self.fetch_artwork`` on the
-host; they differ in trigger signals and payload shapes.
+``@subscribe``-decorated handlers driving the artwork pipeline.
+All ultimately call ``self.fetch_artwork`` on the host; they
+differ in trigger signals and payload shapes. The bulk
+``POST_SYNC_PHASE_CHANGED`` handler is the one that covers game
+shortcuts — see the note above ``_on_artwork_request`` for why
+there is no install-time handler.
 """
 from __future__ import annotations
 
@@ -119,24 +122,13 @@ class _EventHandlersMixin:
     # Handlers assume host provides fetch_artwork
     # async def fetch_artwork(self, app_id: int, store: str, game_id: str, title: str) -> dict: ...
 
-    @subscribe(Events.GAME_INSTALLED)
-    async def _on_game_installed(self: Any, **kwargs: Any) -> None:
-        """Fetch artwork immediately after a new install.
-
-        Missing ``app_id``/``store``/``game_id`` → silent skip
-        (partial payloads happen when the emitter failed to
-        resolve one of the fields).
-        """
-        app_id = kwargs.get("app_id")
-        store = kwargs.get("store")
-        game_id = kwargs.get("game_id")
-        title = kwargs.get("title")
-
-        if not all((app_id, store, game_id, title)):
-            return
-
-        # Fire and forget; background task
-        _track(asyncio.create_task(self.fetch_artwork(app_id, store, game_id, title)))
+    # There is deliberately no install-time handler. A game's shortcut —
+    # and therefore its artwork — is created at SYNC time; installing only
+    # flips that shortcut's install tag and preserves its appid, so the
+    # cover art already exists by then. ``DownloadWorker`` documents the
+    # same reasoning where it declines to emit on install completion.
+    # A ``GAME_INSTALLED`` handler used to sit here reading ``app_id``; the
+    # event had no live emitter and never sent that key.
 
     @subscribe(Events.ARTWORK_REQUEST)
     async def _on_artwork_request(self: Any, **kwargs: Any) -> None:
@@ -165,9 +157,9 @@ class _EventHandlersMixin:
         """Fetch a cover for a newly-created shortcut.
 
         Only acts on auth shortcuts (``is_auth=True``) — game
-        shortcuts already get artwork via ``GAME_INSTALLED``
-        with richer data. Uses ``_AUTH_TITLE_FOR_LOOKUP`` to
-        map the store id to what SGDB actually has art for.
+        shortcuts get artwork from the bulk post-sync phase
+        below, with richer data. Uses ``_AUTH_TITLE_FOR_LOOKUP``
+        to map the store id to what SGDB actually has art for.
         """
         is_auth = kwargs.get("is_auth", False)
         if not is_auth:

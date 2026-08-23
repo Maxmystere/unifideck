@@ -81,7 +81,14 @@ class Events(StrEnum):
     STORE_REGISTERED = "store_registered"
 
     # Game lifecycle
-    GAME_INSTALLED = "game_installed"
+    # No GAME_INSTALLED counterpart: install completion is
+    # ``DOWNLOAD_COMPLETE`` (worker) → ``mark_installed`` →
+    # ``SHORTCUT_INSTALL_STATE_CHANGED``, which fires in BOTH
+    # directions and is what flips the ``installed`` flag readers
+    # actually observe. A ``GAME_INSTALLED`` member existed for a
+    # long time with no live emitter; the asymmetry with
+    # GAME_UNINSTALLED made it look real, and three subscribers
+    # (artwork, proton, Steam Collections) were silently dead.
     GAME_UNINSTALLED = "game_uninstalled"
     GAME_UPDATE_AVAILABLE = "game_update_available"
     GAME_LAUNCHED = "game_launched"

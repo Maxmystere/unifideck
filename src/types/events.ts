@@ -65,7 +65,6 @@ export const Events = {
   UBISOFT_INSTALL_LAUNCH_REQUESTED: "ubisoft_install_launch_requested",
   BATTLENET_INSTALL_LAUNCH_REQUESTED: "battlenet_install_launch_requested",
   // Game state
-  GAME_INSTALLED: "game_installed",
   GAME_UNINSTALLED: "game_uninstalled",
   GAME_UPDATE_AVAILABLE: "game_update_available",
   GAME_LAUNCHED: "game_launched",

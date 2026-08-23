@@ -452,31 +452,30 @@ def test_cleanup_umu_runtime_cache_wipes_steamrt4(tmp_path, monkeypatch):
     assert not (cache / "steamrt4").exists()
 
 
-# ── ProtonService default-tool policy ─────────────────────────────
+# ── ProtonService writes no compat-tool entries ───────────────────
 
-async def test_proton_service_no_force_by_default():
+async def test_proton_service_holds_no_compat_tool_surface():
+    """ProtonService only keeps GE-Proton installed — it writes no config.vdf.
+
+    The old ``GAME_INSTALLED`` → ``set_compat_tool`` path was removed: the
+    event had no live emitter, its payload key never matched what the handler
+    read, the per-store tool table was empty for every store, and in the
+    plugin it was pointed at ``localconfig.vdf`` while ``CompatToolMapping``
+    lives in ``config/config.vdf``. ``ProtonToolsManager`` in
+    ``compatibility/proton_helpers.py`` is the one live writer. Asserting the
+    surface is gone keeps it from being reintroduced by copy-paste.
+    """
     from unifideck.services.proton_service import ProtonService
 
-    with patch("unifideck.services.proton_service.auto_wire"):
-        svc = ProtonService(MagicMock(), "/nonexistent/config.vdf")
-    svc.set_compat_tool = AsyncMock()
+    svc = ProtonService(MagicMock())
 
-    await svc._on_game_installed(store="epic", app_id=12345)
-    svc.set_compat_tool.assert_not_awaited()
-
-
-async def test_proton_service_override_still_forces_tool():
-    from unifideck.services.proton_service import ProtonService
-
-    with patch("unifideck.services.proton_service.auto_wire"):
-        svc = ProtonService(
-            MagicMock(), "/nonexistent/config.vdf",
-            overrides={"epic": "GE-Proton10-34"},
-        )
-    svc.set_compat_tool = AsyncMock()
-
-    await svc._on_game_installed(store="epic", app_id=999)
-    svc.set_compat_tool.assert_awaited_once_with(999, "GE-Proton10-34")
+    for gone in (
+        "set_compat_tool",
+        "_inject_compat_tool",
+        "_on_game_installed",
+        "set_config_vdf_path",
+    ):
+        assert not hasattr(svc, gone), f"{gone} should have been removed"
 
 
 # ── emit_stage payload forwarding ─────────────────────────────────

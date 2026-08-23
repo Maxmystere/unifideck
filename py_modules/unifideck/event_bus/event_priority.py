@@ -50,7 +50,6 @@ _DEFAULT_PRIORITY: dict[Events, EventPriority] = {
     Events.PLUGIN_UNLOADING: EventPriority.CRITICAL,
     Events.GAME_LAUNCHED: EventPriority.CRITICAL,
     Events.GAME_STOPPED: EventPriority.CRITICAL,
-    Events.GAME_INSTALLED: EventPriority.NORMAL,
     Events.GAME_UNINSTALLED: EventPriority.NORMAL,
     Events.GAME_UPDATE_AVAILABLE: EventPriority.BACKGROUND,
     Events.SYNC_STARTED: EventPriority.NORMAL,

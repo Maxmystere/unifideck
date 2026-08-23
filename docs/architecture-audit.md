@@ -15,11 +15,17 @@ Two facts frame every section:
 
 ### 1.1 P0 correctness bugs (silent failures)
 
-1. **`GAME_INSTALLED` payload contract mismatch.** The emitter at `py_modules/unifideck/core/manifest.py:463-470` sends `store, game_id, title, install_path, executable`. Both subscribers read a key that is never sent:
-   - `services/artwork/event_handlers.py:130` reads `kwargs.get("app_id")` and returns early when it is falsy.
-   - `services/proton_service.py:173` reads `kwargs.get("app_id")` and returns early.
+1. ~~**`GAME_INSTALLED` payload contract mismatch.**~~ **RESOLVED — and the original diagnosis was wrong.** The finding claimed the emitter at `core/manifest.py:463-470` sent `game_id` while both subscribers read `app_id`, killing artwork-on-install and Proton-on-install "despite the event firing". Validation showed the event **never fired at all**, and that fixing the payload would have changed no behaviour:
 
-   Result: artwork-on-install and Proton-on-install are both silently dead despite the event firing.
+   - The only emit site was `_scan_one_root` inside `discover_all`, whose two wrappers (`discover_installed_games`, `discover_and_log`) had zero callers — their only references were `vulture_whitelist.py` entries. The dead code had already been noticed and silenced rather than deleted.
+   - Artwork-on-install was **redundant, not missing**: a game's shortcut and its cover art are created at *sync* time, and installing only flips that shortcut's install tag while preserving its appid (`services/shortcut/events.py:163-178`). `download/worker.py` documents the same reasoning where it declines to emit.
+   - Proton-on-install had **four** independent reasons it could never work: no live emitter; the payload key mismatch; `DEFAULT_TOOLS` empty for all six stores by design; and in the plugin the writer was pointed at `localconfig.vdf` (`bootstrap/paths.py:166`, re-bound by `steam/current_user.py`) while `CompatToolMapping` lives in `config/config.vdf`.
+   - **The real user-facing bug was on the frontend and this audit missed it.** `src/lib/steam-bridge/collection-manager.ts` subscribed to `GAME_INSTALLED` to rebuild the `[Unifideck] Installed` collection. That never fired, while `GAME_UNINSTALLED` on the next line did — so the collection (and any TabMaster tab on it) dropped games on uninstall but never picked them up on install until the next full sync. Its own comment claimed to have fixed exactly that.
+   - Both guards locked in **opposite halves** of the mismatch and so caught nothing: `tests/unit/test_proton_ge.py` asserted the subscriber's `app_id` contract while `scripts/validate_event_schemas.py` asserted the emitter's `game_id` contract.
+
+   Fix: repointed the collection manager at `SHORTCUT_INSTALL_STATE_CHANGED` (the event that actually fires, in both directions), then deleted the phantom event and everything hanging off it — both dead subscribers, the dead discovery half of `core/manifest.py` (520→257 lines), the entire ProtonService compat-tool path (243→120 lines, resolving half of §1.4), and the two `vulture_whitelist.py` entries. `Events.GAME_INSTALLED` no longer exists, so nothing can subscribe to it again.
+
+   **Lesson for the rest of this register:** "emitted but with the wrong payload" and "not emitted at all" look identical from a grep of emit sites. Check that the *enclosing function* has callers before trusting an emit site, and check whether a dead subscriber's job is already done elsewhere before restoring it.
 
 2. **`TOAST_NOTIFICATION` is emitted but consumed nowhere.** Emitted at `services/launcher/circuit_breaker.py:59`, `services/launcher/error_toasts.py:48`, and `services/shortcut/service.py:272`. No Python subscriber, and it is absent from `src/types/events.ts` and `WATCHED_EVENTS`. Launcher error and circuit-breaker toasts never reach the UI. The working channel is `LAUNCHER_STAGE` via `launcher/frontend_bridge.py`; these two emit the dead channel instead. Its payload also uses `params=`, while the frontend contract reads `i18n_params`.
 
@@ -56,12 +62,14 @@ Cross-referenced `rpc/mixins/*.py` against `src/api/rpc-routes.ts` and call site
 
 ### 1.4 Redundancy outside stores
 
-- **Two `config.vdf` CompatToolMapping injectors** that diverge: `compatibility/proton_helpers.py:65` (live, `ProtonToolsManager`) vs `services/proton_service.py:224` `_inject_compat_tool` (weaker regex, effectively dead).
+- ~~**Two `config.vdf` CompatToolMapping injectors**~~ **RESOLVED (item #1).** `services/proton_service.py`'s `_inject_compat_tool` (weaker regex, unreachable) was deleted along with the rest of that service's compat-tool path. `compatibility/proton_helpers.py:65` (`ProtonToolsManager`) is now the only writer.
 - **`resolve_proton_path` name collision**: `compatibility/proton_helpers.py:330` is a "legacy passthrough" that returns its input; `launcher/proton/infrastructure/selector.py:158` is the real `str -> Path`. Two public functions, same name, incompatible semantics.
 - **Duplicated encrypted-token persistence**: `stores/gog/tokens/storage.py` (~272 lines) and `stores/microsoft/tokens/persistence.py` (~251 lines) both implement `SecureTokenStore`-backed load/persist/clear with legacy-plaintext migration. A third store (EA App is anticipated in `wrapper_signals.py`) would be a third copy.
 - **Duplicated `find_umu_run`**: `stores/shared/wine_env.py:52` and `stores/ubisoft/binaries.py:72`.
 - **Three appid-to-u32 conversions**: `core/compat_bridge.py:61`, `services/shortcut/orphan_scan.py:54`, and inline in `services/shortcut/events.py:22`.
 - **Security package split with a circular import**: `security/ephemeral_creds.py` (440 lines) and `security/ephemeral_creds_inplace.py` (310 lines) import each other to "break a cycle". Also `device_fingerprint.py` vs `device_identity.py` overlap.
+- **Write-only install manifest** *(new, found while resolving item #1)*: `core/manifest.py`'s `write_manifest` is called by `epic/install.py` and `amazon/amazon_install.py` at the end of a successful install, but its only reader was `read_manifest`, consumed solely by the dead `discover_all` pass. With that pass deleted, `.unifideck_manifest.json` is written and never read anywhere in the tree. This may be deliberate (support bundles, external tooling, forward compat), so it was left in place — but either give it a reader or drop the write.
+- **`steam/current_user.localconfig_path` has no production caller** *(new, minor, found while resolving item #1)*: item #1 removed its last one (the ProtonService re-bind). Kept deliberately — unlike the phantom emitter it is a correct, exported, unit-tested path helper symmetric with `shortcuts_path` / `grid_dir` in a module whose job is per-user Steam paths, and vulture accepts it via `__all__`. Noted so it is not mistaken for live wiring.
 - **Frontend event names maintained in three places**: backend `core/types/events.py`, frontend `src/types/events.ts`, and `src/api/event-bus-client.ts:36-77` (`WATCHED_EVENTS`). An omission (not a typo) slips through, and already has (`LIBRARY_SYNC_*` are deliberately absent from `WATCHED_EVENTS`).
 
 ---
@@ -185,7 +193,7 @@ Ordered by risk-to-value. Tick the box when a fix lands and the user has validat
 
 ### P0 — silent correctness bugs (fix first; make dead paths actually run)
 
-- [ ] 1. Fix the `GAME_INSTALLED` payload: add `app_id` at `core/manifest.py:463` or make both subscribers read `game_id`/`install_path` (`artwork/event_handlers.py:130`, `proton_service.py:173`).
+- [x] 1. ~~Fix the `GAME_INSTALLED` payload~~ → **the event had no live emitter at all; retired it entirely.** Repointed `collection-manager.ts` at `SHORTCUT_INSTALL_STATE_CHANGED` (fixing a real user-facing bug this audit missed: the `[Unifideck] Installed` collection never picked up installs), deleted both dead subscribers, the dead discovery half of `core/manifest.py`, the whole ProtonService compat-tool path, and 2 vulture allowlist entries. See the rewritten §1.1.1. *(awaiting user device validation)*
 - [ ] 2. Wire `MetricsCollector` timers/gauges: move `auto_wire`/`logger.info` out of the counter loop, add `@subscribe` to the `_on_*` handlers.
 - [ ] 3. Resolve `TOAST_NOTIFICATION`: add a real consumer or route the two emitters through `LAUNCHER_STAGE`/`frontend_bridge`; align `params` vs `i18n_params`.
 - [ ] 4. Make `DOWNLOAD_*` single-emitter: pick the worker shape, stop store installers emitting terminal events.
@@ -199,7 +207,7 @@ Ordered by risk-to-value. Tick the box when a fix lands and the user has validat
 - [ ] 9. Extract the duplicated token persistence (`gog/tokens/storage.py` + `microsoft/tokens/persistence.py`) into one `shared/` primitive.
 - [ ] 10. Delete `StoreBase._run_cli` (dead) or make the CLI stores actually use it.
 - [ ] 11. Make microsoft's install/uninstall/update stubs return an explicit `not_supported` instead of `success=True`.
-- [ ] 12. Resolve the `resolve_proton_path` name collision and the security-package circular-import split.
+- [ ] 12. Resolve the `resolve_proton_path` name collision and the security-package circular-import split. *(the two-`config.vdf`-injector half of §1.4 is already resolved: item #1 deleted `proton_service.py`'s `_inject_compat_tool`, leaving `ProtonToolsManager` in `compatibility/proton_helpers.py` as the sole writer. The name collision and the security split remain.)*
 
 ### P2 — documentation re-sync (zero code risk)
 

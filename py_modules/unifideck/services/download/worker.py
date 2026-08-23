@@ -324,10 +324,13 @@ class _WorkerMixin:
         item.status = "complete"
         item.end_time = time.time()
         logger.info("[DownloadWorker] completed install for %s", key)
-        # Build a Game record so the ShortcutService listener registers
-        # the shortcut. We do NOT emit GAME_INSTALLED here — ArtworkService
-        # fetches cover art during the post-install sync pass and
-        # re-emitting causes duplicate SteamGridDB lookups.
+        # Build a Game record so the ShortcutService listener flips the
+        # shortcut's install tag. DOWNLOAD_COMPLETE is the only event this
+        # needs: ``mark_installed`` then emits SHORTCUT_INSTALL_STATE_CHANGED,
+        # which is what every install-state reader subscribes to. No separate
+        # install event — the shortcut and its cover art were created during
+        # the library sync and ``mark_installed`` preserves the appid, so
+        # re-fetching artwork here would only duplicate SteamGridDB lookups.
         game = await build_installed_game(
             item, result, store, getattr(self, "_launcher_path", ""),
         )

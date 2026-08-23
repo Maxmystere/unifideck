@@ -458,10 +458,26 @@ export function startCollectionManager(): CollectionManagerHandle {
 
   // Install/uninstall used to reach the collections only via the NEXT library
   // sync (or a Steam restart), so "[Unifideck] Installed" — and any TabMaster
-  // tab built on it — lagged behind reality. Both bus events already existed
-  // with no frontend consumer; rebuilding on them makes membership track the
-  // library live. Debounced because a multi-game operation emits a burst and
-  // each rebuild walks every collection.
+  // tab built on it — lagged behind reality.
+  //
+  // This listened on GAME_INSTALLED, which has NO backend emitter: its only
+  // emit site sat in `core/manifest.py`'s `discover_all`, which nothing calls.
+  // So installs never reached the collections while uninstalls did (via
+  // GAME_UNINSTALLED, which every store's uninstall path really emits) — the
+  // exact lag this block claimed to fix. SHORTCUT_INSTALL_STATE_CHANGED is the
+  // live event: `ShortcutService.mark_installed` / `mark_uninstalled` emit it in
+  // both directions, and `cleanup_finalize` emits it per cleared game.
+  // GAME_UNINSTALLED is kept as well — redundant under the debounce, but it
+  // covers the edge where `mark_uninstalled` finds no shortcut and returns
+  // without emitting.
+  //
+  // Debounced because a multi-game operation emits a burst and each rebuild
+  // walks every collection. The delay is also load-bearing for correctness:
+  // `runFilters` reads the install status that `lib/library-filters` keeps in
+  // memory, and library-filters flips it from ITS OWN subscription to this same
+  // event. Handlers for one poll run synchronously, so deferring the rebuild
+  // guarantees it observes the flip. Lowering this toward 0 would make the
+  // rebuild race that update and silently omit the just-installed game.
   let installDebounce: number | undefined;
   const onInstallChange = () => {
     window.clearTimeout(installDebounce);
@@ -473,7 +489,10 @@ export function startCollectionManager(): CollectionManagerHandle {
     if (syncAttached) return;
     window.addEventListener("unifideck-sync-completed", onSync);
     unsubInstallEvents = [
-      EventBusClient.subscribe(Events.GAME_INSTALLED, onInstallChange),
+      EventBusClient.subscribe(
+        Events.SHORTCUT_INSTALL_STATE_CHANGED,
+        onInstallChange,
+      ),
       EventBusClient.subscribe(Events.GAME_UNINSTALLED, onInstallChange),
     ];
     syncAttached = true;
