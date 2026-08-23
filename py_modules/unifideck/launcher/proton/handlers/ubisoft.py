@@ -197,7 +197,7 @@ async def ubisoft_auth_launch(plan: ProtonLaunchPlan) -> int:
     # NOT a game launch — the generic "Launching Game" confused users.
     # Shared with Battle.net so the two clients say the same thing, and
     # worded by action so a cart press doesn't say "sign in".
-    wrapper_clients.announce_client_open(plan, "ubisoft")
+    wrapper_clients.announce_client_open("ubisoft")
     upc_exe = _find_upc_exe(plan)
     if upc_exe is None:
         launcher_toast(

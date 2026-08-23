@@ -401,10 +401,7 @@
       "battlenetClientInstallFailedMessage": "The Battle.net client installer didn't finish. Try again, or check the launch log for what it reported.",
       "installingBattlenet": "Installing via Battle.net",
       "installingBattlenetMessage": "Opening Battle.net. Press Install there to start the download for {{gameTitle}}.",
-      "wrapperSignIn": "Signing in to {{client}}",
-      "wrapperSignInMessage": "Opening {{client}}. Sign in there, then return.",
-      "wrapperStore": "Opening {{client}}",
-      "wrapperStoreMessage": "Its store is a tab inside the client."
+      "wrapperOpening": "Opening {{client}}"
     },
     "updateComplete": "Update Complete!",
     "updateCompleteMessage": "{{title}} has been updated.",

@@ -48,17 +48,17 @@ def test_search_url_is_empty_for_an_unknown_store() -> None:
     [
         ("epic", "store.epicgames.com"),
         ("gog", "www.gog.com"),
-        ("amazon", "www.amazon.com"),
+        ("amazon", "luna.amazon.com"),
         ("microsoft", "www.xbox.com"),
     ],
 )
 def test_every_browser_store_has_a_shop(store: str, host: str) -> None:
-    """Amazon points at the MAIN site, not gaming.amazon.com.
+    """Amazon points at Luna.
 
-    Measured on device: nile's OAuth plants its session on
-    ``amazon.com``, and ``gaming.amazon.com`` (Prime Gaming / Luna)
-    loaded signed OUT with that cookie. The main site accepts it, and
-    both are one tap away from its nav.
+    It reaches that subdomain signed in only because
+    ``AmazonStore.prepare_web_session`` plants auth cookies scoped to
+    ``.amazon.com``; a domain cookie is sent to every subdomain. Without
+    that step this host loads logged out, which is exactly what it did.
     """
     url = storefront_url(store)
     assert url.startswith("https://")

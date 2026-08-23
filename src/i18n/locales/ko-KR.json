@@ -392,10 +392,7 @@
       "battlenetClientInstallFailedMessage": "Battle.net 클라이언트 설치 프로그램이 완료되지 않았습니다. 다시 시도하거나 실행 로그에서 보고 내용을 확인하세요.",
       "installingBattlenet": "Battle.net을 통해 설치 중",
       "installingBattlenetMessage": "Battle.net을 여는 중입니다. {{gameTitle}} 다운로드를 시작하려면 거기서 설치를 누르세요.",
-      "wrapperSignIn": "{{client}}에 로그인 중",
-      "wrapperSignInMessage": "{{client}}을(를) 여는 중입니다. 거기서 로그인한 뒤 돌아오세요.",
-      "wrapperStore": "{{client}}을(를) 여는 중",
-      "wrapperStoreMessage": "상점은 클라이언트 안의 탭에 있습니다."
+      "wrapperOpening": "{{client}}을(를) 여는 중"
     },
     "updateComplete": "업데이트 완료!",
     "updateCompleteMessage": "{{title}} 업데이트가 완료되었습니다.",

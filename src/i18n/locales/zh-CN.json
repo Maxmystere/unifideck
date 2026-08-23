@@ -392,10 +392,7 @@
       "battlenetClientInstallFailedMessage": "Battle.net 客户端安装程序未完成。请重试，或查看启动日志了解其报告的内容。",
       "installingBattlenet": "正在通过 Battle.net 安装",
       "installingBattlenetMessage": "正在打开 Battle.net。请在其中点击“安装”以开始下载 {{gameTitle}}。",
-      "wrapperSignIn": "正在登录 {{client}}",
-      "wrapperSignInMessage": "正在打开 {{client}}。请在那里登录后返回。",
-      "wrapperStore": "正在打开 {{client}}",
-      "wrapperStoreMessage": "商店是客户端内的一个标签页。"
+      "wrapperOpening": "正在打开 {{client}}"
     },
     "updateComplete": "更新已完成！",
     "updateCompleteMessage": "{{title}} 已更新。",

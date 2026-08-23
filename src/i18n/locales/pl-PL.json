@@ -392,10 +392,7 @@
       "battlenetClientInstallFailedMessage": "Instalator klienta Battle.net nie zakończył pracy. Spróbuj ponownie lub sprawdź w dzienniku uruchamiania, co zgłosił.",
       "installingBattlenet": "Instalowanie przez Battle.net",
       "installingBattlenetMessage": "Otwieranie Battle.net. Naciśnij tam Zainstaluj, aby rozpocząć pobieranie {{gameTitle}}.",
-      "wrapperSignIn": "Logowanie do {{client}}",
-      "wrapperSignInMessage": "Otwieranie {{client}}. Zaloguj się tam i wróć.",
-      "wrapperStore": "Otwieranie {{client}}",
-      "wrapperStoreMessage": "Sklep jest kartą w kliencie."
+      "wrapperOpening": "Otwieranie {{client}}"
     },
     "updateComplete": "Aktualizacja zakończona!",
     "updateCompleteMessage": "Gra {{title}} została zaktualizowana.",

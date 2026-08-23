@@ -125,12 +125,21 @@ def _fail_on_live_data_writes():
     """
     live = _live_data_dir()
     before = _snapshot(live)
+    # Sampled at BOTH ends: a browser that started or stopped mid-run
+    # still rewrote its profile, and either sighting is enough to say
+    # the suite did not.
+    edge_live = _edge_is_running()
     yield
     after = _snapshot(live)
-    added = sorted(k for k in after.keys() - before.keys() if not _foreign_writer(k))
+    edge_live = edge_live or _edge_is_running()
+    added = sorted(
+        k for k in after.keys() - before.keys()
+        if not _foreign_writer(k, edge_live=edge_live)
+    )
     changed = sorted(
         k for k in after.keys() & before.keys()
-        if after[k] != before[k] and not _foreign_writer(k)
+        if after[k] != before[k]
+        and not _foreign_writer(k, edge_live=edge_live)
     )
     if not added and not changed:
         return
@@ -154,10 +163,40 @@ def _fail_on_live_data_writes():
 #: file itself is still watched; only the sidecars are exempt.
 _FOREIGN_SUFFIXES = ("-wal", "-shm", "-journal")
 
+#: The shared Edge auth profile. A RUNNING browser owns this whole tree
+#: and rewrites most of it — telemetry every few minutes, and Cookies,
+#: History, Preferences and Sessions wholesale on exit. Observed
+#: mid-suite with a storefront window open, which is precisely when
+#: on-device development happens.
+_EDGE_PROFILE_DIR = "edge-auth"
 
-def _foreign_writer(rel_path: str) -> bool:
+
+def _edge_is_running() -> bool:
+    """Whether a live Edge owns the shared auth profile.
+
+    Scans ``/proc`` for the ``--user-data-dir`` we pass. Deliberately
+    NOT a blanket exemption: when no browser is running, a change under
+    ``edge-auth/`` really is the suite's doing and must still fail —
+    ``auth.edge_browser.cookie_writer`` writes that profile's cookie DB
+    for real, and a test reaching it would be exactly the kind of
+    live-data write this guard exists to catch (the docstring above
+    records one such run signing the machine out of Amazon).
+    """
+    for entry in Path("/proc").glob("[0-9]*/cmdline"):
+        try:
+            cmdline = entry.read_bytes()
+        except OSError:
+            continue
+        if b"--user-data-dir=" in cmdline and b"/edge-auth" in cmdline:
+            return True
+    return False
+
+
+def _foreign_writer(rel_path: str, *, edge_live: bool) -> bool:
     """Whether ``rel_path`` is written by something other than the suite."""
-    return rel_path.endswith(_FOREIGN_SUFFIXES)
+    if rel_path.endswith(_FOREIGN_SUFFIXES):
+        return True
+    return edge_live and rel_path.startswith(_EDGE_PROFILE_DIR)
 
 
 def _snapshot(root):

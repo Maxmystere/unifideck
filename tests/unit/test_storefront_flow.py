@@ -129,7 +129,7 @@ def _no_waiting(monkeypatch):
     [
         ("epic", "store.epicgames.com"),
         ("gog", "www.gog.com"),
-        ("amazon", "www.amazon.com"),
+        ("amazon", "luna.amazon.com"),
         ("microsoft", "www.xbox.com"),
     ],
 )

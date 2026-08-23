@@ -392,10 +392,7 @@
       "battlenetClientInstallFailedMessage": "El instalador del cliente de Battle.net no terminó. Inténtalo de nuevo o revisa el registro de inicio para ver qué informó.",
       "installingBattlenet": "Instalando a través de Battle.net",
       "installingBattlenetMessage": "Abriendo Battle.net. Pulsa Instalar allí para empezar la descarga de {{gameTitle}}.",
-      "wrapperSignIn": "Iniciando sesión en {{client}}",
-      "wrapperSignInMessage": "Abriendo {{client}}. Inicia sesión allí y vuelve.",
-      "wrapperStore": "Abriendo {{client}}",
-      "wrapperStoreMessage": "Su tienda es una pestaña dentro del cliente."
+      "wrapperOpening": "Abriendo {{client}}"
     },
     "updateComplete": "¡Actualización completada!",
     "updateCompleteMessage": "{{title}} ha sido actualizado.",

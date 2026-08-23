@@ -392,10 +392,7 @@
       "battlenetClientInstallFailedMessage": "Battle.net istemci yükleyicisi tamamlanmadı. Tekrar deneyin veya ne bildirdiğini görmek için başlatma günlüğüne bakın.",
       "installingBattlenet": "Battle.net üzerinden yükleniyor",
       "installingBattlenetMessage": "Battle.net açılıyor. {{gameTitle}} indirmesini başlatmak için oradan Yükle'ye basın.",
-      "wrapperSignIn": "{{client}} oturumu açılıyor",
-      "wrapperSignInMessage": "{{client}} açılıyor. Orada oturum açıp geri dönün.",
-      "wrapperStore": "{{client}} açılıyor",
-      "wrapperStoreMessage": "Mağaza, istemcinin içindeki bir sekmededir."
+      "wrapperOpening": "{{client}} açılıyor"
     },
     "updateComplete": "Güncelleme Tamamlandı!",
     "updateCompleteMessage": "{{title}} güncellendi.",

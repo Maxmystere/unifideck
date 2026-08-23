@@ -24,6 +24,7 @@ appropriate sub-component.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -194,6 +195,51 @@ class AmazonStore(StoreBase):
             return False
         extensions = data.get("extensions", {})
         return "customer_info" in extensions
+
+    async def prepare_web_session(self) -> Result:
+        """Give the browser a signed-in amazon.com before the shop opens.
+
+        nile signs in through Amazon's *device registration* flow, which
+        authorises the device but leaves the shared Edge profile without
+        the auth cookies a signed-in amazon.com needs — so the shop
+        opened logged out even though the store itself worked. Exchange
+        nile's refresh token for website cookies (what Amazon's own apps
+        do) and plant them where Edge will read them.
+
+        Only Amazon needs this. The other browser stores sign in through
+        ordinary web logins that leave a session behind on their own.
+
+        Best-effort throughout: a failure here means the shop opens with
+        whatever session the profile already had, never that the cart
+        stops working.
+        """
+        from unifideck.auth.edge_browser.cookie_writer import write_cookies
+        from unifideck.auth.edge_browser.edge import PROFILE_DIR, EdgeBrowser
+        from unifideck.stores.amazon.web_session import fetch_website_cookies
+
+        # A running Edge owns the cookie DB and flushes its in-memory
+        # copy over it on exit, so anything written underneath is lost.
+        # Refuse rather than write something that cannot take effect.
+        edge = getattr(self, "_edge", None)
+        if edge is not None and any(
+            EdgeBrowser.cdp_alive(port)
+            for port in (
+                edge.cdp_port,
+                edge.xcloud_cdp_port(),
+                edge.storefront_cdp_port(),
+            )
+        ):
+            logger.info(
+                "[AmazonStore] Edge is running — skipping cookie write",
+            )
+            return Result(success=False, store="amazon", error="edge_running")
+        cookies = await fetch_website_cookies()
+        if not cookies:
+            return Result(success=False, store="amazon", error="no_web_cookies")
+        written = await asyncio.to_thread(
+            write_cookies, PROFILE_DIR, cookies,
+        )
+        return Result(success=written > 0, store="amazon")
 
     async def start_auth(self, **kwargs: Any) -> AuthResult:
         """Start auth."""

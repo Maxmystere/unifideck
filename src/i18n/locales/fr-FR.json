@@ -392,10 +392,7 @@
       "battlenetClientInstallFailedMessage": "Le programme d'installation du client Battle.net ne s'est pas terminé. Réessayez, ou consultez le journal de lancement pour voir ce qu'il a signalé.",
       "installingBattlenet": "Installation via Battle.net",
       "installingBattlenetMessage": "Ouverture de Battle.net. Appuyez sur Installer pour lancer le téléchargement de {{gameTitle}}.",
-      "wrapperSignIn": "Connexion à {{client}}",
-      "wrapperSignInMessage": "Ouverture de {{client}}. Connectez-vous, puis revenez.",
-      "wrapperStore": "Ouverture de {{client}}",
-      "wrapperStoreMessage": "Sa boutique est un onglet dans le client."
+      "wrapperOpening": "Ouverture de {{client}}"
     },
     "updateComplete": "Mise à jour terminée !",
     "updateCompleteMessage": "{{title}} a été mis à jour.",

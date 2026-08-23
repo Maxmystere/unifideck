@@ -81,6 +81,27 @@ const CLIENT_STOREFRONTS: Partial<
     launchWrapperAuthViaShortcut(BATTLENET_SHORTCUT_CONFIG, "storefront"),
 };
 
+/**
+ * Let the backend plant a browser session for `store`, if it can.
+ *
+ * Only Amazon has anything to do here: nile signs in through Amazon's
+ * device-registration flow, which authorises the device but leaves the
+ * Edge profile without the cookies a signed-in amazon.com needs, so the
+ * shop opened logged out. The backend exchanges nile's refresh token
+ * for website cookies and writes them into the profile — which must
+ * happen BEFORE Edge starts, since Edge owns that file while running.
+ *
+ * Awaited but never trusted: a failure just means the shop opens with
+ * whatever session was already there.
+ */
+async function prepareWebSession(store: StoreId): Promise<void> {
+  try {
+    await call<[StoreId], unknown>(rpcRoutes.prepareStoreWebSession, store);
+  } catch (e) {
+    console.warn(`[StorefrontLauncher:${store}] web session prep failed:`, e);
+  }
+}
+
 /** Whether this store has a shop the cart can open at all. */
 export function hasStorefront(store: StoreId): boolean {
   return store in BROWSER_STOREFRONTS || store in CLIENT_STOREFRONTS;
@@ -128,6 +149,7 @@ export async function openStorefront(
     return { success: false, error: `No storefront for ${store}` };
   }
   EventBusClient.bumpToFast();
+  if (store in BROWSER_STOREFRONTS) await prepareWebSession(store);
   const result = await launch();
   const appId = result.app_id;
   if (result.success && appId) {

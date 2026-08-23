@@ -83,6 +83,35 @@ class StoreRPCMixin:
         """
         return self.registry.get_store_infos()
 
+    async def prepare_store_web_session(self, store_id: str) -> Any:
+        """Give the browser a signed-in session for ``store_id``, if it can.
+
+        Called just before the QAM cart opens a store's shop. Only
+        Amazon implements it: nile signs in through Amazon's device
+        registration flow, which authorises the device but leaves the
+        shared Edge profile without the auth cookies a signed-in
+        amazon.com needs, so the shop opened logged out. Every other
+        browser store signs in through an ordinary web login that
+        leaves its own session behind.
+
+        Must run BEFORE Edge launches — it writes the profile's cookie
+        DB, which Edge owns and rewrites while running.
+
+        Never raises. A store with nothing to do, an unknown store, and
+        a failed exchange all answer the same way: the shop still
+        opens, with whatever session the profile already had.
+        """
+        store = self.registry.get_store(store_id)
+        if store is None or not hasattr(store, "prepare_web_session"):
+            return {"success": False, "error": "not_applicable"}
+        try:
+            return await store.prepare_web_session()
+        except Exception:
+            logger.exception(
+                "[StoreRPC:web_session:%s] preparation failed", store_id,
+            )
+            return {"success": False, "error": "prepare_failed"}
+
     async def clear_store_auths(self) -> Any:
         """Sign out of every store and wipe cached credentials.
 

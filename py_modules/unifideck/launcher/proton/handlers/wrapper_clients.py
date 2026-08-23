@@ -303,27 +303,24 @@ def live_client_prefixes(
 _CLIENT_NAMES = {"ubisoft": "Ubisoft Connect", "battlenet": "Battle.net"}
 
 
-def announce_client_open(plan: object, store: str) -> None:
-    """Toast that ``store``'s client is opening, worded by why.
+def announce_client_open(store: str) -> None:
+    """Toast that ``store``'s client is opening. Nothing more.
 
-    Both wrapper stores open the same client the same way for two
-    different reasons — signing in, and browsing its Store/Shop tab —
-    so the wording must vary by ACTION, not by store. It used to vary
-    by store and not by action: Ubisoft said "Signing in to Ubisoft
-    Connect. Sign in there, then return." while Battle.net said
-    "Battle.net Sign-In / Opening the Battle.net client so you can sign
-    in…", and both said it even when the user had pressed the cart.
+    One line, one variable. It used to vary by store *and* editorialise:
+    Ubisoft said "Signing in to Ubisoft Connect / Sign in there, then
+    return." while Battle.net said "Battle.net Sign-In / Opening the
+    Battle.net client so you can sign in…" — two different voices for
+    the same event, both telling the user what to do next as though
+    that needed explaining, and both still saying "sign in" when the
+    user had pressed the cart.
 
-    Kept here rather than in either handler so a third wrapper store
-    cannot reintroduce the divergence.
+    No title key, so this renders as a title with no body (see
+    ``showLauncherToast``). Kept here rather than in either handler so
+    a third wrapper store cannot reintroduce the divergence.
     """
     from unifideck.launcher.frontend_bridge import launcher_toast
 
-    context = getattr(plan, "context", None)
-    is_shop = getattr(context, "action", None) == "storefront"
-    key = "wrapperStore" if is_shop else "wrapperSignIn"
     launcher_toast(
-        f"toasts.launcher.{key}Message",
-        i18n_title_key=f"toasts.launcher.{key}",
+        "toasts.launcher.wrapperOpening",
         i18n_params={"client": _CLIENT_NAMES.get(store, store)},
     )

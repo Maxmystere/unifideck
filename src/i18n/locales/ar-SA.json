@@ -392,10 +392,7 @@
       "battlenetClientInstallFailedMessage": "لم يكتمل مثبّت عميل Battle.net. حاول مرة أخرى أو راجع سجل التشغيل لمعرفة ما أبلغ عنه.",
       "installingBattlenet": "جارٍ التثبيت عبر Battle.net",
       "installingBattlenetMessage": "جارٍ فتح Battle.net. اضغط على «تثبيت» هناك لبدء تنزيل {{gameTitle}}.",
-      "wrapperSignIn": "جارٍ تسجيل الدخول إلى {{client}}",
-      "wrapperSignInMessage": "جارٍ فتح {{client}}. سجّل الدخول هناك ثم عُد.",
-      "wrapperStore": "جارٍ فتح {{client}}",
-      "wrapperStoreMessage": "المتجر عبارة عن علامة تبويب داخل التطبيق."
+      "wrapperOpening": "جارٍ فتح {{client}}"
     },
     "updateComplete": "اكتمل التحديث!",
     "updateCompleteMessage": "تم تحديث {{title}}.",

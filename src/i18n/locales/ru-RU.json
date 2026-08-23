@@ -392,10 +392,7 @@
       "battlenetClientInstallFailedMessage": "Установщик клиента Battle.net не завершил работу. Повторите попытку или посмотрите в журнале запуска, что он сообщил.",
       "installingBattlenet": "Установка через Battle.net",
       "installingBattlenetMessage": "Открытие Battle.net. Нажмите там «Установить», чтобы начать загрузку {{gameTitle}}.",
-      "wrapperSignIn": "Вход в {{client}}",
-      "wrapperSignInMessage": "Открывается {{client}}. Войдите там и вернитесь.",
-      "wrapperStore": "Открытие {{client}}",
-      "wrapperStoreMessage": "Магазин находится на вкладке внутри клиента."
+      "wrapperOpening": "Открытие {{client}}"
     },
     "updateComplete": "Обновление завершено!",
     "updateCompleteMessage": "{{title}} обновлен.",

@@ -392,10 +392,7 @@
       "battlenetClientInstallFailedMessage": "Het installatieprogramma van de Battle.net-client is niet voltooid. Probeer het opnieuw of bekijk in het startlogboek wat het meldde.",
       "installingBattlenet": "Installeren via Battle.net",
       "installingBattlenetMessage": "Battle.net wordt geopend. Klik daar op Installeren om de download van {{gameTitle}} te starten.",
-      "wrapperSignIn": "Aanmelden bij {{client}}",
-      "wrapperSignInMessage": "{{client}} wordt geopend. Meld je daar aan en kom terug.",
-      "wrapperStore": "{{client}} wordt geopend",
-      "wrapperStoreMessage": "De winkel is een tabblad in de client."
+      "wrapperOpening": "{{client}} wordt geopend"
     },
     "updateComplete": "Update voltooid!",
     "updateCompleteMessage": "{{title}} is bijgewerkt.",

@@ -401,10 +401,7 @@
       "battlenetClientInstallFailedMessage": "Battle.net 用戶端安裝程式未完成。請重試，或查看啟動記錄了解其回報的內容。",
       "installingBattlenet": "正在透過 Battle.net 安裝",
       "installingBattlenetMessage": "正在開啟 Battle.net。請在其中點選「安裝」以開始下載 {{gameTitle}}。",
-      "wrapperSignIn": "正在登入 {{client}}",
-      "wrapperSignInMessage": "正在開啟 {{client}}。請在該處登入後返回。",
-      "wrapperStore": "正在開啟 {{client}}",
-      "wrapperStoreMessage": "商店是用戶端內的一個分頁。"
+      "wrapperOpening": "正在開啟 {{client}}"
     },
     "updateComplete": "更新完畢！",
     "updateCompleteMessage": "{{title}} 已被更新。",
