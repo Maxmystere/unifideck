@@ -181,19 +181,14 @@ class EpicInstaller:
                 store="epic",
                 game_id=game_id,
             )
-        await self._bus.emit(
-            Events.DOWNLOAD_STARTED,
-            store="epic",
-            game_id=game_id,
-        )
         outcome = await self._run_install_with_dlc_fallback(
             base, game_id, progress_cb, language,
         )
         logger.info("[EpicInstall] legendary exit_code=%d", outcome.rc)
         if outcome.rc != 0:
-            return await self._fail(game_id, _format_exit_error(outcome))
+            return self._fail(game_id, _format_exit_error(outcome))
         if not await self._install_was_recorded(game_id, outcome):
-            return await self._fail(game_id, _no_install_error(outcome))
+            return self._fail(game_id, _no_install_error(outcome))
         return await self._complete_install(game_id, base, language)
 
     async def _prepare_base_dir(self, base: str) -> str | None:
@@ -220,14 +215,17 @@ class EpicInstaller:
             await asyncio.to_thread(write_app_language, game_id, language)
         return await self._finalize_install(game_id, base)
 
-    async def _fail(self, game_id: str, error: str) -> InstallResult:
-        """Emit the one terminal ``DOWNLOAD_FAILED`` and wrap the error."""
-        await self._bus.emit(
-            Events.DOWNLOAD_FAILED,
-            store="epic",
-            game_id=game_id,
-            error=error,
-        )
+    def _fail(self, game_id: str, error: str) -> InstallResult:
+        """Wrap a terminal error in a failing ``InstallResult``.
+
+        Emits nothing. ``DownloadWorker`` is the sole emitter of every
+        ``DOWNLOAD_*`` event for all six stores: it turns this envelope
+        into the one ``DOWNLOAD_FAILED`` (``_emit_failure``), and only its
+        payload carries the queue item the UI needs — the game title for
+        the toast and ``error_message`` for the history row. This method
+        used to emit its own store-shaped copy, which reached the frontend
+        as a second, title-less failure toast.
+        """
         return InstallResult(
             success=False,
             error=error,
@@ -272,9 +270,11 @@ class EpicInstaller:
         already downloaded. So when the DLC-inclusive attempt fails on a
         DLC-capable store, retry once with ``--skip-dlcs`` (an explicit
         skip — with ``--yes`` legendary would otherwise still auto-install
-        DLC) to recover the playable base game. No ``DOWNLOAD_FAILED`` is
-        emitted for the first attempt; only ``install_game`` emits the
-        terminal failure if the retry also fails.
+        DLC) to recover the playable base game. A recovered install must
+        not look like a failure to the user: the first attempt reports
+        nothing, and only the ``InstallResult`` ``install_game`` finally
+        returns decides whether ``DownloadWorker`` emits
+        ``DOWNLOAD_FAILED``.
 
         Install tags are resolved once and reused across both attempts —
         the retry differs only in its DLC flag.
@@ -422,12 +422,6 @@ class EpicInstaller:
         if eta is not None:
             update["eta_seconds"] = eta
         await self._safe_progress(progress_cb, update)
-        await self._bus.emit(
-            Events.DOWNLOAD_PROGRESS,
-            store="epic",
-            game_id=game_id,
-            progress=pct,
-        )
 
     async def _safe_progress(
         self, progress_cb: ProgressCallback | None, update: dict[str, Any],
@@ -465,12 +459,14 @@ class EpicInstaller:
                 executable_relative=exe_relative,
                 platform="windows",
             )
-        await self._bus.emit(
-            Events.DOWNLOAD_COMPLETE,
-            store="epic",
-            game_id=game_id,
-            install_path=install_path,
-        )
+        # No ``DOWNLOAD_COMPLETE`` here. The install is not finished at this
+        # point: ``DownloadWorker`` still has to run prefix warmup (up to
+        # 600s of createprefix + winetricks + cloud-save pull) while the row
+        # sits in its "preparing" phase, and it emits the one completion
+        # afterwards, carrying the ``Game`` record that flips the shortcut's
+        # install tag. Emitting from here announced the install as done
+        # minutes early — the same premature-completion trap that broke
+        # Battle.net installs (see launcher/wrapper_prefix_probe.py).
         return InstallResult(
             success=True,
             store="epic",

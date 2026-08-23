@@ -475,11 +475,20 @@ class _WorkerMixin:
     async def _update_progress(self, item: DownloadItem, progress: Any) -> None:
         """Progress callback invoked from the store's ``install_game``.
 
-        Stores emit progress in two shapes:
-        - Epic/Amazon pass a bare ``float`` (0.0-100.0).
+        Stores report progress in two shapes:
+        - Epic/Amazon pass a bare ``float`` (0.0-100.0), or a partial
+          ``dict`` when one output line only carries some of the fields.
         - GOG/Ubisoft pass a ``dict`` with ``percentage``,
           ``downloaded_bytes``, ``total_bytes``, ``speed_bps``,
           ``eta_seconds``, ``phase``, ``phase_message``.
+
+        Either way the merged item is what gets emitted, as ``item=`` —
+        the same shape as every other ``DOWNLOAD_*`` event and byte-for-byte
+        what ``get_download_queue`` hands the frontend, so the UI applies it
+        by row id instead of guessing that it belongs to the visible row.
+        Carrying the whole item also means ``download_phase`` /
+        ``phase_message`` reach the row on the progress tick rather than on
+        the next queue refetch.
         """
         if isinstance(progress, (int, float)):
             item.progress = float(progress)
@@ -492,9 +501,5 @@ class _WorkerMixin:
 
             await self._bus.emit(
                 Events.DOWNLOAD_PROGRESS,
-                store=item.store,
-                game_id=item.game_id,
-                progress=item.progress,
-                speed_mbps=item.speed_mbps,
-                eta_seconds=item.eta_seconds,
+                item=item.to_dict(),
             )

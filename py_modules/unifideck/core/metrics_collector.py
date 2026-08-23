@@ -213,26 +213,40 @@ class MetricsCollector:
         Keyed via :meth:`_download_key` so concurrent
         downloads don't conflict.
 
+        ``setdefault``, not assignment: ``DOWNLOAD_STARTED``
+        is emitted more than once per install by design.
+        ``DownloadWorker`` re-emits it when the download
+        finishes and prefix warmup begins, so the frontend
+        refetches the queue and the row picks up its
+        "preparing" phase. Assigning restarted the clock
+        there, which made ``download_duration_ms`` measure
+        only the warmup window instead of the install the
+        user actually waited through.
+
+        Safe only because every terminal event —
+        ``COMPLETE``, ``FAILED`` **and** ``CANCELLED`` —
+        pops the entry. Drop the cancel handler and a
+        cancelled attempt's stale clock gets inherited by
+        the retry of the same game.
+
         Args:
-            **kwargs: the raw event payload, in either
-                emitted shape.
+            **kwargs: the raw event payload.
         """
-        self._pending_timers[self._download_key(kwargs)] = time.monotonic()
+        self._pending_timers.setdefault(
+            self._download_key(kwargs), time.monotonic(),
+        )
 
     @subscribe(Events.DOWNLOAD_COMPLETE)
     async def _on_download_complete(self, **kwargs: Any) -> None:
         """Finalise the (store, game_id) download timer.
 
-        Records into ``download_duration_ms``. Epic and
-        Amazon complete twice (one worker-shaped event, one
-        store-shaped — see :meth:`_download_key`); because
-        both resolve to the same key, the first one pops the
-        pending entry and the second is a no-op instead of
-        overwriting the measurement.
+        Records into ``download_duration_ms``, spanning the
+        first ``DOWNLOAD_STARTED`` through here — download
+        plus prefix warmup, which is the whole time the
+        queue row is occupied.
 
         Args:
-            **kwargs: the raw event payload, in either
-                emitted shape.
+            **kwargs: the raw event payload.
         """
         self._complete_timer(
             self._download_key(kwargs),
@@ -309,8 +323,24 @@ class MetricsCollector:
         process.
 
         Args:
-            **kwargs: the raw event payload, in either
-                emitted shape.
+            **kwargs: the raw event payload.
+        """
+        self._pending_timers.pop(self._download_key(kwargs), None)
+
+    @subscribe(Events.DOWNLOAD_CANCELLED)
+    async def _on_download_cancelled(self, **kwargs: Any) -> None:
+        """Discard the pending download timer on cancellation.
+
+        The third terminal event, and for a long time the
+        missing one: only ``COMPLETE`` and ``FAILED`` popped
+        the entry, so every cancelled install left a
+        ``_pending_timers`` row keyed by store and game for
+        the lifetime of the plugin process. It is also what
+        makes ``_on_download_start``'s ``setdefault`` safe —
+        see its docstring.
+
+        Args:
+            **kwargs: the raw event payload.
         """
         self._pending_timers.pop(self._download_key(kwargs), None)
 
@@ -318,16 +348,17 @@ class MetricsCollector:
     def _download_key(payload: dict[str, Any]) -> str:
         """Build the ``_pending_timers`` key for a download event.
 
-        ``DOWNLOAD_*`` is emitted in two shapes: the store
-        installers pass ``store``/``game_id`` at the top
-        level (``stores/epic/install.py:184``) while
-        ``DownloadWorker`` passes the whole item dict
-        (``services/download/worker.py:234``) — the only
-        shape GOG produces. Reading the ids out of ``item``
-        when they're absent up top keeps both shapes on one
-        key. Without it every worker-shaped download shares
-        ``"dl::"``, so two concurrent downloads overwrite
-        each other's start time.
+        Every live emitter is ``services/download/`` and passes
+        the whole queue item as ``item`` — reading the ids out
+        of it is the production path. Without it every download
+        would share the key ``"dl::"`` and two concurrent ones
+        would overwrite each other's start time.
+
+        The top-level ``store``/``game_id`` read is kept as
+        tolerance, not as a live contract: the Epic and Amazon
+        installers used to emit their own store-shaped copy of
+        each event (audit item #4) and a stray re-add should
+        still land on the right key rather than on ``"dl::"``.
 
         Args:
             payload: the raw event kwargs.

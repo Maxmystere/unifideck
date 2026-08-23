@@ -16,7 +16,10 @@ module pins its behaviour:
    undeclared), so the gate cannot pass while broken;
 4. extraction noise is filtered — the priority dispatcher's
    ``bus.emit(item.event, ...)`` must NOT surface as a
-   phantom event named ``"event"``.
+   phantom event named ``"event"``;
+5. single-emitter events are only emitted from their owning
+   subsystem, and that check reports a violation rather than
+   passing regardless (audit item #4).
 
 Resolution of the repo root is robust (env var → walk up from
 the unifideck package → known locations) because the suite
@@ -186,7 +189,44 @@ def test_extraction_noise_is_filtered(
     target = (
         script_module.ROOT / "py_modules" / "unifideck"
     )
-    actual = script_module.walk_sources(target)
+    actual, emitters = script_module.walk_sources(target)
     assert "event" not in actual
     # everything surviving the filter is a real enum member
     assert set(actual) <= script_module.VALID_EVENTS
+    # The emitter map is filtered by the same rule, and covers every
+    # event the kwargs map does — check_emitter_owners reads it.
+    assert set(emitters) == set(actual)
+
+
+# ========================================================= #
+# 5. Single-emitter ownership
+# ========================================================= #
+def test_download_events_are_owned_by_the_download_service(
+    script_module,
+) -> None:
+    """The live tree must have exactly one DOWNLOAD_* emitter.
+
+    Audit item #4: Epic and Amazon emitted the whole download
+    lifecycle a second time from their installers. The kwargs
+    check catches a duplicate that invents its own payload; this
+    one catches a duplicate that copies the right payload from the
+    wrong place.
+    """
+    target = script_module.ROOT / "py_modules" / "unifideck"
+    _actual, emitters = script_module.walk_sources(target)
+
+    assert script_module.check_emitter_owners(emitters) == 0
+    for event, owner in script_module.EMITTER_OWNERS.items():
+        for path in emitters.get(event, set()):
+            assert path.startswith(owner), f"{event} emitted from {path}"
+
+
+def test_an_emitter_outside_its_owning_subsystem_is_reported(
+    script_module,
+) -> None:
+    """The check must actually bite, not just return 0 forever."""
+    owned = next(iter(script_module.EMITTER_OWNERS))
+    violations = script_module.check_emitter_owners(
+        {owned: {"stores/epic/install.py", "services/download/worker.py"}},
+    )
+    assert violations == 1  # the store file only

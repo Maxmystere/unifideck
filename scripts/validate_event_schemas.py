@@ -85,12 +85,19 @@ CANONICAL_SCHEMA: dict[str, set[str]] = {
     "CIRCUIT_STATE_CHANGED":        {"failure_count", "game_id", "is_open", "store", "trigger"},
     "CONFIG_VALIDATION_COMPLETED":  {"defaults_validated", "user_overrides_present"},
     "CONFIG_VALIDATION_FAILED":     {"defaults_validated", "error_count", "first_error_path", "first_error_source", "user_overrides_present"},
+    # Every DOWNLOAD_* event carries the queue item and nothing else
+    # (COMPLETE adds the Game record the shortcut service needs). Epic and
+    # Amazon used to emit a second, store-shaped copy of each — flat
+    # ``store``/``game_id``/``install_path`` with no item — which reached
+    # the frontend as a duplicate failure toast and a no-op refresh (audit
+    # item #4). These sets are deliberately narrow: re-adding a flat kwarg
+    # fails this gate. See also EMITTER_OWNERS below.
     "DOWNLOAD_CANCELLED":           {"item"},
-    "DOWNLOAD_COMPLETE":            {"game", "game_id", "install_path", "item", "store"},
-    "DOWNLOAD_FAILED":              {"error", "error_type", "game_id", "item", "store"},
-    "DOWNLOAD_PROGRESS":            {"eta_seconds", "game_id", "progress", "speed_mbps", "store"},
+    "DOWNLOAD_COMPLETE":            {"game", "item"},
+    "DOWNLOAD_FAILED":              {"error", "error_type", "item"},
+    "DOWNLOAD_PROGRESS":            {"item"},
     "DOWNLOAD_QUEUED":              {"item"},
-    "DOWNLOAD_STARTED":             {"game_id", "item", "store"},
+    "DOWNLOAD_STARTED":             {"item"},
     "GAME_LAUNCHED":                {"app_id", "game_id", "store", "title"},
     "GAME_STOPPED":                 {"app_id", "elapsed_seconds", "exit_code", "game_id", "store", "terminated_by_signal"},
     "GAME_UNINSTALLED":             {"game_id", "store"},
@@ -129,6 +136,23 @@ CANONICAL_SCHEMA: dict[str, set[str]] = {
     "UBISOFT_INSTALL_LAUNCH_REQUESTED": {"store_game_id"},
 }
 
+# Events with a single owning subsystem, as a path prefix relative to
+# ``py_modules/unifideck/``.
+#
+# The kwargs check above catches a second emitter that invents its own
+# payload; it cannot catch one that copies the right payload from the wrong
+# place. ``DownloadWorker`` is the sole dispatcher for all six stores'
+# ``install_game`` / ``update_game``, so it is the only thing that knows
+# when a download really starts and really finishes — a store installer
+# emitting DOWNLOAD_* is a duplicate by construction, and its "complete"
+# fires before the worker has run prefix warmup. Audit item #4.
+EMITTER_OWNERS: dict[str, str] = {
+    f"DOWNLOAD_{name}": "services/download/"
+    for name in (
+        "QUEUED", "STARTED", "PROGRESS", "COMPLETE", "FAILED", "CANCELLED",
+    )
+}
+
 
 def validate_schema_keys() -> int:
     """Assert every CANONICAL_SCHEMA key is a real Events member.
@@ -149,7 +173,7 @@ def validate_schema_keys() -> int:
     return len(phantom)
 
 
-def walk_sources(root: Path) -> dict[str, set[str]]:
+def walk_sources(root: Path) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     """Merge SchemaExtractor results across every .py file.
 
     Extraction noise — any first-arg shape that isn't a literal
@@ -158,8 +182,13 @@ def walk_sources(root: Path) -> dict[str, set[str]]:
     dispatcher's ``bus.emit(item.event, ...)`` resolves to the
     bogus name ``"event"``; filtering on VALID_EVENTS removes it
     along with any other variable / attribute re-emit.
+
+    Returns two maps: ``event -> observed kwargs`` and
+    ``event -> emitting file paths`` (relative to *root*, for
+    :func:`check_emitter_owners`).
     """
     merged: dict[str, set[str]] = {}
+    emitters: dict[str, set[str]] = {}
     for path in root.rglob("*.py"):
         if "__pycache__" in path.parts:
             continue
@@ -168,13 +197,34 @@ def walk_sources(root: Path) -> dict[str, set[str]]:
         except OSError:
             continue
         extracted = SchemaExtractor.extract_from_source(source)
+        rel = path.relative_to(root).as_posix()
         for event, kwargs in extracted.items():
             if event not in VALID_EVENTS:
                 # Extraction noise (variable/attribute re-emit
                 # such as priority_dispatcher's item.event).
                 continue
             merged.setdefault(event, set()).update(kwargs)
-    return merged
+            emitters.setdefault(event, set()).add(rel)
+    return merged, emitters
+
+
+def check_emitter_owners(emitters: dict[str, set[str]]) -> int:
+    """Print emitters outside an event's owning subsystem.
+
+    Prints the number of violations (0 = clean). An event with no
+    observed emitter is skipped, same as :func:`compare` does.
+    """
+    errors = 0
+    for event, owner in sorted(EMITTER_OWNERS.items()):
+        for path in sorted(emitters.get(event, set())):
+            if path.startswith(owner):
+                continue
+            print(
+                f"  ✗  {event}: emitted from {path!r}, but only "
+                f"{owner!r} may emit it (single-emitter event)"
+            )
+            errors += 1
+    return errors
 
 
 def compare(
@@ -236,12 +286,13 @@ def main() -> int:
         return 1
 
     print(f"→ walking {target}")
-    actual = walk_sources(target)
+    actual, emitters = walk_sources(target)
     print(
         f"→ extracted {len(actual)} distinct events from source "
         f"(noise filtered against {len(VALID_EVENTS)} enum members)"
     )
     errors = compare(actual, CANONICAL_SCHEMA)
+    errors += check_emitter_owners(emitters)
     if errors == 0:
         print("\n✓ event schemas valid")
         return 0

@@ -153,23 +153,12 @@ class AmazonInstaller:
                 store="amazon",
                 game_id=game_id,
             )
-        await self._bus.emit(
-            Events.DOWNLOAD_STARTED,
-            store="amazon",
-            game_id=game_id,
-        )
         outcome = await self._run_install(base, game_id, progress_cb, verb)
         if outcome.rc != 0:
             error = _format_exit_error(outcome)
             logger.error(
                 "[AmazonInstall] %s failed for %s: %s",
                 verb, game_id, outcome.tail or "(no output captured)",
-            )
-            await self._bus.emit(
-                Events.DOWNLOAD_FAILED,
-                store="amazon",
-                game_id=game_id,
-                error=error,
             )
             return InstallResult(
                 success=False,
@@ -207,12 +196,6 @@ class AmazonInstaller:
                 "directory found on disk; nile said: %s",
                 game_id, base, tail or "(no output captured)",
             )
-            await self._bus.emit(
-                Events.DOWNLOAD_FAILED,
-                store="amazon",
-                game_id=game_id,
-                error=error,
-            )
             return InstallResult(
                 success=False,
                 error=error,
@@ -236,24 +219,18 @@ class AmazonInstaller:
             )
         except OSError as exc:
             logger.exception("[AmazonInstall] write_manifest failed for %s", install_path)
-            await self._bus.emit(
-                Events.DOWNLOAD_FAILED,
-                store="amazon",
-                game_id=game_id,
-                error=f"manifest_write: {exc}",
-            )
             return InstallResult(
                 success=False,
                 error=f"manifest_write: {exc}",
                 store="amazon",
                 game_id=game_id,
             )
-        await self._bus.emit(
-            Events.DOWNLOAD_COMPLETE,
-            store="amazon",
-            game_id=game_id,
-            install_path=install_path,
-        )
+        # No ``DOWNLOAD_COMPLETE`` here — see the same note in
+        # ``stores/epic/install.py``. ``DownloadWorker`` owns every
+        # ``DOWNLOAD_*`` emit for all six stores; the install is still
+        # mid-flight at this point because prefix warmup has not run yet,
+        # and only the worker's payload carries the ``Game`` record the
+        # shortcut service needs to flip the install tag.
         return InstallResult(
             success=True,
             store="amazon",
@@ -378,6 +355,10 @@ class AmazonInstaller:
             logger.debug("[nile install] %s", line)
             return
 
+        # The callback is the only report: it merges this tick onto the
+        # queue item (``worker_helpers.apply_dict_progress`` reads both
+        # ``progress_percent`` and ``speed_bps``) and the worker emits the
+        # one ``DOWNLOAD_PROGRESS`` from there.
         if progress_cb is not None:
             try:
                 await progress_cb(dict(self._current_progress))
@@ -386,14 +367,6 @@ class AmazonInstaller:
                     "[amazon_install] progress_cb raised: %s",
                     e,
                 )
-        await self._bus.emit(
-            Events.DOWNLOAD_PROGRESS,
-            store="amazon",
-            game_id=game_id,
-            progress=self._current_progress.get("progress_percent", 0.0),
-            speed_mbps=self._current_progress.get("speed_bps", 0.0) / (1024 * 1024),
-            eta_seconds=self._current_progress.get("eta_seconds", 0),
-        )
 
     async def _resolve_install_path(self, game_id: str, base: str) -> str | None:
         """Resolve install path from nile's installed.json or fallback.

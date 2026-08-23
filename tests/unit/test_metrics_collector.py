@@ -9,19 +9,22 @@ returned 0, seven identical "wired" lines hit the log per plugin start
 forever. ``sync_started``, ``sync_complete`` and ``download_started``
 had no subscriber at all.
 
-Two payload facts these tests pin down, because the handlers only became
-reachable with the fix:
+Three payload facts these tests pin down, because the handlers only
+became reachable with the fix:
 
-* ``DOWNLOAD_*`` is emitted in two shapes — ``DownloadWorker`` sends
-  ``item=<dict>`` (the only shape GOG produces), the store installers
-  send ``store=``/``game_id=`` at the top level. Both must resolve to
-  one key, or every worker-shaped download shares ``"dl::"``.
-* Failure events must drop the pending entry. Download keys carry a game
-  id, so without that every cancelled install leaks one entry for the
-  lifetime of the plugin process.
+* every ``DOWNLOAD_*`` event carries ``item=<dict>`` and the ids are read
+  out of it, or every download shares the key ``"dl::"``. The top-level
+  ``store=``/``game_id=`` read is kept as tolerance only: it belonged to
+  the store-shaped duplicates Epic and Amazon emitted until audit item #4.
+* ``DOWNLOAD_STARTED`` fires more than once per install (the "preparing"
+  phase re-emit), so the FIRST start is the one that gets measured.
+* all three terminal events must drop the pending entry. Download keys
+  carry a game id, so a missing one leaks an entry for the lifetime of
+  the plugin process — and it is what makes keeping the first start safe.
 """
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from unifideck.core.metrics_collector import MetricsCollector
@@ -59,6 +62,7 @@ async def test_every_handler_is_wired_exactly_once() -> None:
         # decorated handlers only — no counter declared
         "sync_started": 1,
         "download_started": 1,
+        "download_cancelled": 1,
         # two decorated handlers: timer + gauges
         "sync_complete": 2,
         # counter only
@@ -120,8 +124,15 @@ async def test_concurrent_auth_flows_do_not_share_a_timer() -> None:
     assert metrics._pending_timers == {}
 
 
-# ── V4/V5/V6: both download payload shapes ────────────────────────
-async def test_store_shaped_download_pair_records_a_duration() -> None:
+# ── V4/V5/V6: download payload keying ─────────────────────────────
+async def test_top_level_shaped_download_pair_records_a_duration() -> None:
+    """Defensive tolerance, not a live contract.
+
+    No emitter passes the ids at the top level any more — Epic and Amazon
+    did until audit item #4 retired their store-shaped duplicates. The
+    read is kept so a stray re-add lands on the right key instead of
+    collapsing onto ``"dl::"``.
+    """
     bus, metrics = _collector()
     await bus.emit(Events.DOWNLOAD_STARTED, store="epic", game_id="g1")
     await bus.emit(
@@ -132,7 +143,7 @@ async def test_store_shaped_download_pair_records_a_duration() -> None:
 
 
 async def test_worker_shaped_download_pair_records_a_duration() -> None:
-    """The ids live inside ``item`` — the only shape GOG emits."""
+    """The ids live inside ``item`` — the shape every store emits."""
     bus, metrics = _collector()
     item = {"store": "gog", "game_id": "g1", "title": "A Game"}
     await bus.emit(Events.DOWNLOAD_STARTED, item=item)
@@ -154,26 +165,48 @@ async def test_concurrent_worker_downloads_do_not_share_a_key() -> None:
     assert metrics._pending_timers == {}
 
 
-# ── V8: the double emission Epic and Amazon produce ───────────────
-async def test_double_emitted_download_measures_once() -> None:
-    """Both shapes fire for Epic/Amazon; the timer must not double-write.
+# ── V8: one install counts once, however many phases it has ───────
+async def test_one_install_counts_once() -> None:
+    """A single install produces a single completion.
 
-    The duplicate ``download_completed`` count asserted here is not this
-    module's bug — it is the double ``DOWNLOAD_*`` emission tracked as
-    audit item #4. Pinned so a future single-emitter fix trips this test
-    deliberately instead of silently.
+    Epic and Amazon used to emit every download event twice — once as
+    ``DownloadWorker`` and once from the store installer — which counted
+    every Epic/Amazon install twice against ``download_completed`` while
+    the other four stores counted once. Support bundles carry these
+    counters, so the two most-used stores read doubled during triage.
+    Audit item #4 retired the store-shaped emits.
     """
     bus, metrics = _collector()
     item = {"store": "epic", "game_id": "g1"}
     await bus.emit(Events.DOWNLOAD_STARTED, item=item)
-    await bus.emit(Events.DOWNLOAD_STARTED, store="epic", game_id="g1")
-    await bus.emit(
-        Events.DOWNLOAD_COMPLETE, store="epic", game_id="g1", install_path="/x",
-    )
     await bus.emit(Events.DOWNLOAD_COMPLETE, item=item, game={})
     snapshot = metrics.get_plugin_metrics()
     assert snapshot["timers_ms"]["download_duration_ms"] > 0
-    assert snapshot["counters"]["download_completed"] == 2
+    assert snapshot["counters"]["download_completed"] == 1
+    assert metrics._pending_timers == {}
+
+
+async def test_phase_reemit_does_not_restart_the_clock() -> None:
+    """The "preparing" re-emit must not become the measured start.
+
+    ``DownloadWorker`` re-emits ``DOWNLOAD_STARTED`` when the download
+    finishes and prefix warmup begins, so the frontend refetches the queue
+    and the row picks up its new phase. Assigning the start time there made
+    ``download_duration_ms`` report only the warmup window — seconds for an
+    install that took an hour. The first start is the real one.
+    """
+    bus, metrics = _collector()
+    item = {"store": "epic", "game_id": "g1"}
+    await bus.emit(Events.DOWNLOAD_STARTED, item=item)
+    first_start = metrics._pending_timers["dl:epic:g1"]
+    # The download phase, then the "preparing" phase re-emit.
+    await bus.emit(Events.DOWNLOAD_PROGRESS, item=item)
+    await bus.emit(Events.DOWNLOAD_STARTED, item=item)
+    assert metrics._pending_timers["dl:epic:g1"] == first_start
+    await bus.emit(Events.DOWNLOAD_COMPLETE, item=item, game={})
+    snapshot = metrics.get_plugin_metrics()
+    assert snapshot["timers_ms"]["download_duration_ms"] > 0
+    assert snapshot["counters"]["download_completed"] == 1
     assert metrics._pending_timers == {}
 
 
@@ -208,6 +241,41 @@ async def test_failed_download_drops_the_pending_timer() -> None:
     assert snapshot["counters"]["download_failed"] == 1
     assert "download_duration_ms" not in snapshot["timers_ms"]
     assert metrics._pending_timers == {}
+
+
+async def test_cancelled_download_drops_the_pending_timer() -> None:
+    """The other half of the same leak.
+
+    Only COMPLETE and FAILED used to pop the entry, so every cancelled
+    install left a ``dl:<store>:<game>`` row in ``_pending_timers`` for the
+    lifetime of the plugin process.
+    """
+    bus, metrics = _collector()
+    item = {"store": "epic", "game_id": "g1"}
+    await bus.emit(Events.DOWNLOAD_STARTED, item=item)
+    await bus.emit(Events.DOWNLOAD_CANCELLED, item=item)
+    assert metrics._pending_timers == {}
+    assert "download_duration_ms" not in metrics.get_plugin_metrics()["timers_ms"]
+
+
+async def test_retry_after_a_cancel_does_not_inherit_the_stale_clock() -> None:
+    """Why the cancel handler and ``setdefault`` are one fix, not two.
+
+    ``_on_download_start`` keeps the FIRST start time so the "preparing"
+    phase re-emit can't reset it. That is only safe because all three
+    terminal events clear the entry: without the cancel handler, retrying
+    the same game would measure from the abandoned attempt's clock.
+    """
+    bus, metrics = _collector()
+    item = {"store": "epic", "game_id": "g1"}
+    await bus.emit(Events.DOWNLOAD_STARTED, item=item)
+    await bus.emit(Events.DOWNLOAD_CANCELLED, item=item)
+    await bus.emit(Events.DOWNLOAD_STARTED, item=item)
+    retry_start = metrics._pending_timers["dl:epic:g1"]
+    await bus.emit(Events.DOWNLOAD_COMPLETE, item=item, game={})
+    duration = metrics.get_plugin_metrics()["timers_ms"]["download_duration_ms"]
+    # Measured from the retry's own start, not the cancelled attempt's.
+    assert duration <= (time.monotonic() - retry_start) * 1000 + 1
 
 
 async def test_repeated_failures_do_not_accumulate_pending_entries() -> None:
