@@ -188,9 +188,12 @@ class ObservabilityRPCMixin:
     def _support_bundle_extra(self) -> dict[str, Any]:
         """Gather the facts only this layer can see.
 
-        Feature flags and the frontend's boot-time CEF probe results
-        live on the plugin instance, not on the filesystem, so the
-        collector cannot reach them. Kept sync and underscore-prefixed
+        Feature flags, the frontend's boot-time CEF probe results and
+        the bus metrics snapshot live on the plugin instance, not on
+        the filesystem, so the collector cannot reach them. The metrics
+        block is counters, timers, gauges and uptime only — no titles,
+        ids or paths — which is what makes it safe to put in a bundle
+        a reporter pastes in public. Kept sync and underscore-prefixed
         so the RPC auto-wrapper skips it. Each lookup is guarded
         individually — a missing flag service must not cost us the
         whole bundle.
@@ -205,6 +208,12 @@ class ObservabilityRPCMixin:
         probes = getattr(self, "runtime_probes", None)
         if probes:
             extra["runtime_probes"] = probes
+        metrics = getattr(self.services, "metrics", None)
+        if metrics is not None:
+            try:
+                extra["plugin_metrics"] = metrics.get_plugin_metrics()
+            except Exception:
+                logger.debug("[Observability] metrics snapshot failed", exc_info=True)
         return extra
 
     async def report_runtime_probes(self, probes: list[dict[str, Any]]) -> Any:

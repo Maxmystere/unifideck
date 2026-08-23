@@ -122,6 +122,35 @@ async def test_flags_and_probes_are_folded_in() -> None:
     assert extra["runtime_probes"][0]["name"] == "cef"
 
 
+async def test_plugin_metrics_reach_the_environment_report() -> None:
+    """Counters/timers/gauges are in-memory only, so the collector can't
+    read them off disk — the RPC layer has to hand them over."""
+    service = _FakeBundleService()
+    snapshot = {
+        "counters": {"auth_attempts": 3},
+        "timers_ms": {"sync_duration_ms": 812.4},
+        "gauges": {"sync_games_total": 214.0},
+        "uptime_s": 90,
+    }
+    host = _host(service, metrics=SimpleNamespace(get_plugin_metrics=lambda: snapshot))
+    await host.capture_logs()
+    extra = service.calls[0][1] or {}
+    assert extra["plugin_metrics"]["timers_ms"]["sync_duration_ms"] == 812.4
+    assert extra["plugin_metrics"]["counters"]["auth_attempts"] == 3
+
+
+async def test_a_broken_metrics_service_does_not_cost_the_bundle() -> None:
+    """Same contract as the flag service: optional context, never fatal."""
+    def _explode() -> dict[str, Any]:
+        raise RuntimeError("metrics service down")
+
+    service = _FakeBundleService()
+    host = _host(service, metrics=SimpleNamespace(get_plugin_metrics=_explode))
+    result = await host.capture_logs()
+    assert result["archive_path"]
+    assert service.calls[0][1] == {}
+
+
 async def test_extra_is_still_a_dict_with_neither_available() -> None:
     service = _FakeBundleService()
     await _host(service).capture_logs()

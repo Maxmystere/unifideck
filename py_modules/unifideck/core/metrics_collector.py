@@ -33,6 +33,7 @@ from typing import Any
 
 from unifideck.core.types import Events
 from unifideck.event_bus.event_bus import EventBus
+from unifideck.event_bus.event_bus_devex import auto_wire, subscribe
 
 logger = logging.getLogger(__name__)
 
@@ -76,12 +77,17 @@ class MetricsCollector:
            closure captures the counter name and forwards
            any kwargs (ignored).
         2. **Decorated handlers** — the ``_on_*`` methods
-           use ``auto_wire`` so they're picked up by the
-           bus's introspection. Note: ``auto_wire`` is
-           called inside the loop — should only run once,
-           but extra calls are no-ops (idempotent).
+           carry ``@subscribe`` metadata, so a single
+           ``auto_wire`` call registers all of them.
 
-        Logs at INFO with the wiring count once
+        ``auto_wire`` must run exactly **once**.
+        ``EventBus.on`` allows duplicate registrations by
+        design (it says so in its own docstring), so
+        calling it once per counter row — as this method
+        used to — subscribes every decorated handler seven
+        times over and multiplies everything they record.
+
+        Logs at INFO with both wiring counts once
         registration completes.
         """
         counter_events = [
@@ -95,13 +101,12 @@ class MetricsCollector:
         ]
         for event, name in counter_events:
             self._bus.on(event, lambda n=name, **kw: self._inc_counter(n))
-            from unifideck.event_bus.event_bus_devex import auto_wire
-
-            auto_wire(self, self._bus)
-            logger.info(
-                "[MetricsCollector] wired (%d counter + decorated handlers)",
-                len(counter_events),
-            )
+        wired = auto_wire(self, self._bus)
+        logger.info(
+            "[MetricsCollector] wired (%d counter + %d decorated handlers)",
+            len(counter_events),
+            wired,
+        )
 
     async def stop(self) -> None:
         """No-op shutdown hook.
@@ -151,7 +156,8 @@ class MetricsCollector:
         """
         self._counters[name] = self._counters.get(name, 0) + 1
 
-    def _on_auth_start(self, store: str = "", **kwargs: Any) -> None:
+    @subscribe(Events.STORE_AUTH_STARTED)
+    async def _on_auth_start(self, store: str = "", **kwargs: Any) -> None:
         """Stash the monotonic start time for an auth attempt.
 
         Keyed by ``"auth:<store>"`` so concurrent auth
@@ -164,7 +170,8 @@ class MetricsCollector:
         """
         self._pending_timers[f"auth:{store}"] = time.monotonic()
 
-    def _on_auth_complete(self, store: str = "", **kwargs: Any) -> None:
+    @subscribe(Events.STORE_AUTH_COMPLETE)
+    async def _on_auth_complete(self, store: str = "", **kwargs: Any) -> None:
         """Finalise the auth timer for ``store`` into ``auth_duration_ms``.
 
         Look up the pending start, compute elapsed, store
@@ -178,7 +185,8 @@ class MetricsCollector:
         """
         self._complete_timer(f"auth:{store}", "auth_duration_ms")
 
-    def _on_sync_start(self, **kwargs: Any) -> None:
+    @subscribe(Events.SYNC_STARTED)
+    async def _on_sync_start(self, **kwargs: Any) -> None:
         """Stash the monotonic start time for a sync.
 
         Single shared timer key (``"sync"``) — only one
@@ -189,7 +197,8 @@ class MetricsCollector:
         """
         self._pending_timers["sync"] = time.monotonic()
 
-    def _on_sync_complete(self, **kwargs: Any) -> None:
+    @subscribe(Events.SYNC_COMPLETE)
+    async def _on_sync_complete(self, **kwargs: Any) -> None:
         """Finalise the sync timer into ``sync_duration_ms``.
 
         Args:
@@ -197,37 +206,41 @@ class MetricsCollector:
         """
         self._complete_timer("sync", "sync_duration_ms")
 
-    def _on_download_start(self, store: str = "", game_id: str = "", **kwargs: Any) -> None:
+    @subscribe(Events.DOWNLOAD_STARTED)
+    async def _on_download_start(self, **kwargs: Any) -> None:
         """Stash the monotonic start time for a download.
 
-        Keyed by ``"dl:<store>:<game_id>"`` so concurrent
+        Keyed via :meth:`_download_key` so concurrent
         downloads don't conflict.
 
         Args:
-            store: store identifier.
-            game_id: store-specific game id.
-            **kwargs: ignored.
+            **kwargs: the raw event payload, in either
+                emitted shape.
         """
-        self._pending_timers[f"dl:{store}:{game_id}"] = time.monotonic()
+        self._pending_timers[self._download_key(kwargs)] = time.monotonic()
 
-    def _on_download_complete(
-        self, store: str = "", game_id: str = "", **kwargs: Any,
-    ) -> None:
+    @subscribe(Events.DOWNLOAD_COMPLETE)
+    async def _on_download_complete(self, **kwargs: Any) -> None:
         """Finalise the (store, game_id) download timer.
 
-        Records into ``download_duration_ms``.
+        Records into ``download_duration_ms``. Epic and
+        Amazon complete twice (one worker-shaped event, one
+        store-shaped — see :meth:`_download_key`); because
+        both resolve to the same key, the first one pops the
+        pending entry and the second is a no-op instead of
+        overwriting the measurement.
 
         Args:
-            store: store identifier.
-            game_id: store-specific game id.
-            **kwargs: ignored.
+            **kwargs: the raw event payload, in either
+                emitted shape.
         """
         self._complete_timer(
-            f"dl:{store}:{game_id}",
+            self._download_key(kwargs),
             "download_duration_ms",
         )
 
-    def _on_sync_gauge(
+    @subscribe(Events.SYNC_COMPLETE)
+    async def _on_sync_gauge(
         self,
         games: list[Any] | None = None,
         stores_synced: list[str] | None = None,
@@ -258,6 +271,76 @@ class MetricsCollector:
             self._gauges["sync_games_total"] = float(len(games))
             if stores_synced is not None:
                 self._gauges["sync_stores_count"] = float(len(stores_synced))
+
+    @subscribe(Events.STORE_AUTH_FAILED)
+    async def _on_auth_failed(self, store: str = "", **kwargs: Any) -> None:
+        """Discard the pending auth timer for ``store``.
+
+        A failed attempt has no duration worth recording.
+        Dropping the entry also stops a later
+        ``STORE_AUTH_COMPLETE`` that arrives without its own
+        start — the wrapper-store monitor emits one on token
+        capture — from being measured against this failed
+        attempt's clock.
+
+        Args:
+            store: store identifier.
+            **kwargs: ignored.
+        """
+        self._pending_timers.pop(f"auth:{store}", None)
+
+    @subscribe(Events.SYNC_FAILED)
+    async def _on_sync_failed(self, **kwargs: Any) -> None:
+        """Discard the pending sync timer.
+
+        Args:
+            **kwargs: ignored.
+        """
+        self._pending_timers.pop("sync", None)
+
+    @subscribe(Events.DOWNLOAD_FAILED)
+    async def _on_download_failed(self, **kwargs: Any) -> None:
+        """Discard the pending download timer.
+
+        The one cleanup that matters for more than accuracy:
+        download keys carry a game id, so without this every
+        failed or cancelled install would leave an entry in
+        ``_pending_timers`` for the lifetime of the plugin
+        process.
+
+        Args:
+            **kwargs: the raw event payload, in either
+                emitted shape.
+        """
+        self._pending_timers.pop(self._download_key(kwargs), None)
+
+    @staticmethod
+    def _download_key(payload: dict[str, Any]) -> str:
+        """Build the ``_pending_timers`` key for a download event.
+
+        ``DOWNLOAD_*`` is emitted in two shapes: the store
+        installers pass ``store``/``game_id`` at the top
+        level (``stores/epic/install.py:184``) while
+        ``DownloadWorker`` passes the whole item dict
+        (``services/download/worker.py:234``) — the only
+        shape GOG produces. Reading the ids out of ``item``
+        when they're absent up top keeps both shapes on one
+        key. Without it every worker-shaped download shares
+        ``"dl::"``, so two concurrent downloads overwrite
+        each other's start time.
+
+        Args:
+            payload: the raw event kwargs.
+
+        Returns:
+            ``"dl:<store>:<game_id>"``.
+        """
+        item = payload.get("item")
+        if not isinstance(item, dict):
+            item = {}
+        store = payload.get("store") or item.get("store") or ""
+        game_id = payload.get("game_id") or item.get("game_id") or ""
+        return f"dl:{store}:{game_id}"
 
     def _complete_timer(self, key: str, metric_name: str) -> None:
         """Compute elapsed time and record into ``_timers[metric_name]``.
