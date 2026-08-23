@@ -63,6 +63,13 @@ jobs:
       - name: Validate event schemas
         run: python3 scripts/validate_event_schemas.py
 
+      # Static architecture-invariant gate: main.py mixin set vs
+      # rpc/mixins/__init__.py __all__, store list (cache_registry vs disk),
+      # and uses_wine vs WRAPPER_STORES. Exits 1 on any hard mismatch; the
+      # dead-RPC check is report-only. See unifideck-drift-guard skill.
+      - name: Validate architecture invariants
+        run: python3 scripts/validate_architecture.py
+
       - name: Run tests with coverage (strict)
         run: |
           # -W error                    : every warning is an error

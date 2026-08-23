@@ -13,16 +13,14 @@ The module deliberately stays thin :
       ``boot_plugin``, called once Decky has signalled the plugin is
       mounted and the event loop is alive.
     * No top-level RPC method bodies — RPC surface comes from the
-      eleven mixins composed below ; ``@auto_wrap_rpc_methods``
+      twenty mixins composed below ; ``@auto_wrap_rpc_methods``
       decorates each public coroutine so it returns a typed
       ``Result`` envelope instead of raising.
 
-The five-layer architecture (see operational plan v1.3, section 2)
-flows downward from this entry : Layer 6 (RPC mixins) → Layer 5
-(services) → Layer 4 (stores) → Layer 3 (event bus / cache /
-config) → Layer 2 (core) → Layer 1 (paths / I/O). This file
-references only Layer 6 (mixins) and the bootstrap helpers ; it
-never imports a service or store directly.
+The layered architecture flows downward from this entry (see
+``docs/architecture.md`` for the authoritative layer diagram; do not
+restate a layer count here). This file references only the RPC mixins
+and the bootstrap helpers ; it never imports a service or store directly.
 """
 
 from __future__ import annotations
