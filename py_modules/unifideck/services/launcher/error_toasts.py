@@ -25,32 +25,34 @@ async def emit_launcher_error_toast(
     ctx: LaunchContext,
     err_code: str,
 ) -> None:
-    """Emit a user-facing error toast for a LauncherError."""
-    from unifideck.core.types.events import Events
+    """Emit a user-facing error toast for a LauncherError.
 
-    from .circuit_breaker import get_launch_id_or_none
+    This is the catch-all for a launch that died on an error nothing
+    more specific handled — the specific failures (umu retry, prefix
+    init, GE fallback) toast from their own sites. It goes out on
+    ``LAUNCHER_STAGE`` for the same reason as the circuit-breaker toast:
+    we are in the launcher subprocess, and its bus reaches the UI only
+    through ``frontend_bridge``'s LAUNCHER_STAGE forwarder. The previous
+    ``TOAST_NOTIFICATION`` emit had no forwarder and no subscriber, so a
+    terminal launch failure produced no message anywhere — the
+    dispatcher just mapped the ``Result`` to an exit code and exited,
+    and Steam shows nothing for a non-Steam shortcut exiting non-zero.
+    """
+    from unifideck.launcher.game_title import resolve_title
+    from unifideck.launcher.rpc import emit_stage
 
-    store = ctx.store
-    game_id = ctx.game_id
-    game_key = f"{store}:{game_id}"
-
-    launch_id = await get_launch_id_or_none(svc)
-
-    actions = []
-    if launch_id:
-        actions.append({
-            "label": "Show logs",
-            "url": f"unifideck://show-logs/{launch_id}"
-        })
+    title = resolve_title(ctx.game_key)
 
     try:
-        await svc._bus.emit(
-            Events.TOAST_NOTIFICATION,
+        await emit_stage(
+            svc._bus,
+            i18n_key="toasts.launcher.launcherError",
+            game_title=title,
             severity="error",
             duration_ms=10000,
-            i18n_key="toasts.launcher.launcherError",
-            params={"game_key": game_key, "error_code": err_code},
-            actions=actions,
+            # ``{{game_key}}`` is the placeholder the string declares —
+            # see the note in circuit_breaker.emit_circuit_open_toast.
+            i18n_params={"game_key": title, "error_code": err_code},
         )
     except Exception as e:
         logger.warning("[ErrorToasts] Failed to emit error toast: %s", e)

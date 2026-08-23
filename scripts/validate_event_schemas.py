@@ -125,7 +125,6 @@ CANONICAL_SCHEMA: dict[str, set[str]] = {
     "SYNC_PROGRESS":                {"current_game", "progress_percent", "status", "store", "synced_games", "total_games"},
     "SYNC_SKIPPED":                 {"reason", "store"},
     "SYNC_STARTED":                 {"registered_phases", "scope", "stores"},
-    "TOAST_NOTIFICATION":           {"actions", "duration_ms", "i18n_key", "params", "severity"},
     "BATTLENET_INSTALL_LAUNCH_REQUESTED": {"store_game_id"},
     "UBISOFT_INSTALL_LAUNCH_REQUESTED": {"store_game_id"},
 }

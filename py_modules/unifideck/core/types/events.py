@@ -102,19 +102,36 @@ class Events(StrEnum):
     SUSPEND = "suspend"
     RESUME = "resume"
 
-    # Launcher progress stages + toast bridge.
-    # Emitted by LauncherService and cloud_failure.py as a
+    # Launcher progress stages + the plugin's ONLY user-facing toast
+    # channel. Emitted by LauncherService and cloud_failure.py as a
     # game moves through the launch pipeline (prefix setup,
     # cloud sync, proton selection, umu-run start, ...).
     # Also emitted on cloud sync failures, disk space checks,
-    # and circuit breaker events. The frontend's
-    # LauncherToastListener subscribes to this channel to
-    # render toast notifications with optional action buttons
-    # (see actions/unifideck_uri.py for the URI scheme).
+    # circuit breaker refusals, and shortcut write refusals.
+    #
+    # Despite the name it is not launch-only: any service that needs to
+    # surface an asynchronous message to the user emits here. A separate
+    # TOAST_NOTIFICATION member existed until 2026-08 for exactly that
+    # "generic notification" job and was retired — it had no subscriber
+    # in either process, and its three emitters (circuit breaker,
+    # launcher error, shortcut write refusal) were silent for their whole
+    # lifetime. Do not reintroduce a second toast channel: this one is
+    # the only name wired on both delivery legs.
+    #
+    # Two legs reach the UI, one per process:
+    #   * plugin backend → replay buffer → subscribe_replay →
+    #     src/services/boot-event-listener.tsx;
+    #   * launcher subprocess → frontend_bridge.install_bus_forwarder →
+    #     launcher_events.jsonl → get_launcher_toasts →
+    #     src/services/launcherToasts.tsx.
+    # The forwarder mirrors THIS event and no other, which is why an
+    # event emitted in the launcher on any other name cannot be seen.
+    #
     # Payload fields: i18n_key (str), i18n_title_key? (str — bold
     # toast title rendered above i18n_key's message), severity
     # ("info"|"warning"|"error"), i18n_params (dict),
-    # duration_ms (int), action? ({i18n_label_key, target_url,
+    # duration_ms? (int — overrides the frontend's per-severity
+    # default), action? ({i18n_label_key, target_url,
     # fallback_url?}), store?, game_id?, phase?.
     LAUNCHER_STAGE = "launcher_stage"
 
@@ -295,21 +312,14 @@ class Events(StrEnum):
     SHORTCUT_RECONCILE_COMPLETE = "shortcut_reconcile_complete"
 
     # ── UI toast notification ────────────────────────────────────
-    # Generic frontend toast trigger. Emitted by any service that
-    # needs to surface a user-facing message asynchronously
-    # (launcher error, circuit breaker tripped, sync failed, etc.).
-    # The frontend subscribes via the bus bridge and displays the
-    # toast styled per ``severity``.
-    # Added 2026-05-15 (lot 12c): the emit sites in
-    # services/launcher/{circuit_breaker,error_toasts}.py have
-    # always referenced ``Events.TOAST_NOTIFICATION`` but the enum
-    # member was never declared — both call sites were silent
-    # no-ops, so launcher errors and circuit-breaker trips never
-    # actually reached the UI.
-    # Payload fields: severity ("info" | "warning" | "error"),
-    #   duration_ms (int), i18n_key (str), params (dict[str, Any]),
-    #   actions (list[dict[str, Any]], opt).
-    TOAST_NOTIFICATION = "toast_notification"
+    # TOAST_NOTIFICATION lived here and was retired 2026-08. Declaring
+    # the member in 2026-05 fixed only the AttributeError its three emit
+    # sites were raising — it never made them reach the UI, because the
+    # name was absent from src/types/events.ts and WATCHED_EVENTS, had no
+    # Python subscriber, and was not mirrored by the launcher's bus
+    # forwarder (which carries LAUNCHER_STAGE alone). All three emitters
+    # now use LAUNCHER_STAGE; see its comment above. Generic toasts have
+    # one channel on purpose.
 
     # On-demand artwork fetch request. Any caller may emit this to
     # ask ArtworkService to pull covers for a given title from

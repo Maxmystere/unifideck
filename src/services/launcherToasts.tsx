@@ -20,16 +20,16 @@ import { rpcRoutes } from "../api/rpc-routes";
 import { unwrapRpcEnvelope } from "../api/useRPC";
 import { EventBusClient } from "../api/event-bus-client";
 import { CloudSaveConflictModal } from "../components/modals/CloudSaveConflictModal";
+import { resolveToastDuration } from "./toast-duration";
 
 const POLL_INTERVAL_MS = 2000;
-const DEFAULT_DURATION = 5000;
-const LONG_DURATION = 7500;
 
 interface LauncherToast {
   i18n_key?: string;
   i18n_title_key?: string;
   i18n_params?: Record<string, unknown>;
   severity?: "info" | "warning" | "error";
+  duration_ms?: number;
   game_title?: string;
   action?: { verb: string; args: string[] };
   local_snapshot?: Record<string, unknown>;
@@ -119,13 +119,12 @@ function showLauncherToast(ev: LauncherToast): void {
     ? String(i18n.t(ev.i18n_title_key, params))
     : message;
   const body = ev.i18n_title_key ? message : "";
-  const longer = ev.severity === "error" || ev.severity === "warning";
 
   try {
     toaster.toast({
       title,
       body,
-      duration: longer ? LONG_DURATION : DEFAULT_DURATION,
+      duration: resolveToastDuration(ev.duration_ms, ev.severity),
     });
   } catch {
     console.log(`[LauncherToast] ${title}: ${body}`);

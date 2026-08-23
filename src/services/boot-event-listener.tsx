@@ -20,22 +20,20 @@ import i18n from "i18next";
 import { EventBusClient } from "../api/event-bus-client";
 import { type ToastActionPayload } from "../types/events";
 import { CloudSaveConflictModal } from "../components/modals/CloudSaveConflictModal";
-
-const DEFAULT_DURATION = 5000;
-const ERROR_DURATION = 7500;
+import { resolveToastDuration } from "./toast-duration";
 
 /** Show a toast via the imperative Decky toaster API. */
 function showToast(
   title: string,
   body: string,
   severity?: "info" | "warning" | "error",
+  durationMs?: number,
 ): void {
-  const longer = severity === "error" || severity === "warning";
   try {
     toaster.toast({
       title,
       body,
-      duration: longer ? ERROR_DURATION : DEFAULT_DURATION,
+      duration: resolveToastDuration(durationMs, severity),
     });
   } catch {
     console.log(`[BootEventListener] ${title}: ${body}`);
@@ -105,9 +103,9 @@ export function startBootEventListener(): () => void {
       // Generic toast
       if (p.i18n_title_key) {
         const title = String(i18n.t(p.i18n_title_key, params));
-        showToast(title, message, p.severity);
+        showToast(title, message, p.severity, p.duration_ms);
       } else {
-        showToast(message, "", p.severity);
+        showToast(message, "", p.severity, p.duration_ms);
       }
     }),
   );
