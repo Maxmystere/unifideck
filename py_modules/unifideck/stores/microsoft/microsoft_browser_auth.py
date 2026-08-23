@@ -4,6 +4,10 @@ import logging
 import urllib.parse
 from typing import Any
 
+from unifideck.auth.flow_events import (
+    RECONCILE_FLOW_EVENTS,
+    RECONCILE_TIMEOUT_SECONDS,
+)
 from unifideck.auth.orchestrator import AuthOrchestrator
 from unifideck.core.types import AuthResult, Events, Result
 from unifideck.event_bus.event_bus import EventBus
@@ -32,8 +36,14 @@ class MicrosoftBrowserAuth:
         self._config = config
         self._config_manager = config_manager
     @audit_auth_flow(store="microsoft", method="oauth_browser")
-    async def start_auth(self) -> AuthResult:
-        """Start auth."""
+    async def start_auth(self, *, reconcile: bool = False) -> AuthResult:
+        """Start auth, or reconcile the session after a shop visit.
+
+        ``reconcile=True`` re-runs the exchange so the stored tokens
+        follow an account switch the user made in the store browser. It
+        reports on the reconcile events instead of ``STORE_AUTH_*``, so
+        a failure cannot blank the store's row in the settings UI.
+        """
         if not self._config.is_valid():
             return AuthResult(
                 success=False,
@@ -47,6 +57,8 @@ class MicrosoftBrowserAuth:
             ),
             exchange_code=self._exchange_code,
             background=True,
+            events=RECONCILE_FLOW_EVENTS if reconcile else None,
+            timeout=RECONCILE_TIMEOUT_SECONDS if reconcile else None,
             write_url_file=_MS_AUTH_URL_FILE,
         )
     async def _build_auth_url(self) -> str:

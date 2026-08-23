@@ -156,7 +156,9 @@
     "authenticate": "تسجيل الدخول",
     "legendaryNotInstalled": "⚠️ جاري تثبيت أداة Epic Games...",
     "nileNotInstalled": "⚠️ أداة Amazon Games غير موجودة",
-    "error": "خطأ. تحقق من السجلات"
+    "error": "خطأ. تحقق من السجلات",
+    "storefrontOpening": "جارٍ فتح متجر {{store}}...",
+    "storefrontFailed": "تعذّر فتح متجر {{store}}"
   },
   "librarySync": {
     "title": "مزامنة المكتبة",

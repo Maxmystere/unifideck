@@ -74,6 +74,20 @@ class Events(StrEnum):
     STORE_AUTH_FAILED = "store_auth_failed"
     STORE_LOGOUT = "store_logout"
 
+    # Store session reconcile — the outcome of re-running a store's
+    # token exchange after the user closed its shop window, so the
+    # plugin's stored tokens follow an account switch made in there.
+    #
+    # Deliberately NOT the STORE_AUTH_* pair. A reconcile failure is
+    # not an auth failure: STORE_AUTH_FAILED flips the store's row to
+    # "error", where the settings UI renders no button at all, which
+    # would strand the user with no way to sign in or out over a
+    # background refresh they never asked for.
+    #   reconciled      payload: { store }
+    #   reconcile_failed payload: { error, store }
+    STORE_SESSION_RECONCILED = "store_session_reconciled"
+    STORE_SESSION_RECONCILE_FAILED = "store_session_reconcile_failed"
+
     # Store registration lifecycle — emitted by StoreRegistry
     # when a store plugin is registered at bootstrap. Consumed
     # by metrics_collector.py and any future store-aware

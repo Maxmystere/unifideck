@@ -14,6 +14,8 @@ export const Events = {
   STORE_AUTH_STARTED: "store_auth_started",
   STORE_AUTH_COMPLETE: "store_auth_complete",
   STORE_AUTH_FAILED: "store_auth_failed",
+  STORE_SESSION_RECONCILED: "store_session_reconciled",
+  STORE_SESSION_RECONCILE_FAILED: "store_session_reconcile_failed",
   STORE_LOGOUT: "store_logout",
   STORE_REGISTERED: "store_registered",
   // Library sync

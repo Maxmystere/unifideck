@@ -262,13 +262,21 @@ def _special_action_context(
         return _wrapper_install_context(
             store, game_id, raw_options, action_store or store,
         )
-    return _auth_context(store, game_id, raw_options, action_store)
+    return _action_context(
+        store, game_id, raw_options, action_store, action or "auth")
 
 
-def _auth_context(
+def _action_context(
     store: str, game_id: str, raw_options: str, auth_store: str | None,
+    action: str = "auth",
 ) -> LaunchContext:
-    """Context for an auth shortcut (no game target)."""
+    """Context for an auth or storefront shortcut (no game target).
+
+    Both mean "open a window for this store, there is no game here", so
+    they share one builder; ``action`` is what ``_handle_auth_path``
+    routes on. Parameterised rather than copied: a fifth near-identical
+    ``LaunchContext`` builder would push this file over its LOC cap.
+    """
     plugin_dir = _resolve_plugin_dir()
     return LaunchContext(
         store=store,
@@ -279,7 +287,7 @@ def _auth_context(
         raw_options=raw_options,
         is_launch_action=False,
         auth_store=auth_store,
-        action="auth",
+        action=action,
         bypass_circuit_breaker=False,
     )
 
@@ -361,10 +369,15 @@ def _game_context(
 def _detect_special_action() -> tuple[str | None, str | None, bool]:
     """Detect a non-launch action from ``UNIFIDECK_<STORE>_ACTION``.
 
-    Returns ``(store, action, is_launch_action)``. ``auth`` is valid for
-    every store; ``install`` is valid for the *wrapper* stores only, where
-    it opens the vendor client so the user can start the download. Anything
-    else (or no token) is a normal game launch (``(None, None, True)``).
+    Returns ``(store, action, is_launch_action)``. ``auth`` and
+    ``storefront`` are valid for every store; ``install`` is valid for the
+    *wrapper* stores only, where it opens the vendor client so the user can
+    start the download. Anything else (or no token) is a normal game launch
+    (``(None, None, True)``).
+
+    ``storefront`` is deliberately NOT wrapper-gated: every store has a
+    shop. Which *kind* — web storefront or the vendor client's own Store
+    tab — ``_handle_auth_path`` decides, ``is_wrapper_store`` first.
 
     The wrapper test goes through ``is_wrapper_store`` rather than a literal
     ``== "ubisoft"``: that literal is why ``UNIFIDECK_BATTLENET_ACTION=install``
@@ -383,6 +396,8 @@ def _detect_special_action() -> tuple[str | None, str | None, bool]:
     for candidate_store, action in action_env.items():
         if action == "auth":
             return candidate_store, "auth", False
+        if action == "storefront":
+            return candidate_store, "storefront", False
         if action == "install" and is_wrapper_store(candidate_store):
             return candidate_store, "install", False
     return None, None, True

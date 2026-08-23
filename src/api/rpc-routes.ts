@@ -17,6 +17,7 @@ export const rpcRoutes = {
   checkStoreStatus: "check_store_status",
   getStoreInfos: "get_store_infos",
   clearStoreAuths: "clear_store_auths",
+  reconcileStoreSession: "reconcile_store_session",
   // Edge prereq (EdgeRPCMixin)
   isEdgeInstalled: "is_edge_installed",
   installEdge: "install_edge",

@@ -156,7 +156,9 @@
     "authenticate": "Accedi",
     "legendaryNotInstalled": "⚠️ Installazione di Epic Games CLI...",
     "nileNotInstalled": "⚠️ Amazon Games CLI non trovato",
-    "error": "Errore - Controlla i log"
+    "error": "Errore - Controlla i log",
+    "storefrontOpening": "Apertura dello store {{store}}...",
+    "storefrontFailed": "Impossibile aprire lo store {{store}}"
   },
   "librarySync": {
     "title": "SINCRONIZZAZIONE LIBRERIA",

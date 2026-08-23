@@ -156,7 +156,9 @@
     "authenticate": "Se connecter",
     "legendaryNotInstalled": "⚠️ Installation de l'outil Epic Games...",
     "nileNotInstalled": "⚠️ Outil Amazon Games introuvable",
-    "error": "Erreur. Vérifier les journaux"
+    "error": "Erreur. Vérifier les journaux",
+    "storefrontOpening": "Ouverture de la boutique {{store}}...",
+    "storefrontFailed": "Impossible d'ouvrir la boutique {{store}}"
   },
   "librarySync": {
     "title": "SYNCHRO DE LA BIBLIOTHÈQUE",

@@ -156,7 +156,9 @@
     "authenticate": "Giriş Yap",
     "legendaryNotInstalled": "⚠️ Epic Games aracı yükleniyor...",
     "nileNotInstalled": "⚠️ Amazon Games aracı bulunamadı",
-    "error": "Hata. Günlükleri kontrol edin"
+    "error": "Hata. Günlükleri kontrol edin",
+    "storefrontOpening": "{{store}} mağazası açılıyor...",
+    "storefrontFailed": "{{store}} mağazası açılamadı"
   },
   "librarySync": {
     "title": "KÜTÜPHANE SENK.",

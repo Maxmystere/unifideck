@@ -156,7 +156,9 @@
     "authenticate": "ログインする",
     "legendaryNotInstalled": "⚠️ Epic Games ツールをインストール中...",
     "nileNotInstalled": "⚠️ Amazon Games ツールが見つかりません",
-    "error": "エラー。ログを確認してください"
+    "error": "エラー。ログを確認してください",
+    "storefrontOpening": "{{store}} ストアを開いています...",
+    "storefrontFailed": "{{store}} ストアを開けませんでした"
   },
   "librarySync": {
     "title": "ライブラリ同期",

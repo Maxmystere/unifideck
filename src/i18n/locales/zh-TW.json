@@ -156,7 +156,9 @@
     "authenticate": "登入",
     "legendaryNotInstalled": "⚠️ 正在安裝 Epic Games 用戶端…",
     "nileNotInstalled": "⚠️ 找不到 Amazon Games 用戶端",
-    "error": "錯誤。請檢查紀錄檔"
+    "error": "錯誤。請檢查紀錄檔",
+    "storefrontOpening": "正在開啟 {{store}} 商店...",
+    "storefrontFailed": "無法開啟 {{store}} 商店"
   },
   "librarySync": {
     "title": "遊戲庫同步",

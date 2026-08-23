@@ -156,7 +156,9 @@
     "authenticate": "登录",
     "legendaryNotInstalled": "⚠️ 正在安装 Epic Games 客户端...",
     "nileNotInstalled": "⚠️ 未找到 Amazon Games 客户端",
-    "error": "错误。请检查日志"
+    "error": "错误。请检查日志",
+    "storefrontOpening": "正在打开 {{store}} 商店...",
+    "storefrontFailed": "无法打开 {{store}} 商店"
   },
   "librarySync": {
     "title": "游戏库同步",

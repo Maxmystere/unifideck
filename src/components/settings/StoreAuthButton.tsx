@@ -34,19 +34,11 @@ export const StoreAuthButton: FC<Props> = ({
   const { t } = useTranslation();
   if (status === "checking" || status === "error") return null;
   const isConnected = status === "connected";
+  // Styles live in `storeConnections.css.ts` and are rendered once by
+  // `StoreConnections`. They used to be an inline `<style>` here, which
+  // meant the same block was parsed once per store row.
   return (
     <>
-      <style>{`
-        .unifideck-store-auth-button.connected {
-          background-color: #ef4444 !important;
-          color: #fff;
-        }
-        .unifideck-store-auth-button.connected:focus,
-        .unifideck-store-auth-button.connected:hover {
-          color: #ef4444 !important;
-          background-color: #fff !important;
-        }
-      `}</style>
       <DialogButton
         disabled={busy}
         className={`unifideck-store-auth-button ${

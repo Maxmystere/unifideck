@@ -18,10 +18,16 @@ import from here.
 from __future__ import annotations
 
 import logging
-import urllib.parse
 from typing import Any
 
+from unifideck.core.store_urls import store_search_url
+
 logger = logging.getLogger(__name__)
+
+# Re-exported for the existing importers of this module. The table
+# itself moved to ``core.store_urls`` so the launcher can reach it
+# without importing ``rpc`` (import-linter's ``rpc-is-leaf``).
+__all__ = ["store_search_url"]
 
 
 def build_game_from_info(info: dict[str, Any], app_id: int) -> Any:
@@ -398,23 +404,3 @@ def pick_cloud_saves(
     return resolve_cloud_support(store, game_id, enriched)
 
 
-def store_search_url(store: str, title: str) -> str:
-    """Build a fallback store landing URL for non-Steam stores.
-
-    Used by the "Store Page" button when the shortcut has no real
-    Steam store presence.
-    """
-    encoded = urllib.parse.quote(title or "")
-    if store == "epic":
-        return f"https://store.epicgames.com/en-US/browse?q={encoded}&sortBy=relevancy"
-    if store == "gog":
-        return f"https://www.gog.com/games?query={encoded}"
-    if store == "amazon":
-        return "https://gaming.amazon.com/home"
-    if store == "ubisoft":
-        return f"https://store.ubisoft.com/us/search?q={encoded}"
-    if store == "battlenet":
-        return f"https://us.shop.battle.net/en-us/search?q={encoded}"
-    if store == "microsoft":
-        return "https://www.xbox.com/en-US/games"
-    return ""

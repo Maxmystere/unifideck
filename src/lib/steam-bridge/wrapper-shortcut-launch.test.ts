@@ -141,10 +141,50 @@ describe("wrapperActionEnv", () => {
     });
   });
 
+  // The shop button opens UPC's own Store tab, and that session lives in
+  // the AUTH prefix — same as sign-in. Gating the hint on `=== "auth"`
+  // dropped it here, the launcher then derived the prefix from
+  // ctx.game_id, and UPC opened into an EMPTY prefix: a cart press
+  // landing on a login screen, with nothing in any log to say why.
+  it("threads the prefix hint for storefront too, not just auth", () => {
+    expect(wrapperActionEnv(UBISOFT, "storefront")).toEqual({
+      UNIFIDECK_UBISOFT_ACTION: "storefront",
+      UNIFIDECK_UBISOFT_PREFIX_NAME: ".upc-auth",
+    });
+  });
+
+  it("withholds it only from install, which targets a per-game prefix", () => {
+    expect(wrapperActionEnv(UBISOFT, "install")).not.toHaveProperty(
+      "UNIFIDECK_UBISOFT_PREFIX_NAME",
+    );
+  });
+
   it("omits it entirely for Battle.net, which has no prefix env var", () => {
     expect(wrapperActionEnv(BATTLENET, "auth")).toEqual({
       UNIFIDECK_BATTLENET_ACTION: "auth",
     });
+    expect(wrapperActionEnv(BATTLENET, "storefront")).toEqual({
+      UNIFIDECK_BATTLENET_ACTION: "storefront",
+    });
+  });
+});
+
+describe("buildTemporaryLaunchOptions for a storefront press", () => {
+  it("carries the action and the prefix hint, keeping user wrappers", () => {
+    const options = buildTemporaryLaunchOptions(
+      {
+        success: true,
+        store_game_id: "ubisoft:123",
+        current_launch_options: "ubisoft:123 mangohud",
+        launcher_path: "/l",
+      },
+      wrapperActionEnv(UBISOFT, "storefront"),
+      "ubisoft:upc-auth",
+    );
+    expect(options).toContain("ubisoft:upc-auth");
+    expect(options).toContain("UNIFIDECK_UBISOFT_ACTION=storefront");
+    expect(options).toContain("UNIFIDECK_UBISOFT_PREFIX_NAME=.upc-auth");
+    expect(options).toContain("mangohud");
   });
 });
 

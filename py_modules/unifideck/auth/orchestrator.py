@@ -34,10 +34,16 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from unifideck.core.types import AuthResult, Events
+from unifideck.core.types import AuthResult
+
+from .flow_events import (
+    AUTH_FLOW_EVENTS,
+    RECONCILE_FLOW_EVENTS,
+    FlowEvents,
+)
+from .url_file import write_url_atomically
 
 if TYPE_CHECKING:
     from unifideck.event_bus.event_bus import EventBus
@@ -69,6 +75,7 @@ class OrchestratorConfig:
     # the shell launcher time to spawn Edge before we begin
     # polling for CDP targets. Does not affect correctness.
     browser_launch_grace: float = 1.5
+
 
 class AuthOrchestrator:
     """Stateless orchestrator for CDP OAuth auth flows.
@@ -102,6 +109,13 @@ class AuthOrchestrator:
         # Background task handle — set when running in background
         # mode so logout/cancel can stop a stale flow cleanly.
         self._bg_task: asyncio.Task[Any] | None = None
+        # Which events this flow reports on. Instance state rather
+        # than a threaded parameter because one orchestrator runs one
+        # flow at a time — ``_spawn_background_task`` cancels any
+        # previous flow before starting the next — and threading a
+        # third argument through six methods to say the same thing
+        # would be worse. Set by ``run_flow``.
+        self._events: FlowEvents = AUTH_FLOW_EVENTS
         # ─── Public API ────────────────────────────────────────────
 
     async def run_flow(
@@ -115,6 +129,7 @@ class AuthOrchestrator:
         background: bool = False,
         content_trigger_url: str | None = None,
         content_regex: str | None = None,
+        events: FlowEvents | None = None,
     ) -> AuthResult:
         """Execute the CDP OAuth flow (blocking or background).
 
@@ -130,12 +145,20 @@ class AuthOrchestrator:
             background: If True, return early after URL acquisition
                 and run the rest of the flow in a background task.
                 The returned AuthResult has pending=True.
+            events: Which bus events to report on. Defaults to the
+                ``STORE_AUTH_*`` set; a session reconcile passes
+                ``RECONCILE_FLOW_EVENTS`` so its failures cannot blank
+                the store's row in the settings UI.
 
         Returns:
             Blocking mode: the terminal AuthResult.
             Background mode: AuthResult(success=True, pending=True)
             unless URL acquisition itself failed.
         """
+        stand_down = self._reconcile_stand_down(events)
+        if stand_down is not None:
+            return stand_down
+        self._events = events or AUTH_FLOW_EVENTS
         deadline = timeout if timeout is not None else self._cfg.timeout
         await self._emit_started()
 
@@ -220,13 +243,43 @@ class AuthOrchestrator:
         recover the URL via the bus even if the file write
         didn't go through.
         """
-        write_ok = await self._write_url_atomically(write_url_file, url)
+        write_ok = await write_url_atomically(write_url_file, url)
         if write_ok:
             return None
         return await self._emit_failed(
             "url_write_failed",
             f"could not write URL to {write_url_file}",
             url=url,
+        )
+
+    def has_active_flow(self) -> bool:
+        """Whether a background flow for this store is still running."""
+        task = self._bg_task
+        return task is not None and not task.done()
+
+    def _reconcile_stand_down(
+        self, events: FlowEvents | None,
+    ) -> AuthResult | None:
+        """Refuse a reconcile that would displace a live sign-in.
+
+        Starting any flow runs ``cancel_background()``, so arming a
+        shop's reconcile while the user was mid-login would silently
+        kill the login — the browser left sitting on a filled-in form
+        with nothing waiting to capture the code, and no error anywhere.
+
+        A sign-in going the other way is fine: it may supersede a stale
+        reconcile, because the user actually asked for it.
+
+        Returns the refusal result, or ``None`` to proceed.
+        """
+        if events is not RECONCILE_FLOW_EVENTS or not self.has_active_flow():
+            return None
+        logger.info(
+            "[AuthOrchestrator/%s] reconcile skipped — a flow is in flight",
+            self._store,
+        )
+        return AuthResult(
+            success=False, store=self._store, error="flow_in_progress",
         )
 
     def cancel_background(self) -> bool:
@@ -347,7 +400,7 @@ class AuthOrchestrator:
         result.store = self._store
         if result.success:
             await self._bus.emit(
-                Events.STORE_AUTH_COMPLETE, store=self._store,
+                self._events.complete, store=self._store,
             )
             logger.info(
                 "[AuthOrchestrator/%s] auth complete (tokens_cached=%s)",
@@ -355,7 +408,7 @@ class AuthOrchestrator:
             )
         else:
             await self._bus.emit(
-                Events.STORE_AUTH_FAILED,
+                self._events.failed,
                 store=self._store,
                 error=result.error or "exchange_returned_failure",
             )
@@ -425,8 +478,15 @@ class AuthOrchestrator:
     # ─── Event helpers ────────────────────────────────────────
 
     async def _emit_started(self) -> None:
-        """Announce the start of the flow on the EventBus."""
-        await self._bus.emit(Events.STORE_AUTH_STARTED, store=self._store)
+        """Announce the start of the flow, if this flow announces one.
+
+        A reconcile passes ``started=None``: it runs behind a shop
+        window the user has already closed, so there is no flow for
+        them to be told about.
+        """
+        if self._events.started is None:
+            return
+        await self._bus.emit(self._events.started, store=self._store)
 
     async def _emit_failed(
         self,
@@ -434,13 +494,13 @@ class AuthOrchestrator:
         detail: str,
         url: str | None = None,
     ) -> AuthResult:
-        """Emit AUTH_FAILED and build a matching AuthResult."""
+        """Emit this flow's failure event and build a matching result."""
         logger.warning(
             "[AuthOrchestrator/%s] %s: %s",
             self._store, error_code, detail,
         )
         await self._bus.emit(
-            Events.STORE_AUTH_FAILED,
+            self._events.failed,
             store=self._store,
             error=error_code,
         )
@@ -473,51 +533,3 @@ class AuthOrchestrator:
                 "(ignored): %s",
                 self._store, e,
             )
-
-    # ─── I/O helpers ──────────────────────────────────────────
-
-    @staticmethod
-    async def _write_url_atomically(path: str, url: str) -> bool:
-        """Write the OAuth URL to disk atomically.
-
-        Creates the parent directory if needed, writes to a
-        `.tmp` sibling first, then renames into place. This
-        guarantees the shell launcher never reads a half-written
-        URL file.
-        """
-        def _write_sync() -> str:
-            expanded = Path(path).expanduser()
-            parent = expanded.parent
-            parent.mkdir(parents=True, exist_ok=True)
-            tmp = expanded.with_name(expanded.name + ".tmp")
-            with tmp.open("w", encoding="utf-8") as f:
-                f.write(url)
-            tmp.replace(expanded)
-            return str(expanded)
-
-        # `expanded` was bound only on the
-        # success path (the result of asyncio.to_thread). When
-        # _write_sync raised OSError, the `except` handler
-        # referenced an unbound `expanded`, producing an
-        # UnboundLocalError that masked the real OSError and
-        # propagated to the caller instead of returning False.
-        # Bind a fallback up front so the error path can always
-        # log a meaningful target path.
-        #
-        # The fallback is the raw `path` (no expanduser): the
-        # real expanded path is computed inside _write_sync and
-        # overwrites this on success. Calling Path(...).expanduser()
-        # here would be a blocking pathlib call in an async
-        # function (ASYNC240) for no benefit — the value is only
-        # ever used in the error log, where the un-expanded path
-        # (e.g. "~/.config/...") is just as diagnostic.
-        expanded = path
-        try:
-            expanded = await asyncio.to_thread(_write_sync)
-            logger.debug(
-                "[AuthOrchestrator] wrote auth URL to %s", expanded,
-            )
-            return True
-        except OSError:
-            logger.exception("[AuthOrchestrator] failed to write %s", expanded)
-            return False

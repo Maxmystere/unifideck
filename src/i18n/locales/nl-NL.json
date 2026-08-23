@@ -156,7 +156,9 @@
     "authenticate": "Aanmelden",
     "legendaryNotInstalled": "⚠️ Epic Games CLI installeren...",
     "nileNotInstalled": "⚠️ Amazon Games CLI niet gevonden",
-    "error": "Fout - Controleer logs"
+    "error": "Fout - Controleer logs",
+    "storefrontOpening": "{{store}}-winkel wordt geopend...",
+    "storefrontFailed": "Kan de {{store}}-winkel niet openen"
   },
   "librarySync": {
     "title": "BIBLIOTHEEK SYNC",

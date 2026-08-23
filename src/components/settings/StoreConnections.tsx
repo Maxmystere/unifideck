@@ -9,12 +9,15 @@
  * plane is unchanged.
  */
 import { FC } from "react";
-import { PanelSection, PanelSectionRow, Field } from "@decky/ui";
+import { PanelSection, PanelSectionRow, Field, Focusable } from "@decky/ui";
 import { useTranslation } from "react-i18next";
 import { useStores } from "../../contexts/StoreContext";
 import { useStoreAuth } from "../../hooks/useStoreAuth";
+import { hasStorefront } from "../../services/store/StorefrontLauncher";
 import { StoreIcon } from "../shared/StoreIcon";
 import { StoreAuthButton } from "./StoreAuthButton";
+import { StoreStorefrontButton } from "./StoreStorefrontButton";
+import { STORE_ROW_CSS } from "./storeConnections.css";
 import type { StoreId } from "../../types/api";
 
 interface RowConfig {
@@ -63,13 +66,25 @@ const StoreRow: FC<{ storeId: StoreId; displayName: string }> = ({
           />
           <span style={{ fontSize: 14 }}>{displayName}</span>
         </div>
-        <StoreAuthButton
-          store={storeId}
-          status={status ?? "disconnected"}
-          busy={busy}
-          onConnect={() => void connect()}
-          onDisconnect={() => void disconnect()}
-        />
+        {/* One flex box, so the row keeps exactly two direct children
+            and `space-between` still reads as "label left, actions
+            right". A third direct child would spread them apart. */}
+        <div style={{ display: "flex", gap: 6, flex: "0 0 auto" }}>
+          {hasStorefront(storeId) && (
+            <StoreStorefrontButton
+              store={storeId}
+              isConnected={isConnected}
+              busy={busy}
+            />
+          )}
+          <StoreAuthButton
+            store={storeId}
+            status={status ?? "disconnected"}
+            busy={busy}
+            onConnect={() => void connect()}
+            onDisconnect={() => void disconnect()}
+          />
+        </div>
       </div>
       {showNotInstalled && config?.notInstalledMessage && (
         <PanelSectionRow>
@@ -86,7 +101,18 @@ export const StoreConnections: FC = () => {
   if (loading) return null;
   return (
     <PanelSection title={t("storeConnections.title")}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      {/* Rendered once for the whole section, not per row. */}
+      <style>{STORE_ROW_CSS}</style>
+      {/* "grid", not "row" and not one Focusable per row: six rows each
+          holding two buttons resolve as a 2-D grid. With a nav container
+          per row, every vertical step re-enters a fresh container and
+          lands on an arbitrary column — so moving down the cart column
+          would jump to a sign-out button. Per-row containers stay plain
+          divs. Same reasoning as DownloadsTab. */}
+      <Focusable
+        flow-children="grid"
+        style={{ display: "flex", flexDirection: "column", gap: 2 }}
+      >
         {stores.map((s) => (
           <StoreRow
             key={s.name}
@@ -94,7 +120,7 @@ export const StoreConnections: FC = () => {
             displayName={s.display_name}
           />
         ))}
-      </div>
+      </Focusable>
     </PanelSection>
   );
 };

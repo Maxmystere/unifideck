@@ -168,25 +168,29 @@ class LauncherService:
 
         Three steps:
 
-        1. Emit the ``launchingGame`` toast.
-        2. Route to the auth-shortcut handler (non-launch actions)
-           or to the launch dispatch matrix (real launches).
+        1. Route to the non-launch handler (auth / storefront /
+           install) or to the launch dispatch matrix (real launches).
+        2. For a real launch, emit the ``launchingGame`` toast.
         3. Enrich the launch result with the elapsed time, stashed
            in ``Result.metadata["elapsed"]`` because ``Result``
            has no dedicated elapsed field and the frontend reads
            this via the documented metadata channel.
 
+        The non-launch branch returns BEFORE the toast: a sign-in or a
+        shop window is not a game, and announcing "Launching Game:
+        epic:epic-store" for one is simply wrong.
+
         Extracted from ``launch`` (lot 13a) so the outer method
         only calls 5 distinct symbols, well under the fan-out gate.
         """
+        if not ctx.is_launch_action:
+            return await self._handle_auth_path(ctx)
         await emit_stage(
             self._bus,
             i18n_key="toasts.launcher.launchingGame",
             game_title=ctx.game_key,
             priority="low",
         )
-        if not ctx.is_launch_action:
-            return await self._handle_auth_path(ctx)
         res = await self._dispatch_launch_kind(ctx, state)
         if res.metadata is None:
             res.metadata = {}  # type: ignore[unreachable]  # guard 'if res.metadata is None'
@@ -211,21 +215,32 @@ class LauncherService:
         )
 
     async def _handle_auth_path(self, ctx: LaunchContext) -> Result:
-        """Route a non-launch context to the right auth handler.
+        """Route a non-launch context to the right handler.
 
-        The four OAuth stores open Edge on a captured auth URL
-        (``launcher/flows/auth.py``). Ubisoft is different: it has no
-        browser OAuth — the user signs in inside the Ubisoft Connect
+        The four OAuth stores open Edge — on a captured auth URL
+        (``launcher/flows/auth.py``) or on a shop URL
+        (``launcher/flows/storefront.py``). Ubisoft is different: it has
+        no browser OAuth — the user signs in inside the Ubisoft Connect
         (UPC) desktop client, which must be launched via Proton in the
         ``.upc-auth`` prefix. ``handle_store_auth`` only no-ops for
         Ubisoft (it returns immediately, which is why the shortcut
         closed at once), so Ubisoft gets its own Proton path here.
+
+        **The wrapper check must stay first.** A wrapper store has no
+        browser session at all, so its shop is the vendor client's own
+        Store tab, in the auth prefix. Testing ``action`` first would
+        send a Ubisoft cart press to Edge and a signed-out web page.
 
         Extracted from ``launch`` (lot 13a) to keep that method's
         fan-out under the gate.
         """
         if is_wrapper_store(ctx.auth_store):
             return await self._launch_wrapper_client(ctx)
+        if ctx.action == "storefront":
+            from unifideck.launcher.flows.storefront import (
+                handle_store_storefront,
+            )
+            return await handle_store_storefront(ctx, self._edge_browser)
         from unifideck.launcher.flows.auth import handle_store_auth
         return await handle_store_auth(ctx, self._edge_browser)
 
@@ -268,7 +283,14 @@ class LauncherService:
 
     @staticmethod
     def _wrapper_handler(store: str | None, action: str | None) -> Any:
-        """The launcher handler for one wrapper store's auth/install run."""
+        """The launcher handler for one wrapper store's non-launch run.
+
+        Only ``install`` gets its own handler. Everything else — ``auth``
+        and ``storefront`` — opens the client bare in the auth prefix,
+        which is both where the user signs in and where the client's own
+        Store/Shop tab is already signed in. So ``storefront`` falls into
+        the ``else`` on purpose; it is not an oversight.
+        """
         if store == "ubisoft":
             from unifideck.launcher.proton.handlers.ubisoft import (
                 ubisoft_auth_launch,

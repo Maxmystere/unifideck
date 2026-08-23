@@ -25,6 +25,10 @@ import json
 import logging
 from typing import Any, cast
 
+from unifideck.auth.flow_events import (
+    RECONCILE_FLOW_EVENTS,
+    RECONCILE_TIMEOUT_SECONDS,
+)
 from unifideck.auth.orchestrator import AuthOrchestrator
 from unifideck.core.binaries import clean_cli_env
 from unifideck.core.types import AuthResult, Events, Result, StoreAuthError
@@ -80,8 +84,16 @@ class AmazonAuthFlow:
         self._pending_login: dict[str, Any] | None = None
 
     @audit_auth_flow(store="amazon", method="oauth_cli")
-    async def start_auth(self) -> AuthResult:
-        """Start auth."""
+    async def start_auth(self, *, reconcile: bool = False) -> AuthResult:
+        """Start auth, or reconcile the session after a shop visit.
+
+        ``reconcile=True`` re-runs the exchange so the stored tokens
+        follow an account switch the user made in the store browser.
+        Two behaviours flip for it: the already-authed fast path is
+        skipped (valid credentials for the OLD account are exactly what
+        we are replacing), and the flow reports on the reconcile events
+        so a failure cannot blank the store's row in the settings UI.
+        """
         if not self._cli_path:
             return AuthResult(
                 success=False,
@@ -93,7 +105,7 @@ class AmazonAuthFlow:
         # skip the OAuth dance and emit a success event so the
         # frontend updates the badge to "Connected" without
         # opening a browser.
-        if await self._is_already_authed():
+        if not reconcile and await self._is_already_authed():
             logger.info(
                 "[amazon_auth] already logged in — skipping OAuth",
             )
@@ -106,6 +118,8 @@ class AmazonAuthFlow:
             allowed_uris=_AMAZON_REDIRECT_URIS,
             exchange_code=self._register_code,
             background=True,
+            events=RECONCILE_FLOW_EVENTS if reconcile else None,
+            timeout=RECONCILE_TIMEOUT_SECONDS if reconcile else None,
             write_url_file="~/.local/share/unifideck/amazon_auth_url.txt",
         )
 

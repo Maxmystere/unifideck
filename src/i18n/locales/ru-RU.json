@@ -156,7 +156,9 @@
     "authenticate": "Войти",
     "legendaryNotInstalled": "⚠️ Установка утилиты Epic Games...",
     "nileNotInstalled": "⚠️ Утилита Amazon Games не найдена",
-    "error": "Ошибка. Проверьте журналы"
+    "error": "Ошибка. Проверьте журналы",
+    "storefrontOpening": "Открытие магазина {{store}}...",
+    "storefrontFailed": "Не удалось открыть магазин {{store}}"
   },
   "librarySync": {
     "title": "СИНХРОНИЗАЦИЯ БИБЛИОТЕКИ",

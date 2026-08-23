@@ -357,26 +357,46 @@ export async function launchWrapperViaShortcut(
   }
 }
 
-/** Env tokens for one action, including the optional prefix hint. */
+/**
+ * Env tokens for one action, including the optional prefix hint.
+ *
+ * The prefix hint goes to every action EXCEPT `install`, which is the
+ * one that targets a per-game prefix resolved from the store's id map.
+ * The test is deliberately `!== "install"` rather than `=== "auth"`:
+ * `storefront` also runs in the auth prefix, because that is where the
+ * vendor client's own signed-in session lives. Naming only `auth` here
+ * would omit the hint for a shop launch, the launcher would derive the
+ * prefix from `ctx.game_id`, and the client would open into an EMPTY
+ * prefix — a cart press landing on a login screen. See the
+ * `prefixEnvVar` docstring above for the same failure in its original
+ * form.
+ */
 export function wrapperActionEnv(
   config: WrapperShortcutConfig,
   action: string,
 ): Record<string, string> {
   const env: Record<string, string> = { [config.actionEnvVar]: action };
-  if (config.prefixEnvVar && config.authPrefixName && action === "auth") {
+  if (config.prefixEnvVar && config.authPrefixName && action !== "install") {
     env[config.prefixEnvVar] = config.authPrefixName;
   }
   return env;
 }
 
 /**
- * Open the vendor client so the user can sign in.
+ * Open the vendor client, for sign-in or for its own Store/Shop tab.
  *
  * Resolves the persistent auth shortcut through the store's dedicated
  * context route, which ensures the shortcut exists and repairs the VDF.
+ *
+ * `action` is `"auth"` or `"storefront"`; both open the client bare in
+ * the auth prefix, because that prefix holds the session — a wrapper
+ * store has no browser cookies to reuse, so its signed-in shop is the
+ * client's own. The launcher's `_wrapper_handler` maps both to the same
+ * handler for exactly that reason.
  */
 export async function launchWrapperAuthViaShortcut(
   config: WrapperShortcutConfig,
+  action: string = "auth",
 ): Promise<ShortcutLaunchResult> {
   const raw = await call<[], unknown>(config.authContextRoute).catch(
     () => null,
@@ -405,7 +425,7 @@ export async function launchWrapperAuthViaShortcut(
   return launchWrapperViaShortcut(
     config,
     config.authShortcutStoreId,
-    wrapperActionEnv(config, "auth"),
+    wrapperActionEnv(config, action),
     {
       appid_unsigned: authCtx.appid_unsigned,
       launch_wait_ms: authCtx.launch_wait_ms,
