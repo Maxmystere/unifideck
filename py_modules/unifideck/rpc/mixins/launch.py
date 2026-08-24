@@ -184,15 +184,6 @@ class LaunchRPCMixin:
             raise RpcError("service_unavailable", service="launch_logs")
         return await svc.read(launch_id, max_lines=max_lines)
 
-    async def export_launch_logs(
-        self, launch_id: str, dest_path: str = "",
-    ) -> Any:
-        """Copy archived logs to ``dest_path``."""
-        svc = getattr(self.services, "launch_logs", None)
-        if svc is None:
-            raise RpcError("service_unavailable", service="launch_logs")
-        return await svc.export(launch_id, dest_path=dest_path)
-
     async def list_save_folder(
         self,
         store: str,

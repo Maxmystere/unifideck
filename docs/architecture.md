@@ -136,24 +136,23 @@ The `Plugin` class in `main.py` is composed from 20 RPC mixin classes (see `main
 | -------------------------- | ------------------------------------------------------------------------------- |
 | `StoreRPCMixin`            | `check_store_status`, `get_store_infos`, `store_auth`, `clear_store_auths`       |
 | `SyncRPCMixin`             | `sync_libraries`, `force_sync_libraries`, `get_game_info`, `get_sync_progress`   |
-| `DownloadRPCMixin`         | `install_game`, `uninstall_game`, `update_game`, `cancel_download`, `get_download_queue` |
+| `DownloadRPCMixin`         | `install_game`, `uninstall_game`, `update_game`, `cancel_download`, `get_download_queue`, `get_available_updates` |
 | `StorageRPCMixin`          | `get_storage_locations`, `get_browseable_devices`, `set_custom_install_path`    |
 | `LaunchRPCMixin`           | `notify_game_launched`, `notify_game_stopped`, `get_launch_failures`             |
-| `AuthShortcutsRPCMixin`    | `get_<store>_auth_shortcut_context`, `get_compat_tool_for_game`, `save_proton_setting` |
-| `EdgeRPCMixin`             | `install_edge`, `is_edge_installed`                                             |
+| `AuthShortcutsRPCMixin`    | `get_<store>_auth_shortcut_context`, `get_compat_tool_for_game`                  |
+| `EdgeRPCMixin`             | `install_edge`                                                                  |
 | `ExecutableRPCMixin`       | `list_game_executables`, `set_game_executable`, `reset_game_executable`          |
 | `LibraryFacetsRPCMixin`    | `get_overview_enrichment`                                                       |
-| `PlaytimeRPCMixin`         | `get_playtime`, `get_all_playtimes`, `sync_playtime_now`                         |
+| `PlaytimeRPCMixin`         | `get_playtime`                                                                  |
 | `SecurityRPCMixin`         | `get_security_audit_log`, `get_security_bruteforce_status`, `get_security_counters` |
 | `ObservabilityRPCMixin`    | `subscribe_replay`, `get_bus_health`, `get_plugin_metrics`, `get_launcher_toasts` |
 | `ActionRPCMixin`           | `dispatch_unifideck_action` (URI dispatch)                                      |
 | `AccountRPCMixin`          | `check_account_switch`, `migrate_account_data`                                  |
 | `AchievementsRPCMixin`     | `get_game_achievements`, `get_last_session_achievements`                         |
-| `CloudFailureRPCMixin`     | `get_cloud_failure_behaviors`, `set_cloud_failure_behavior`                      |
 | `CloudSaveRPCMixin`        | `get_cloud_save_status`, `cloud_save_pull`, `cloud_save_push`, `set_game_save_path` |
 | `ConfigValidationRPCMixin` | `get_config_validation_status`                                                  |
 | `UIRPCMixin`               | `get_game_metadata_display`, `get_language_preference`, `set_language_preference` |
-| `UpdaterRPCMixin`          | `check_plugin_update`, `get_available_versions`, `get_release_notes`            |
+| `UpdaterRPCMixin`          | `check_plugin_update`, `get_available_versions`, `log_update_event`              |
 
 ---
 

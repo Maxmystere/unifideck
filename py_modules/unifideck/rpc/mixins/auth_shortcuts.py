@@ -22,6 +22,24 @@ wrote into ``shortcuts.vdf`` so both sides agree.
 Ubisoft has its own VDF-scan + repair logic in
 ``UbisoftStore.get_auth_shortcut_context`` ; we just proxy.
 
+``get_compat_tool_for_game`` also lives here. It **reads** the
+shortcut's Force-Compatibility tool for the wrapper-store launch
+path (``launchWrapperViaShortcut``). It used to be half of a
+capture-and-clear dance on the game-details page: the frontend
+saved the tool to ``proton_settings.json`` via a
+``save_proton_setting`` RPC, then cleared Force Compatibility so
+``RunGame`` wouldn't wrap our launcher in Proton. That flow was
+deliberately removed — clearing the selection meant the launcher
+only ever saw a stale copy, so switching Proton in Steam's dialog
+appeared to work or not purely by timing. ``config.vdf``'s
+CompatToolMapping is now the single source of truth, read directly
+by ``selector.select_proton_version``, and the double-Proton
+problem is handled at the umu spawn point by
+``container_escape``. The ``save_proton_setting`` RPC was left
+with no caller and deleted in the audit §1.2 pass;
+``proton_helpers.save_proton_setting`` itself stays live, written
+by the launcher's own ``prefix_setup`` and ``ge_fallback``.
+
 Lives in its own file (split from ``StoreRPCMixin``) so each
 mixin honours the 200 LOC ceiling.
 """
@@ -139,47 +157,20 @@ class AuthShortcutsRPCMixin:
         )
         return result
 
-    async def save_proton_setting(
-        self, store_game_id: str, tool_name: str,
-    ) -> Any:
-        """Persist the per-game Proton tool the launcher should apply.
-
-        Called by the game-details page (``useLaunchPrep``) after it
-        reads Steam's Force-Compatibility selection and before it
-        clears it — so the launcher (which reads
-        ``proton_settings.json``) re-applies the user's chosen tool
-        instead of letting Steam wrap the launcher in Proton.
-        Passing an empty ``tool_name`` clears the saved entry.
-        """
-        try:
-            from unifideck.compatibility.proton_helpers import (
-                save_proton_setting as _save,
-            )
-            result = _save(store_game_id, tool_name)
-            logger.info(
-                "[AuthShortcuts] save_proton_setting(%s, %r) → %s",
-                store_game_id, tool_name, result,
-            )
-            return result
-        except Exception as e:
-            logger.warning(
-                "[AuthShortcuts] save_proton_setting(%s) failed: %s",
-                store_game_id, e,
-            )
-            return {"success": False, "error": str(e)}
-
     async def _get_compat_tool_impl(self, store_game_id: str) -> Any:
         """Return the Steam Force-Compatibility tool for a game shortcut.
 
         Reads the Proton tool currently set as Force Compatibility
         (``config.vdf`` CompatToolMapping) for the shortcut, resolved
-        via its appid scanned from ``shortcuts.vdf``. Consumed by the
-        game-details page (``useLaunchPrep``): when a real Proton tool
-        is set it saves the tool to ``proton_settings.json`` and clears
-        Force Compatibility so ``RunGame`` runs the launcher natively
-        (no double-Proton loading screen) — the launcher re-applies the
-        tool itself. ``is_linux_runtime`` lets the frontend skip that
-        dance for Steam-Linux-Runtime entries (not real Proton).
+        via its appid scanned from ``shortcuts.vdf``.
+
+        Consumed by ``launchWrapperViaShortcut`` (the Ubisoft /
+        Battle.net launch path), which needs the shortcut's
+        ``appid_unsigned`` and current launch options before it can
+        temporarily rewrite them. ``is_linux_runtime`` marks
+        Steam-Linux-Runtime entries, which are not real Proton.
+
+        NOT a capture-and-clear helper — see this module's docstring.
         """
         try:
             from unifideck.compatibility.proton_helpers import (

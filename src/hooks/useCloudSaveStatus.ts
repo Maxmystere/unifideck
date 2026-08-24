@@ -5,7 +5,7 @@
  * Deliberately NOT folded into `useGameInfo` (the App-Details hot
  * path that must stay non-blocking). `get_cloud_save_status` can hit
  * the store's metadata/CLI, so it is fetched separately — the same
- * way `check_game_update` and `useGameSize` are kept off the render
+ * way `useGameUpdate` and `useGameSize` are kept off the render
  * path. Only enabled for GOG/Epic (the stores with cloud-save sync).
  *
  * Live-updates: subscribes to the four CLOUD_SYNC_* events and

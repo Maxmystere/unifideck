@@ -13,7 +13,9 @@ The module deliberately stays thin :
       ``boot_plugin``, called once Decky has signalled the plugin is
       mounted and the event loop is alive.
     * No top-level RPC method bodies — RPC surface comes from the
-      twenty mixins composed below ; ``@auto_wrap_rpc_methods``
+      mixins composed below (count is machine-checked by
+      ``scripts/validate_architecture.py``, not restated here) ;
+      ``@auto_wrap_rpc_methods``
       decorates each public coroutine so it returns a typed
       ``Result`` envelope instead of raising.
 
@@ -73,7 +75,6 @@ from unifideck.rpc.mixins.account import AccountRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.achievements import AchievementsRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.action import ActionRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.auth_shortcuts import AuthShortcutsRPCMixin  # noqa: E402
-from unifideck.rpc.mixins.cloud_failure import CloudFailureRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.cloud_save import CloudSaveRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.config_validation import ConfigValidationRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.download import DownloadRPCMixin  # noqa: E402
@@ -107,7 +108,6 @@ class Plugin(
     SyncRPCMixin,
     LibraryFacetsRPCMixin,
     UIRPCMixin,
-    CloudFailureRPCMixin,
     CloudSaveRPCMixin,
     ConfigValidationRPCMixin,
     PlaytimeRPCMixin,

@@ -15,7 +15,6 @@ Per-mixin scope:
 * ``ActionRPCMixin``          — ``unifideck://`` URI dispatch;
 * ``AchievementsRPCMixin``    — game achievements + last-session summary;
 * ``AuthShortcutsRPCMixin``   — per-store auth-shortcut context + compat tool;
-* ``CloudFailureRPCMixin``    — cloud-failure UX configuration;
 * ``CloudSaveRPCMixin``       — cloud-save pull/push/status;
 * ``ConfigValidationRPCMixin``— config-validation status;
 * ``DownloadRPCMixin``        — download-queue management;
@@ -39,7 +38,6 @@ from .account import AccountRPCMixin
 from .achievements import AchievementsRPCMixin
 from .action import ActionRPCMixin
 from .auth_shortcuts import AuthShortcutsRPCMixin
-from .cloud_failure import CloudFailureRPCMixin
 from .cloud_save import CloudSaveRPCMixin
 from .config_validation import ConfigValidationRPCMixin
 from .download import DownloadRPCMixin
@@ -61,7 +59,6 @@ __all__ = [
     "AchievementsRPCMixin",
     "ActionRPCMixin",
     "AuthShortcutsRPCMixin",
-    "CloudFailureRPCMixin",
     "CloudSaveRPCMixin",
     "ConfigValidationRPCMixin",
     "DownloadRPCMixin",

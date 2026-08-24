@@ -5,7 +5,7 @@ OP-26i | py_modules/unifideck/rpc/mixins/download.py
 Mixin merging two slices that the handler groups split apart:
 
 * per-game lifecycle (``install_game`` / ``uninstall_game`` /
-  ``check_game_update``) — these live in ``StoreHandlers`` in
+  ``update_game``) — these live in ``StoreHandlers`` in
   the newer API;
 * download-queue management (``cancel_download`` /
   ``get_download_queue``) — these live in ``DownloadHandlers``.
@@ -171,7 +171,7 @@ class DownloadRPCMixin:
         """Queue an update for an already-installed game.
 
         Triggered by the Play→Update button, which only appears
-        when ``check_game_update`` reported an available update.
+        when ``get_available_updates`` listed this game as stale.
         Resolves the Steam ``app_id`` back to its ``(store,
         game_id, install_path)`` via the sync layer, then enqueues
         with ``is_update=True`` so the worker dispatches to
@@ -264,58 +264,35 @@ class DownloadRPCMixin:
         await asyncio.to_thread(marker_sweep.sweep_game, store, game_id)
         return result
 
-    async def check_game_update(self, store: str, game_id: str) -> Any:
-        """Check whether a specific game has an update available.
-
-        :meth:`StoreBase.check_for_updates` is bulk (no args) and
-        returns a ``list[str]`` of game ids with pending updates.
-        Earlier this mixin called ``check_update(game_id)`` which
-        matched neither the name nor the signature.
-
-        **This never blocks on a store round-trip.** It reads whatever
-        :class:`~unifideck.services.update_sweep.UpdateSweepService` last
-        cached and returns immediately. Answering a page open by running
-        the scan inline is what made the Update button take 5-10 s to
-        appear — long enough for the user to have pressed Play already.
-
-        On a cold cache (before the boot sweep has run) it reports "no
-        update" and schedules a background scan; the button arrives via
-        ``GAME_UPDATE_AVAILABLE`` when that lands. ``pending`` tells the
-        frontend which of the two it got, so "no update" and "don't know
-        yet" stay distinguishable.
-
-        Returns ``{"has_update": bool, "pending": bool}``. Note that the
-        RPC wrapper nests that under ``data`` (the dict has no
-        ``success`` key), so frontend callers must unwrap the envelope —
-        reading ``res.has_update`` directly is why the Update button
-        never appeared for any store.
-        """
-        store, game_id = self._validate_pair(store, game_id)
-        self._require_store(store)
-        updatable = update_check_cache.peek(store)
-        if updatable is None:
-            self._request_update_scan(store)
-            return {"has_update": False, "pending": True}
-        return {"has_update": game_id in updatable, "pending": False}
-
     async def get_available_updates(self) -> Any:
         """Return ``{store: [game_id, ...]}`` for every store, from cache only.
 
-        Bulk counterpart to :meth:`check_game_update`, for surfaces that
-        render many games at once (the QAM Downloads tab's Installed
-        list). Doing it per-row would mean one RPC per installed game.
+        The single update-state route. Every Update affordance reads it
+        through ``UpdateStore`` / ``useGameUpdate`` — the App-Details
+        Play section, the QAM Downloads tab's Installed rows, and the
+        pre-launch warning — so they can never disagree.
 
-        Cache-only and non-blocking, same as above: a store that has not
-        been swept yet is simply absent from the mapping rather than
-        holding the whole list up behind a scan.
+        **This never blocks on a store round-trip.** It reads whatever
+        :class:`~unifideck.services.update_sweep.UpdateSweepService` last
+        cached and returns immediately; a store not yet swept is simply
+        absent from the mapping rather than holding the whole list up
+        behind a scan, and gets a background refresh scheduled instead.
+        The button then arrives via ``GAME_UPDATE_AVAILABLE``.
+
+        Answering per-game and inline is what this replaced: a
+        ``check_game_update(store, game_id)`` route ran the scan on page
+        open, which made the Update button take 5-10 s to appear for
+        Epic (legendary logs in and refreshes its asset manifest first)
+        — long enough for the user to have pressed Play already. It was
+        left declared with no caller and deleted in the audit §1.2 pass.
+        Rendering many games at once through it would also have meant
+        one RPC per installed game.
         """
-        sweep = getattr(self, "_update_sweep_service", None)
         out: dict[str, list[str]] = {}
         for store_id in self.registry.store_ids():
             cached = update_check_cache.peek(store_id)
             if cached is None:
-                if sweep is not None:
-                    sweep.request_refresh(store_id)
+                self._request_update_scan(store_id)
                 continue
             out[store_id] = cached
         return out

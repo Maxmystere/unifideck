@@ -75,35 +75,19 @@ def _is_dir_safe(entry: os.DirEntry[str]) -> bool:
 
 
 class UIRPCMixin:
-    """CDP injection, game metadata, and language preferences."""
+    """Game-metadata display, language preferences, and directory browsing.
+
+    Two routes were removed as dead (audit §1.2): ``get_game_metadata``,
+    superseded by the appid-keyed :meth:`get_game_metadata_display` (which
+    does strictly more and avoids a linear scan of every known game), and
+    ``inject_hide_css``, superseded by the frontend's own scoped-CSS
+    marker. The latter was the sole reachable path into
+    ``cdp/cdp_inject.py``, which went with it.
+    """
 
     config: Any
     services: Any
     sync_service: Any  # Required for the metadata.enrich(game) lookup
-
-    async def get_game_metadata(self, store: str, game_id: str) -> Any:
-        """Return merged metadata for a game from the sync cache.
-
-        :class:`MetadataService` does not expose ``get(store, id)``
-        — its real public method is :meth:`enrich(game)` which
-        takes a ``Game`` object. We resolve the game via the sync
-        cache then enrich. An earlier version called
-        ``metadata.get(...)`` and the RPC always raised
-        ``AttributeError``.
-        """
-        metadata = getattr(self.services, "metadata", None)
-        if metadata is None:
-            raise RpcError("service_unavailable", service="metadata")
-        sync = getattr(self, "sync_service", None)
-        if sync is None:
-            raise RpcError("service_unavailable", service="sync_service")
-        for game in sync.get_all_games():
-            # ``game_id`` here is the store-native id (the RPC
-            # argument name predates the rename to
-            # ``store_game_id`` on the dataclass).
-            if game.store == store and game.store_game_id == game_id:
-                return await metadata.enrich(game)
-        return {}
 
     cache: Any
 
@@ -135,22 +119,6 @@ class UIRPCMixin:
         return _mdisp.build_payload(
             game, enriched, steam_app_id, steam_meta, compat_entry,
         )
-
-    async def inject_hide_css(self, app_id: int, css: str) -> Any:
-        """Inject arbitrary CSS keyed by app_id.
-
-        :meth:`SteamCSSInjector.inject_css` takes
-        ``(css, marker)``. An earlier version passed
-        ``(app_id, css)`` so the CSS string was discarded and
-        ``app_id`` was treated as the CSS source.
-        """
-        from unifideck.cdp import get_cdp_client
-        from unifideck.cdp.cdp_inject import build_marker_id
-        injector = await get_cdp_client()
-        if injector is None:
-            return {"ok": False, "error": "cdp_not_connected"}
-        marker = build_marker_id(f"app_{app_id}")
-        return await injector.inject_css(css, marker)
 
     async def get_language_preference(self) -> Any:
         """Return the current UI locale preference.
