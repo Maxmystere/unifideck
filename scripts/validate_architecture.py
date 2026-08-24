@@ -4,10 +4,12 @@
 Three silent drifts have recurred through the 0.7.x series and are worth
 machine-enforcing rather than re-discovering by hand every release:
 
-1. The RPC mixin set is documented inconsistently (the docstring says
-   "eleven", ``rpc/mixins/__init__.py`` re-exports 13, the docs say 18,
-   ``main.py`` composes 20). The one invariant that matters is that
-   ``main.py``'s composed mixins and ``__init__.py``'s ``__all__`` agree.
+1. The RPC mixin set was documented inconsistently: at the 2026-08 audit
+   ``main.py``'s docstring said "eleven", ``rpc/mixins/__init__.py``
+   re-exported 13, and the docs said 18, against a class that composed 20.
+   The one invariant that matters is that ``main.py``'s composed mixins and
+   ``__init__.py``'s ``__all__`` agree; that is check 1, and it is the only
+   place the set is stated. Check 5 keeps it that way (see below).
 
 2. The store list drifts (docs said "five stores" long after Battle.net
    became the sixth). ``bootstrap/cache_registry._STORE_CACHES`` is the
@@ -30,6 +32,22 @@ machine-enforcing rather than re-discovering by hand every release:
    comment on the ``async def`` line or the line above it. The reason lives
    next to the code rather than in an allowlist file, and the exemption
    count is printed on every run so growth is visible rather than silent.
+
+5. A mixin count written into prose goes stale on the next mixin churn, and
+   check 1 cannot see it. This happened three times in 0.7.x: audit §2.1
+   found four disagreeing figures, the remediation hand-corrected them all
+   to 20, and the §1.2 dead-RPC pass then deleted three empty mixins in the
+   same release, making every corrected site wrong again. Correcting the
+   number is the approach that failed; not writing it down is check 5.
+
+   The set is enumerated in exactly two places, both machine-checked by
+   check 1: ``main.py``'s ``class Plugin(...)`` and ``__init__.py``'s
+   ``__all__``. Everywhere else must name the source rather than the figure.
+
+   Opt out with an inline ``mixin-count-ok: <reason>`` marker on the line or
+   the line above it, for a deliberate historical citation. Same convention
+   as ``# no-frontend-caller:`` above and ``# unwired:`` in
+   ``validate_event_wiring.py``: the reason lives next to the text.
 
 Stdlib-only on purpose: the script runs in CI before dependencies are
 installed and must not import the plugin (which would execute store
@@ -55,6 +73,48 @@ SRC = REPO_ROOT / "src"
 
 # Directories under stores/ that are not stores.
 _NON_STORE_DIRS = {"shared", "__pycache__"}
+
+# --- Check 5: mixin counts written into prose -------------------------------
+
+# Everything an agent or a contributor reads to learn the architecture.
+# ``main.py`` and the mixin package are included deliberately: their
+# docstrings are where the original defect lived.
+_MIXIN_COUNT_GLOBS = (
+    "CLAUDE.md",
+    "docs/**/*.md",
+    ".claude/skills/**/*.md",
+    "main.py",
+    "py_modules/unifideck/**/*.py",
+    "scripts/*.py",
+    ".github/workflows/*.yml",
+)
+
+# ``docs/archive/`` is superseded by definition (see CLAUDE.md) and
+# ``architecture-audit.md`` is the register whose job is recording the
+# historical figures. Both would be pure noise.
+_MIXIN_COUNT_EXCLUDE = ("docs/archive/", "docs/architecture-audit.md")
+
+_MIXIN_COUNT_OK = "mixin-count-ok:"
+
+_CARDINAL = (
+    r"\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+    r"thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty"
+)
+
+# Matches a count written next to the word. Every historical instance took
+# one of these forms (mixin-count-ok: spec, not a claim about the tree):
+# "eleven mixins" / "20 RPC mixins" / "the 20 mixin surfaces"
+#
+# The lookbehind is load-bearing: without it "Layer-6 RPC mixins" in
+# services/__init__.py reads as a count of six, because \b sits happily
+# between the hyphen and the digit. It also stops "someone mixins".
+#
+# A figure separated from the word by other prose is NOT caught. Widening
+# the window costs more in false positives than it buys, and the opt-out
+# marker covers the deliberate historical citation that would need it.
+_MIXIN_COUNT_RE = re.compile(
+    rf"(?<![-\w])({_CARDINAL})\s+(?:rpc\s+)?mixin", re.IGNORECASE,
+)
 
 
 def _fail(msg: str) -> None:
@@ -289,6 +349,41 @@ def find_dead_rpc(methods: set[str]) -> list[str]:
     return sorted(dead)
 
 
+def find_prose_mixin_counts(root: Path) -> list[tuple[str, int, str]]:
+    """Return ``(relpath, lineno, matched_text)`` per prose mixin count.
+
+    The mixin set is enumerated in ``main.py``'s ``class Plugin(...)`` and
+    ``__init__.py``'s ``__all__``, which check 1 keeps in agreement. Any
+    third statement of the figure is unowned by that check and goes stale on
+    the next mixin churn -- see the module docstring for the three times it
+    did. Lines carrying a ``mixin-count-ok:`` marker, on the line itself or
+    the line above, are exempt.
+    """
+    hits: list[tuple[str, int, str]] = []
+    seen: set[Path] = set()
+    for pattern in _MIXIN_COUNT_GLOBS:
+        for path in sorted(root.glob(pattern)):
+            if not path.is_file() or path in seen:
+                continue
+            seen.add(path)
+            rel = path.relative_to(root).as_posix()
+            if rel.startswith(_MIXIN_COUNT_EXCLUDE):
+                continue
+            lines = path.read_text(
+                encoding="utf-8", errors="replace",
+            ).splitlines()
+            for lineno, line in enumerate(lines, start=1):
+                if _MIXIN_COUNT_OK in line:
+                    continue
+                if lineno >= 2 and _MIXIN_COUNT_OK in lines[lineno - 2]:
+                    continue
+                # finditer, not search: a line carrying two counts should
+                # report both, or fixing one just re-reds the gate.
+                for match in _MIXIN_COUNT_RE.finditer(line):
+                    hits.append((rel, lineno, match.group(0)))
+    return hits
+
+
 def main() -> int:
     main_path = REPO_ROOT / "main.py"
     mixins_init = PY / "rpc" / "mixins" / "__init__.py"
@@ -378,6 +473,25 @@ def main() -> int:
             f"OK: all {len(methods)} checked RPC methods "
             f"have a frontend caller{note}"
         )
+
+    # Check 5 (hard): the mixin count is not restated in prose.
+    prose_counts = find_prose_mixin_counts(REPO_ROOT)
+    if prose_counts:
+        hard_failures += len(prose_counts)
+        for rel, lineno, text in prose_counts:
+            _fail(
+                f"{rel}:{lineno}: mixin count written into prose "
+                f"({text.strip()!r}; main.py composes {len(composed)})"
+            )
+        print(
+            "\n  The mixin set belongs in main.py's class Plugin(...) and\n"
+            "  rpc/mixins/__init__.py __all__, and nowhere else. Name that\n"
+            "  source instead of the figure, or, for a deliberate historical\n"
+            "  citation, mark the line or the line above it:\n"
+            "      mixin-count-ok: <reason>"
+        )
+    else:
+        print("OK: no mixin count restated in prose")
 
     if hard_failures:
         print(f"\n{hard_failures} architecture invariant(s) violated")

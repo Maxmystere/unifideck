@@ -193,7 +193,33 @@ Fix, in two passes. **Phase 1** deleted 12 superseded or unwanted routes, each a
 
 Two more (`CleanupRPCMixin`, `_CleanupFinalizeMixin`) ride in transitively through `SyncRPCMixin`'s inheritance and are counted nowhere.
 
-**Resolved, and the count has since moved: `main.py` now composes 17.** `__all__` was completed and the agreement is machine-enforced (`validate_architecture.py` check 1), which is the only invariant that matters — so the fix was to stop restating the number in prose rather than to correct it in five places. `main.py`'s docstring now points at the check instead of naming a figure. The §1.2 pass then emptied and deleted `SecurityRPCMixin`, `ConfigValidationRPCMixin` and `CloudFailureRPCMixin` (20 → 17), which is exactly the churn that made the hardcoded counts wrong four times over; the check caught the drift in the same change both times.
+**RESOLVED 2026-08-25 — but the first resolution was half-applied, and the half that was applied by correcting a number was wrong again before this document was finished.**
+
+`main.py` and `__all__` were fixed and their agreement machine-enforced (`validate_architecture.py` check 1), which is the only invariant that matters. That half held: it survived the §1.2 pass emptying and deleting `SecurityRPCMixin`, `ConfigValidationRPCMixin` and `CloudFailureRPCMixin` (20 → 17), and the check caught the drift in the same change. `main.py`'s docstring points at the check instead of naming a figure.
+
+The other half was never done. The recorded fix says "stop restating the number in prose rather than correct it in five places", but only `main.py` was de-numbered; the remaining sites were hand-corrected to **20** and went stale in the same release the §1.2 deletions landed. Re-derived against the current tree, the table above reads:
+
+| Site | Audit said | Said at re-validation | Actual | |
+|---|---|---|---|---|
+| `main.py` docstring | "eleven mixins" | no numeral, points at the check | 17 | held |
+| `rpc/mixins/__init__.py` `__all__` | 13 | 17, matches `main.py` | 17 | held, machine-enforced |
+| `docs/architecture.md:133` | 18 | **20** | 17 | still wrong, new wrong value |
+| `SKILL.md:19` / `backend.md:15` | 20 *(correct then)* | **20** | 17 | went stale underneath |
+
+Three more sites this section's table never listed: `docs/architecture.md:230` ("the 20 mixin surfaces"), `docs/engineering-roadmap.md:66` (present tense, both halves false, and it is the evidence for roadmap item 8 *Stale-docs guard*), and `validate_architecture.py`'s own docstring, asserting in the present tense that `main.py` composes 20 inside the file whose job is catching that drift.
+
+Two things found while re-validating that changed the fix:
+
+- **The Layer-6 table at `architecture.md:137-153` was already complete and correct** — 17 rows matching `main.py` exactly. The doc enumerated the right set three lines below a sentence claiming a different number. The correct answer was on the page the whole time, which is why de-numbering the sentence costs nothing: the table becomes the page's single enumeration.
+- **`.github/workflows/tests.yml:78` understated its own gate**, calling the dead-RPC check "report-only" when §1.2 had made it hard (`hard_failures += len(dead)`). A CI comment that calls a hard gate advisory is how a red build gets waved through. Corrected.
+
+Re-verified as still accurate and needing no change: the transitive pair (`SyncRPCMixin` → `CleanupRPCMixin` → `_CleanupFinalizeMixin`) is correctly absent from `__all__`, whose contract is "every mixin composed in `main.py`". Their RPC surface is not unguarded either: `collect_rpc_methods` globs the whole directory and matches `name.endswith("Mixin")`, so `scan_orphaned_shortcuts` and `perform_full_cleanup` are covered by check 4.
+
+Fix: removed the numeral from all five live sites so the set is stated in exactly two machine-checked places, then added **check 5** to `validate_architecture.py` so a third statement cannot appear. It scans `CLAUDE.md`, `docs/`, `.claude/skills/`, `main.py`, `py_modules/`, `scripts/` and the workflows, excludes `docs/archive/` and this file (both exist to hold the historical figures), and opts out via an inline `mixin-count-ok: <reason>` marker in the house style of `# no-frontend-caller:` and `# unwired:`. Used once, on the roadmap evidence line. New `tests/unit/test_validate_architecture.py` (26 tests) pins both checks against planted violations in both directions, and was itself mutation-tested: removing the lookbehind, shortening the marker's reach, and truncating the line scan each fail the specific test written for them.
+
+The check deliberately matches only a count written *next to* the word, which is the form all seven instances took. A figure separated from the word by other prose is not caught; widening the window costs more in false positives than it buys. One false positive was found and fixed during implementation: `Layer-6 RPC mixins` in `services/__init__.py:7` read as a count of six, because a word boundary sits between the hyphen and the digit. A gate that fires on untouched code gets switched off rather than fixed, so the lookbehind is load-bearing and has its own test.
+
+**Lesson for the rest of this register: correcting a number is not fixing a drift, it is re-arming it.** This count was corrected twice and was wrong both times within a release. The durable fix is to delete every copy but the one a machine checks. Before ticking a P2 documentation item, check whether the fix removes the duplicated fact or just refreshes it.
 
 ### 2.2 Four incompatible layer maps
 
@@ -337,7 +363,7 @@ Ordered by risk-to-value. Tick the box when a fix lands and the user has validat
 ### P2 — documentation re-sync (zero code risk)
 
 - [x] 13. Standardize on one layer model; delete the "5-layer"/"six-layer" prose counts in `docs/architecture.md` (diagram is authoritative). *(done this audit)*
-- [x] 14. Correct the mixin count and complete `rpc/mixins/__init__.py.__all__` to all 20. *(done this audit)*
+- [x] 14. ~~Correct the mixin count and complete `rpc/mixins/__init__.py.__all__` to all 20.~~ **CLOSED 2026-08-25 — the first pass fixed the code half and re-armed the doc half.** `__all__` and check 1 held through the §1.2 deletions (20 → 17); the four prose sites were hand-corrected to 20 instead of de-numbered and were stale again in the same release, plus three more sites this section's table never listed. Closed by removing the numeral everywhere and adding `validate_architecture.py` **check 5**, which fails on any mixin count written into prose (opt-out: `mixin-count-ok: <reason>`). Fixed a false positive on `Layer-6 RPC mixins` and the `tests.yml` comment that called the hard dead-RPC gate "report-only". Guarded by `tests/unit/test_validate_architecture.py`, mutation-tested. See the rewritten §2.1. *(gate-level validation only; nothing here is user-visible or deployed)*
 - [ ] 15. Update every "five stores" reference to six; re-frame `docs/feasibility/battlenet.md` as implemented. *(docs/architecture.md, skill, and in-code comments done this audit; `docs/feasibility/battlenet.md` still framed as feasibility)*
 - [x] 16. Correct the StoreBase contract in `architecture.md` (10 methods, no `launch()`). *(done this audit)*
 - [ ] 17. Remove the phantom "handler groups" docstrings and `OP-XX` markers; document the five undocumented `event_bus/` and `core/sync_*_mixin` modules; add `accounts/` to the layer map. *(mixins/__init__.py docstring + accounts/ done this audit; `store.py`/`auto_wire.py` docstrings + event_bus/core module docs remain)*

@@ -130,7 +130,7 @@ Infrastructure services that subscribe to the EventBus and own cross-cutting con
 
 ### Layer 6 — `rpc/mixins/` + `main.py`
 
-The `Plugin` class in `main.py` is composed from 20 RPC mixin classes (see `main.py` `class Plugin(...)`); two more (`CleanupRPCMixin`, `_CleanupFinalizeMixin`) arrive transitively through `SyncRPCMixin`. Count the mixins in `main.py` — prose counts drift. The `@auto_wrap_rpc_methods` decorator rewrites every public coroutine to return a typed `Result[T]` envelope, keeping the frontend contract stable across backend refactors.
+The `Plugin` class in `main.py` is composed from the RPC mixin classes enumerated in the table below, which is the same set listed in `main.py` `class Plugin(...)`; two more (`CleanupRPCMixin`, `_CleanupFinalizeMixin`) arrive transitively through `SyncRPCMixin`. No count is given here on purpose: a hardcoded figure has gone stale three times through the 0.7.x series. `main.py` and `rpc/mixins/__init__.py.__all__` are the source of truth, and their agreement is machine-checked by `scripts/validate_architecture.py` (check 1), which also fails if a numeric mixin count reappears in prose. The `@auto_wrap_rpc_methods` decorator rewrites every public coroutine to return a typed `Result[T]` envelope, keeping the frontend contract stable across backend refactors.
 
 | Mixin                      | Surface (representative)                                                        |
 | -------------------------- | ------------------------------------------------------------------------------- |
@@ -227,7 +227,7 @@ Installed via `pip install --target py_modules/ -r requirements.txt`.
 
 TypeScript/React frontend compiled to `dist/index.js` by Rollup.
 
-The frontend communicates with the backend exclusively via Decky's RPC bridge — it calls the public methods of the `Plugin` class (which are the 20 mixin surfaces) and receives typed `Result[T]` envelopes.
+The frontend communicates with the backend exclusively via Decky's RPC bridge — it calls the public methods of the `Plugin` class (which are the RPC mixin surfaces) and receives typed `Result[T]` envelopes.
 
 Key architectural landmarks post-restructure:
 
