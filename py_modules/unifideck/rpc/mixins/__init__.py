@@ -16,7 +16,6 @@ Per-mixin scope:
 * ``AchievementsRPCMixin``    — game achievements + last-session summary;
 * ``AuthShortcutsRPCMixin``   — per-store auth-shortcut context + compat tool;
 * ``CloudSaveRPCMixin``       — cloud-save pull/push/status;
-* ``ConfigValidationRPCMixin``— config-validation status;
 * ``DownloadRPCMixin``        — download-queue management;
 * ``EdgeRPCMixin``            — Microsoft Edge install + readiness;
 * ``ExecutableRPCMixin``      — user-settable launch executable per game;
@@ -24,7 +23,6 @@ Per-mixin scope:
 * ``LibraryFacetsRPCMixin``   — per-shortcut facets for native Sort/Filters;
 * ``ObservabilityRPCMixin``   — metrics, watchdog, replay;
 * ``PlaytimeRPCMixin``        — per-game playtime stats;
-* ``SecurityRPCMixin``        — audit log + brute-force state;
 * ``StorageRPCMixin``         — storage locations + browseable devices;
 * ``StoreRPCMixin``           — auth + login state;
 * ``SyncRPCMixin``            — library sync + game info;
@@ -39,7 +37,6 @@ from .achievements import AchievementsRPCMixin
 from .action import ActionRPCMixin
 from .auth_shortcuts import AuthShortcutsRPCMixin
 from .cloud_save import CloudSaveRPCMixin
-from .config_validation import ConfigValidationRPCMixin
 from .download import DownloadRPCMixin
 from .edge import EdgeRPCMixin
 from .executable import ExecutableRPCMixin
@@ -47,7 +44,6 @@ from .launch import LaunchRPCMixin
 from .library_facets import LibraryFacetsRPCMixin
 from .observability import ObservabilityRPCMixin
 from .playtime import PlaytimeRPCMixin
-from .security import SecurityRPCMixin
 from .storage import StorageRPCMixin
 from .store import StoreRPCMixin
 from .sync import SyncRPCMixin
@@ -60,7 +56,6 @@ __all__ = [
     "ActionRPCMixin",
     "AuthShortcutsRPCMixin",
     "CloudSaveRPCMixin",
-    "ConfigValidationRPCMixin",
     "DownloadRPCMixin",
     "EdgeRPCMixin",
     "ExecutableRPCMixin",
@@ -68,7 +63,6 @@ __all__ = [
     "LibraryFacetsRPCMixin",
     "ObservabilityRPCMixin",
     "PlaytimeRPCMixin",
-    "SecurityRPCMixin",
     "StorageRPCMixin",
     "StoreRPCMixin",
     "SyncRPCMixin",

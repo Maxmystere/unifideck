@@ -144,13 +144,11 @@ The `Plugin` class in `main.py` is composed from 20 RPC mixin classes (see `main
 | `ExecutableRPCMixin`       | `list_game_executables`, `set_game_executable`, `reset_game_executable`          |
 | `LibraryFacetsRPCMixin`    | `get_overview_enrichment`                                                       |
 | `PlaytimeRPCMixin`         | `get_playtime`                                                                  |
-| `SecurityRPCMixin`         | `get_security_audit_log`, `get_security_bruteforce_status`, `get_security_counters` |
-| `ObservabilityRPCMixin`    | `subscribe_replay`, `get_bus_health`, `get_plugin_metrics`, `get_launcher_toasts` |
+| `ObservabilityRPCMixin`    | `subscribe_replay`, `get_launcher_toasts`, `capture_logs`                        |
 | `ActionRPCMixin`           | `dispatch_unifideck_action` (URI dispatch)                                      |
 | `AccountRPCMixin`          | `check_account_switch`, `migrate_account_data`                                  |
 | `AchievementsRPCMixin`     | `get_game_achievements`, `get_last_session_achievements`                         |
 | `CloudSaveRPCMixin`        | `get_cloud_save_status`, `cloud_save_pull`, `cloud_save_push`, `set_game_save_path` |
-| `ConfigValidationRPCMixin` | `get_config_validation_status`                                                  |
 | `UIRPCMixin`               | `get_game_metadata_display`, `get_language_preference`, `set_language_preference` |
 | `UpdaterRPCMixin`          | `check_plugin_update`, `get_available_versions`, `log_update_event`              |
 

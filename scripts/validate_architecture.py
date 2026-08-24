@@ -19,9 +19,17 @@ machine-enforcing rather than re-discovering by hand every release:
    frozenset in ``launcher/wrapper_stores.py``. Nothing links them, so a
    new store can set one without the other.
 
-A fourth check (dead RPC) is heuristic and report-only: it prints methods
-with no obvious frontend caller but does not fail the gate, because a name
-can legitimately be invoked through a dynamically-keyed route.
+4. RPC methods accumulate with no frontend caller. The 2026-08 audit found
+   29 of 102 — 28% of the surface — including a whole "DiagnosticsPanel"
+   that was never built. This check *used* to be report-only and asked only
+   "does the snake_case name appear anywhere in ``src/`` text", which missed
+   14 of the 29: a method declared in ``rpcRoutes`` whose constant nothing
+   references passed. It now asks both questions and is a hard gate.
+
+   Opt out per method with an inline ``# no-frontend-caller: <reason>``
+   comment on the ``async def`` line or the line above it. The reason lives
+   next to the code rather than in an allowlist file, and the exemption
+   count is printed on every run so growth is visible rather than silent.
 
 Stdlib-only on purpose: the script runs in CI before dependencies are
 installed and must not import the plugin (which would execute store
@@ -147,40 +155,138 @@ def parse_store_info(store_file: Path) -> tuple[str | None, bool]:
     return name, uses_wine
 
 
+NO_CALLER_RE = re.compile(r"#\s*no-frontend-caller:\s*\S")
+
+
+def _has_no_caller_marker(lines: list[str], def_lineno: int) -> bool:
+    """Is this ``async def`` exempted by a ``# no-frontend-caller:`` marker?
+
+    Checks the ``def`` line itself, then walks upward through the contiguous
+    run of comment lines directly above it. Walking the whole block (rather
+    than a fixed one-line window) is what lets a real explanation span
+    several lines — and these exemptions need explaining, so a one-liner
+    limit would just push the reason somewhere it can rot.
+
+    ``def_lineno`` is ast's 1-based line number for the ``async def``.
+    """
+    idx = def_lineno - 1
+    if idx < 0 or idx >= len(lines):
+        return False
+    if NO_CALLER_RE.search(lines[idx]):
+        return True
+    for i in range(idx - 1, -1, -1):
+        stripped = lines[i].strip()
+        if not stripped.startswith("#"):
+            break
+        if NO_CALLER_RE.search(lines[i]):
+            return True
+    return False
+
+
 def collect_rpc_methods(mixins_path: Path) -> set[str]:
     """Return public ``async def`` method names on ``*Mixin`` classes.
 
     ``@auto_wrap_rpc_methods`` wraps every public coroutine on a mixin, so
     a public ``async def`` on a ``*Mixin`` class is the RPC surface. Module
     level helpers (``cleanup_sweeps.py`` etc.) and sync methods are not.
+
+    Methods carrying an inline ``# no-frontend-caller: <reason>`` marker —
+    on the ``async def`` line or the line directly above it — are excluded
+    from the dead-RPC check. The marker is named for exactly what the check
+    tests, so it stays honest whether the reason is "only the launcher
+    subprocess calls this" or "dead, tracked by audit register 4a".
     """
     names: set[str] = set()
     for file in mixins_path.glob("*.py"):
         if file.name == "__init__.py":
             continue
-        tree = ast.parse(file.read_text(), filename=str(file))
+        source = file.read_text()
+        lines = source.splitlines()
+        tree = ast.parse(source, filename=str(file))
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef) or not node.name.endswith("Mixin"):
                 continue
             for item in node.body:
                 if (
-                    isinstance(item, ast.AsyncFunctionDef)
-                    and not item.name.startswith("_")
+                    not isinstance(item, ast.AsyncFunctionDef)
+                    or item.name.startswith("_")
                 ):
-                    names.add(item.name)
+                    continue
+                if _has_no_caller_marker(lines, item.lineno):
+                    continue
+                names.add(item.name)
     return names
 
 
+def count_exempt_rpc(mixins_path: Path) -> int:
+    """Count methods carrying a ``# no-frontend-caller:`` marker.
+
+    Printed on every clean run so the exemption set cannot grow quietly —
+    the failure mode of any allowlist. A rising number here is the signal
+    that the gate is being worked around rather than satisfied.
+    """
+    total = 0
+    for file in mixins_path.glob("*.py"):
+        if file.name == "__init__.py":
+            continue
+        total += sum(
+            1 for line in file.read_text().splitlines() if NO_CALLER_RE.search(line)
+        )
+    return total
+
+
+def _route_constants() -> dict[str, str]:
+    """Map ``snake_case`` RPC name → its ``rpcRoutes`` camelCase key.
+
+    Parsed from ``src/api/rpc-routes.ts``, the single source of truth for
+    the route table. A method absent from this map has no declared route.
+    """
+    routes = SRC / "api" / "rpc-routes.ts"
+    if not routes.is_file():
+        return {}
+    pairs = re.findall(r"(\w+):\s*\"([a-z0-9_]+)\"", routes.read_text())
+    return {snake: camel for camel, snake in pairs}
+
+
 def find_dead_rpc(methods: set[str]) -> list[str]:
-    """Return methods that appear nowhere under ``src/`` (report-only)."""
+    """Return RPC methods with no live frontend caller.
+
+    Two independent ways a method can be dead, and the original version of
+    this check only caught the first:
+
+    1. **Undeclared** — the name appears nowhere in ``src/`` at all.
+    2. **Declared but unreferenced** — it has an ``rpcRoutes`` entry, but no
+       component mentions that constant. The route table alone keeps the
+       name "present" in ``src/`` text, which is exactly how 14 dead methods
+       hid from the pre-2026-08 version of this check.
+
+    ``rpc-routes.ts`` is excluded from the haystack for both questions, so a
+    row in the table can never vouch for itself.
+    """
     haystack = ""
-    for file in SRC.rglob("*"):
-        if file.is_file() and file.suffix in (".ts", ".tsx"):
-            try:
-                haystack += file.read_text() + "\n"
-            except UnicodeDecodeError:
-                continue
-    return sorted(name for name in methods if name not in haystack)
+    for file in sorted(SRC.rglob("*")):
+        if not file.is_file() or file.suffix not in (".ts", ".tsx"):
+            continue
+        if file.name == "rpc-routes.ts":
+            continue
+        try:
+            haystack += file.read_text() + "\n"
+        except UnicodeDecodeError:
+            continue
+
+    routes = _route_constants()
+    dead: list[str] = []
+    for name in methods:
+        camel = routes.get(name)
+        if camel is not None:
+            # Declared: the route constant must be referenced somewhere.
+            if not re.search(rf"rpcRoutes\.{re.escape(camel)}\b", haystack):
+                dead.append(name)
+            continue
+        # Undeclared: a raw quoted string is the only remaining way in.
+        if not re.search(rf"[\"']{re.escape(name)}[\"']", haystack):
+            dead.append(name)
+    return sorted(dead)
 
 
 def main() -> int:
@@ -250,16 +356,28 @@ def main() -> int:
     if hard_failures == 0:
         print("OK: uses_wine agrees with WRAPPER_STORES for every store")
 
-    # Check 4 (report-only): dead RPC.
+    # Check 4 (hard): dead RPC.
     methods = collect_rpc_methods(mixins_dir)
     dead = find_dead_rpc(methods)
     if dead:
+        hard_failures += len(dead)
+        for name in dead:
+            _fail(f"RPC '{name}' has no frontend caller")
         print(
-            "NOTE (report-only): RPC methods with no obvious frontend caller: "
-            + ", ".join(dead)
+            "\n  Delete the method and its rpcRoutes row, or mark it at the\n"
+            "  definition with the reason nothing in src/ calls it:\n"
+            "      # no-frontend-caller: <reason>\n"
+            "      async def "
+            + dead[0]
+            + "(self, ...)"
         )
     else:
-        print("OK: no obviously-dead RPC methods found")
+        exempt = count_exempt_rpc(mixins_dir)
+        note = f" ({exempt} exempt)" if exempt else ""
+        print(
+            f"OK: all {len(methods)} checked RPC methods "
+            f"have a frontend caller{note}"
+        )
 
     if hard_failures:
         print(f"\n{hard_failures} architecture invariant(s) violated")

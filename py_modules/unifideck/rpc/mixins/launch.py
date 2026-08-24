@@ -151,6 +151,9 @@ class LaunchRPCMixin:
         )
         return info.get("store"), resolved_game, info.get("title")
 
+    # no-frontend-caller: audit register 4a — the circuit breaker is
+    # user-invisible and user-unresettable; this is its read side,
+    # pending the badge that surfaces CIRCUIT_STATE_CHANGED.
     async def get_launch_failures(self, game_key: str) -> Any:
         """Return recent failures + circuit state for a game.
 
@@ -167,14 +170,22 @@ class LaunchRPCMixin:
             "fail_count": fail_count,
         }
 
+    # no-frontend-caller: audit register 4a — the only way to unblock a
+    # tripped game short of waiting out the 10-minute window. Needs a UI.
     async def clear_launch_failures(self, game_key: str) -> Any:
         """Wipe failure history for one game (full reset)."""
         return self._require_launch_history().clear_failures(game_key)
 
+    # no-frontend-caller: audit register 4a — sibling of
+    # clear_launch_failures; same missing UI.
     async def arm_circuit_bypass(self, game_key: str) -> Any:
         """Arm a one-shot bypass flag (5-minute validity)."""
         return self._require_launch_history().arm_bypass(game_key)
 
+    # no-frontend-caller: audit register 4b — reached only by the
+    # show-logs toast action, which no frontend renders. LaunchLogsModal
+    # exists as translated strings in 16 locales but not as a component.
+    # Delete this with the dead verb, or build the modal.
     async def get_launch_logs(
         self, launch_id: str, max_lines: int = 500,
     ) -> Any:
@@ -184,6 +195,9 @@ class LaunchRPCMixin:
             raise RpcError("service_unavailable", service="launch_logs")
         return await svc.read(launch_id, max_lines=max_lines)
 
+    # no-frontend-caller: audit register 4b — reached only by the
+    # open-save-folder toast action; SaveFolderModal likewise exists only
+    # as locale strings. Same decision as get_launch_logs.
     async def list_save_folder(
         self,
         store: str,

@@ -76,7 +76,6 @@ from unifideck.rpc.mixins.achievements import AchievementsRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.action import ActionRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.auth_shortcuts import AuthShortcutsRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.cloud_save import CloudSaveRPCMixin  # noqa: E402
-from unifideck.rpc.mixins.config_validation import ConfigValidationRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.download import DownloadRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.edge import EdgeRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.executable import ExecutableRPCMixin  # noqa: E402
@@ -84,7 +83,6 @@ from unifideck.rpc.mixins.launch import LaunchRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.library_facets import LibraryFacetsRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.observability import ObservabilityRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.playtime import PlaytimeRPCMixin  # noqa: E402
-from unifideck.rpc.mixins.security import SecurityRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.storage import StorageRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.store import StoreRPCMixin  # noqa: E402
 from unifideck.rpc.mixins.sync import SyncRPCMixin  # noqa: E402
@@ -97,7 +95,6 @@ logger = logging.getLogger(__name__)
 @auto_wrap_rpc_methods
 class Plugin(
     ObservabilityRPCMixin,
-    SecurityRPCMixin,
     DownloadRPCMixin,
     StorageRPCMixin,
     LaunchRPCMixin,
@@ -109,7 +106,6 @@ class Plugin(
     LibraryFacetsRPCMixin,
     UIRPCMixin,
     CloudSaveRPCMixin,
-    ConfigValidationRPCMixin,
     PlaytimeRPCMixin,
     ActionRPCMixin,
     AccountRPCMixin,
