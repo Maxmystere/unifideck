@@ -47,6 +47,7 @@ from unifideck.core.types import (
 )
 from unifideck.security import emit_external_auth_check_failed
 from unifideck.services.shortcut import ShortcutService
+from unifideck.stores.shared.cli_credentials import harden_cli_credential_file
 from unifideck.stores.shared.store_base import StoreBase
 from unifideck.utils.config_helpers import get_cfg
 
@@ -211,6 +212,10 @@ class EpicStore(StoreBase):
             )).expanduser())
         if not Path(user_file).is_file():
             return False
+        # legendary rewrites user.json at 0644 on every token refresh, so
+        # tighten here (the path that runs on each status refresh) rather
+        # than once at sign-in. Cheap: a stat, and a chmod only on drift.
+        harden_cli_credential_file(user_file, "epic", self._bus)
         try:
             with Path(user_file).open(encoding="utf-8") as f:
                 data = json.load(f)

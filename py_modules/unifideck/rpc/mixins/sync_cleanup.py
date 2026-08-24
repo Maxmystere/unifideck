@@ -16,6 +16,7 @@ import logging
 from typing import Any
 
 from unifideck.core import marker_sweep
+from unifideck.core.compat_bridge import to_unsigned
 from unifideck.core.safe_delete import safe_rmtree
 from unifideck.rpc.mixins import cleanup_sweeps
 from unifideck.rpc.mixins.cleanup_finalize import _CleanupFinalizeMixin
@@ -207,7 +208,7 @@ class CleanupRPCMixin(_CleanupFinalizeMixin):
                 continue
             app_id = entry.get("appid")
             if isinstance(app_id, int):
-                keep.add(app_id if app_id >= 0 else app_id + 0x100000000)
+                keep.add(to_unsigned(app_id))
         return keep
 
     async def _delete_nonsteam_artwork(self, keep_appids: set[int]) -> int:

@@ -12,6 +12,18 @@ Two public surfaces:
 * ``GameManifest`` dataclass — the typed record;
 * ``build_manifest`` / ``write_manifest`` — compose and persist.
 
+**Who reads what this writes.** Nothing in this module — which is what
+made ``write_manifest`` look write-only to audit §1.4 g, which proposed
+deleting it. The reader is :mod:`unifideck.core.marker_sweep`, where the
+file is ``_MANIFEST_MARKER``: ``iter_marked_dirs`` parses its ``store``
+and ``store_id`` back out, and ``find_for_game`` / ``sweep_game`` /
+``sweep_all`` use that as *proof Unifideck created this directory* before
+deleting anything. That proof is the only thing that lets uninstall and
+"Delete all data" clean up a game installed outside the default library
+root — a custom folder or an SD card, which the store CLIs do not scan.
+Drop the write and those installs are stranded on disk while uninstall
+reports success. Keep the two modules' contract in mind together.
+
 This module used to own a discovery pass as well (``discover_all``
 and friends, walking every game root to re-attach installs by
 emitting ``GAME_INSTALLED``). It had no callers — only

@@ -51,6 +51,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from unifideck.core.compat_bridge import to_unsigned
+
 logger = logging.getLogger(__name__)
 
 # Fallback plugin dir when ``DECKY_PLUGIN_DIR`` is somehow unset (Decky always
@@ -309,7 +311,7 @@ class AuthShortcutsRPCMixin:
             appid = entry.get("appid")
             if appid is None:
                 continue
-            unsigned = appid if appid >= 0 else appid + 2**32
+            unsigned = to_unsigned(appid)
             return int(unsigned), launch_options
         return 0, ""
 
@@ -371,7 +373,7 @@ def _build_auth_shortcut_context(store: str) -> dict[str, Any]:
             store, e,
         )
         return {"success": False, "error": "appid_failed"}
-    unsigned = app_id if app_id >= 0 else app_id + 2**32
+    unsigned = to_unsigned(app_id)
     return {
         "success": True,
         "appid_unsigned": unsigned,

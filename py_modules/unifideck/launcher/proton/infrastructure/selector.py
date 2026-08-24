@@ -4,6 +4,7 @@ import logging
 import subprocess
 from pathlib import Path
 
+from unifideck.core.compat_bridge import to_unsigned
 from unifideck.launcher.types.errors import (
     DependencyMissingError,
     ProtonUnavailableError,
@@ -251,11 +252,9 @@ def get_steam_compat_tool_override(app_id: str) -> str | None:
     if not app_id:
         return None
     try:
-        appid_int = int(app_id)
+        appid_int = to_unsigned(app_id)
     except (TypeError, ValueError):
         return None
-    if appid_int < 0:
-        appid_int += 2**32
     content = _read_steam_config_vdf()
     tool = vdf_compat.parse_compat_tool(content, appid_int) or None
     logger.info(

@@ -19,6 +19,13 @@ def _find_icon_for_appid(grid_dir: str, appid: int) -> str:
     Returns ``""`` when no file is found — caller treats empty
     as "no update needed".
     """
+    # NOT the same conversion as ``core.compat_bridge.to_unsigned``, despite
+    # looking like it — do not fold the two together. That one is a pure
+    # signed→unsigned reinterpretation; this one additionally *forces* the
+    # high bit, which is the invariant ``games_map.py`` establishes when it
+    # generates an appid (``crc32(key) | 0x80000000``). Steam names grid
+    # files with that form, so the OR is what makes the filename right even
+    # if a caller ever hands us an id from another source.
     unsigned = (appid & 0xFFFFFFFF) | 0x80000000
     for ext in (".jpg", ".png"):
         candidate = Path(grid_dir) / f"{unsigned}_icon{ext}"

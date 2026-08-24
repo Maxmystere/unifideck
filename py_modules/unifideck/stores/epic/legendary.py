@@ -47,8 +47,16 @@ _logger = logging.getLogger(__name__)
 def legendary_config_dir() -> Path:
     """Return legendary's config dir (honours ``LEGENDARY_CONFIG_DIR``).
 
-    ``security.ephemeral_creds`` points that variable at an isolated
-    directory, so this must never hardcode the default path.
+    legendary itself reads this variable, so a user (or a test) can point
+    it at a non-default directory and every path we derive must follow —
+    hence never hardcoding the default.
+
+    This docstring used to credit ``security.ephemeral_creds`` with
+    setting the variable. Nothing ever did: that module had no callers in
+    the project's history and was deleted (audit §1.4 f). The credential
+    file it lives beside is protected by
+    :func:`unifideck.stores.shared.cli_credentials.harden_cli_credential_file`
+    instead, which is mode-only — not encryption at rest.
     """
     env = os.environ.get("LEGENDARY_CONFIG_DIR")
     return (

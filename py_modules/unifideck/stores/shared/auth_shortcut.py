@@ -35,6 +35,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from unifideck.core.compat_bridge import to_unsigned
+
 logger = logging.getLogger(__name__)
 
 
@@ -266,7 +268,7 @@ async def ensure_auth_shortcut(
     launcher_path = launcher_path_for(plugin_dir)
     try:
         appid = shortcut_service.generate_app_id(launcher_path, spec.display_name)
-        unsigned = appid if appid >= 0 else appid + 2**32
+        unsigned = to_unsigned(appid)
 
         data = await _read_shortcuts_from_disk(shortcut_service)
         shortcuts = data.get("shortcuts", {})
@@ -277,7 +279,7 @@ async def ensure_auth_shortcut(
                 data["shortcuts"] = shortcuts
                 await shortcut_service.write_shortcuts(data)
             logger.info("[%s] auth shortcut already in VDF (appid=%s)", spec.store, existing)
-            return existing if existing >= 0 else existing + 2**32
+            return to_unsigned(existing)
 
         indices = [int(k) for k in shortcuts if str(k).isdigit()]
         shortcuts[str(max(indices, default=-1) + 1)] = _build_entry(

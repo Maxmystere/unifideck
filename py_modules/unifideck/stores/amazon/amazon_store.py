@@ -43,6 +43,7 @@ from unifideck.core.types import (
 )
 from unifideck.security import emit_external_auth_check_failed
 from unifideck.services.shortcut import ShortcutService
+from unifideck.stores.shared.cli_credentials import harden_cli_credential_file
 from unifideck.stores.shared.store_base import StoreBase
 from unifideck.utils.config_helpers import get_cfg
 
@@ -178,6 +179,11 @@ class AmazonStore(StoreBase):
             )).expanduser())
         if not Path(user_file).is_file():
             return False
+        # nile rewrites user.json at 0644 on every token refresh, and
+        # ``quarantine_corrupt_user_file`` leaves ``.corrupt-*`` copies at
+        # that same mode. Tighten both here, on the path that runs at every
+        # status refresh, so a rotation cannot leave them world-readable.
+        harden_cli_credential_file(user_file, "amazon", self._bus)
         try:
             with Path(user_file).open(encoding="utf-8") as f:
                 data = json.load(f)

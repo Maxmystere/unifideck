@@ -37,6 +37,11 @@ from unifideck.core.safe_delete import safe_rmtree
 logger = logging.getLogger(__name__)
 
 _GOG_MARKER = ".unifideck-id"
+# Written by ``core/manifest.py``'s ``write_manifest`` (from
+# ``epic/install.py`` and ``amazon/amazon_install.py``). This module is its
+# ONLY reader — nothing in ``core/manifest.py`` reads it back — so a search
+# there for consumers turns up nothing and the write looks dead. It is not:
+# see the note in that module's docstring before touching either side.
 _MANIFEST_MARKER = ".unifideck_manifest.json"
 # Ubisoft's install marker, written by ``stores/ubisoft/library/
 # detection_helpers.py`` (``write_install_marker`` / ``write_marker_sync``).
