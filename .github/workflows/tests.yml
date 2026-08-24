@@ -54,6 +54,14 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
+      # The three static gates below ALSO run as their own named
+      # checks in static-gates.yml, which is unfiltered and so
+      # covers docs-only and src-only PRs this workflow's paths
+      # filter skips. The duplication is deliberate: these copies
+      # run BEFORE the pytest matrix so a drift fails in seconds
+      # instead of as a confusing downstream test failure. Read
+      # static-gates.yml's header before deleting either copy.
+      #
       # Static event-contract gate. Runs BEFORE pytest (per the
       # script's own usage note): a kwarg/contract drift is
       # cheaper to surface here than as a confusing downstream
