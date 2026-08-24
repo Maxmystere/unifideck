@@ -409,7 +409,6 @@
     "updateCancelledMessage": "Update for {{title}} was cancelled.",
     "updateFailed": "Update Failed",
     "updateFailedMessage": "Failed to start update.",
-    "storeError": "Failed to communicate with {{store}} ({{errType}})",
     "captureLogsStarted": "Collecting logs...",
     "captureLogsStartedMessage": "Building a diagnostics bundle in your Downloads folder. This takes a few seconds.",
     "captureLogsDone": "Logs captured",
@@ -725,8 +724,7 @@
     "signInRequired": "Sign in to play",
     "syncSkippedNoSubscription": "No active Xbox Game Pass subscription detected. Your xCloud library was not synchronized.",
     "syncSkippedTierUnknown": "Your Xbox Game Pass subscription was detected but the plan could not be determined. Sync skipped to avoid listing unavailable games.",
-    "subscriptionCheckFailed": "Could not verify your Xbox Game Pass subscription. xCloud sync skipped. Retry when your connection stabilizes.",
-    "subscriptionDetected": "Xbox Game Pass {{tier}} subscription active."
+    "subscriptionCheckFailed": "Could not verify your Xbox Game Pass subscription. xCloud sync skipped. Retry when your connection stabilizes."
   },
   "playButton": {
     "play": "Play",

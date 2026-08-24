@@ -400,7 +400,6 @@
     "updateCancelledMessage": "Se canceló la actualización de {{title}}.",
     "updateFailed": "Error al actualizar",
     "updateFailedMessage": "Error al iniciar la actualización.",
-    "storeError": "Error al comunicar con {{store}} ({{errType}})",
     "captureLogsStarted": "Recopilando registros...",
     "captureLogsStartedMessage": "Creando un paquete de diagnóstico en tu carpeta de Descargas. Tardará unos segundos.",
     "captureLogsDone": "Registros capturados",
@@ -702,8 +701,7 @@
     "signInRequired": "Inicia sesión para jugar",
     "syncSkippedNoSubscription": "No se detectó ninguna suscripción activa a Xbox Game Pass. No se sincronizó tu biblioteca de xCloud.",
     "syncSkippedTierUnknown": "Se detectó tu suscripción a Xbox Game Pass pero no se pudo determinar el plan. Sincronización omitida para evitar listar juegos no disponibles.",
-    "subscriptionCheckFailed": "No se pudo verificar tu suscripción a Xbox Game Pass. Sincronización de xCloud omitida. Reinténtalo cuando tu conexión se estabilice.",
-    "subscriptionDetected": "Suscripción activa a Xbox Game Pass {{tier}}."
+    "subscriptionCheckFailed": "No se pudo verificar tu suscripción a Xbox Game Pass. Sincronización de xCloud omitida. Reinténtalo cuando tu conexión se estabilice."
   },
   "playButton": {
     "play": "Jugar",

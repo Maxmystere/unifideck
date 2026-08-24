@@ -207,15 +207,57 @@ async def _read_shortcuts_from_disk(shortcut_service: Any) -> dict[str, Any]:
     return dict(data) if isinstance(data, dict) else {"shortcuts": {}}
 
 
+async def _emit_shortcut_created(
+    bus: Any, spec: AuthShortcutSpec, unsigned: int,
+) -> None:
+    """Announce a freshly-written auth shortcut so ArtworkService can cover it.
+
+    ``ArtworkService._on_shortcut_created`` filters on ``is_auth`` and maps the
+    store id through its own ``_AUTH_TITLE_FOR_LOOKUP`` to a name SteamGridDB
+    actually has art for, so the payload only has to carry identity. It wants
+    the UNSIGNED appid: that is what Steam's ``grid/`` filenames use.
+
+    This emit is why the handler exists. It sat subscribed and unreachable for
+    the project's whole life (audit §1.3) — Ubisoft never needed it because it
+    fetches its own auth artwork in ``ubisoft/auth/context.py``, and the four
+    OAuth stores moved to ephemeral 15-second shortcuts that are gone before
+    any art could matter. Battle.net is the one store that reaches this module
+    and keeps a persistent tile, so its sign-in tile rendered bare.
+
+    Best-effort: artwork is cosmetic and must never break a sign-in.
+    """
+    if bus is None:
+        return
+    from unifideck.core.types.events import Events
+    try:
+        await bus.emit(
+            Events.SHORTCUT_CREATED,
+            store=spec.store,
+            app_id=unsigned,
+            title=spec.display_name,
+            is_auth=True,
+        )
+    except Exception:
+        logger.debug(
+            "[%s] SHORTCUT_CREATED emit failed — auth shortcut is still usable",
+            spec.store, exc_info=True,
+        )
+
+
 async def ensure_auth_shortcut(
     shortcut_service: Any,
     spec: AuthShortcutSpec,
     plugin_dir: str | None,
+    bus: Any = None,
 ) -> int | None:
     """Create or repair the persistent auth shortcut. Returns its unsigned appid.
 
     Never raises: a missing shortcut service or an unwritable VDF degrades
     to ``None``, and the frontend falls back to a temporary shortcut.
+
+    ``bus`` is optional so test doubles and any caller that only wants the
+    appid can omit it; when present, a NEWLY created shortcut emits
+    ``SHORTCUT_CREATED`` for the artwork pipeline.
     """
     if shortcut_service is None:
         logger.debug("[%s] no shortcut service — cannot create auth shortcut", spec.store)
@@ -247,6 +289,10 @@ async def ensure_auth_shortcut(
     except Exception:
         logger.exception("[%s] auth shortcut creation failed", spec.store)
         return None
+    # Create branch only. The early return above covers "already in VDF", and
+    # re-announcing an existing shortcut on every sign-in would re-run the SGDB
+    # lookup for art that is already on disk.
+    await _emit_shortcut_created(bus, spec, int(unsigned))
     return int(unsigned)
 
 
@@ -254,15 +300,20 @@ async def build_context(
     shortcut_service: Any,
     spec: AuthShortcutSpec,
     plugin_dir: str | None,
+    bus: Any = None,
 ) -> dict[str, Any]:
     """The payload the frontend needs to RunGame this store's auth shortcut.
 
     ``launcher_path`` is always returned, even on failure, so the frontend
     can fall back to a temporary shortcut — which is the only thing that
     works during the first session after the VDF is written.
+
+    Pass ``bus`` to have a newly created shortcut announce itself for artwork.
     """
     launcher_path = launcher_path_for(plugin_dir)
-    unsigned = await ensure_auth_shortcut(shortcut_service, spec, plugin_dir)
+    unsigned = await ensure_auth_shortcut(
+        shortcut_service, spec, plugin_dir, bus=bus,
+    )
     if unsigned is None:
         return {
             "success": False,

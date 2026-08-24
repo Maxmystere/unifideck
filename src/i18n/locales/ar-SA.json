@@ -400,7 +400,6 @@
     "updateCancelledMessage": "تم إلغاء تحديث {{title}}.",
     "updateFailed": "فشل التحديث",
     "updateFailedMessage": "تعذر بدء عملية التحديث.",
-    "storeError": "تعذر الاتصال بـ {{store}} ({{errType}})",
     "captureLogsStarted": "جارٍ جمع السجلات...",
     "captureLogsStartedMessage": "يجري إنشاء حزمة تشخيص في مجلد التنزيلات. يستغرق ذلك بضع ثوانٍ.",
     "captureLogsDone": "تم جمع السجلات",
@@ -702,8 +701,7 @@
     "signInRequired": "تسجيل الدخول مطلوب للعب",
     "syncSkippedNoSubscription": "لم يتم رصد اشتراك Xbox Game Pass نشط. تم تخطي مزامنة ألعاب xCloud.",
     "syncSkippedTierUnknown": "تم رصد اشتراك Xbox Game Pass ولكن تعذر تأكيد الفئة. لتفادي إظهار الألعاب غير القابلة للتشغيل، تم تخطي المزامنة.",
-    "subscriptionCheckFailed": "تعذر التحقق من حالة اشتراك Xbox Game Pass. تم تخطي مزامنة xCloud. يرجى المحاولة عند توفر اتصال شبكة مستقر.",
-    "subscriptionDetected": "تم رصد اشتراك Xbox Game Pass نشط من الفئة {{tier}}."
+    "subscriptionCheckFailed": "تعذر التحقق من حالة اشتراك Xbox Game Pass. تم تخطي مزامنة xCloud. يرجى المحاولة عند توفر اتصال شبكة مستقر."
   },
   "playButton": {
     "play": "تشغيل",

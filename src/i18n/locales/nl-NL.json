@@ -400,7 +400,6 @@
     "updateCancelledMessage": "Update voor {{title}} is geannuleerd.",
     "updateFailed": "Update mislukt",
     "updateFailedMessage": "Kan update niet starten.",
-    "storeError": "Kan niet communiceren met {{store}} ({{errType}})",
     "captureLogsStarted": "Logboeken verzamelen...",
     "captureLogsStartedMessage": "Diagnosepakket wordt gemaakt in je map Downloads. Dit duurt enkele seconden.",
     "captureLogsDone": "Logboeken vastgelegd",
@@ -702,8 +701,7 @@
     "signInRequired": "Meld je aan om te spelen",
     "syncSkippedNoSubscription": "Geen actief Xbox Game Pass-abonnement gedetecteerd. Je xCloud-bibliotheek is niet gesynchroniseerd.",
     "syncSkippedTierUnknown": "Xbox Game Pass-abonnement gedetecteerd, maar het niveau kon niet worden bepaald. Synchronisatie overgeslagen om te voorkomen dat niet-beschikbare games worden getoond.",
-    "subscriptionCheckFailed": "Kan Xbox Game Pass-abonnement niet verifiëren. xCloud-synchronisatie overgeslagen. Probeer het opnieuw zodra je verbinding stabiel is.",
-    "subscriptionDetected": "Actief Xbox Game Pass {{tier}}-abonnement."
+    "subscriptionCheckFailed": "Kan Xbox Game Pass-abonnement niet verifiëren. xCloud-synchronisatie overgeslagen. Probeer het opnieuw zodra je verbinding stabiel is."
   },
   "playButton": {
     "play": "Spelen",

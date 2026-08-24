@@ -2,10 +2,19 @@
 
 ``@subscribe``-decorated handlers driving the artwork pipeline.
 All ultimately call ``self.fetch_artwork`` on the host; they
-differ in trigger signals and payload shapes. The bulk
-``POST_SYNC_PHASE_CHANGED`` handler is the one that covers game
-shortcuts — see the note above ``_on_artwork_request`` for why
-there is no install-time handler.
+differ in trigger signals and payload shapes.
+
+Which handler covers what:
+
+* ``POST_SYNC_PHASE_CHANGED`` — the bulk pass, and the one that covers game
+  shortcuts. See the note above ``_on_artwork_request`` for why there is no
+  install-time handler.
+* ``SHORTCUT_CREATED`` — auth tiles, emitted by
+  ``stores/shared/auth_shortcut.ensure_auth_shortcut`` when it writes a new
+  persistent shortcut. Battle.net is its only live source; Ubisoft fetches
+  its own auth artwork and the four OAuth stores use ephemeral shortcuts.
+* ``ARTWORK_REQUEST`` — on-demand force-refetch. No emitter yet; see the
+  ``unwired:`` note on the enum member.
 """
 from __future__ import annotations
 

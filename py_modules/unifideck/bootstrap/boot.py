@@ -147,11 +147,18 @@ async def _boot_config_and_validate(
     """Layer 3 — ConfigManager + startup validation.
 
     Validates the config at boot BEFORE stores are instantiated.
-    Failures log a warning, flag the plugin as "degraded", emit
-    CONFIG_VALIDATION_FAILED on the bus for SecurityService, and
-    continue booting anyway so the user can still see the
-    DiagnosticsPanel and fix their config. Validation covers
-    user overrides as well.
+    Failures log a warning, set the "degraded" flag, emit
+    CONFIG_VALIDATION_FAILED on the bus for SecurityService's audit
+    log, and continue booting anyway. Validation covers user
+    overrides as well.
+
+    None of that is user-facing at boot: the flag drives no behaviour
+    and there is no UI for it. A malformed config surfaces afterwards
+    through Capture Logs — the bundle carries both the audit trail and
+    a ``config_validation`` block with the errors. This docstring
+    promised a "DiagnosticsPanel" the user could see and fix their
+    config in; no such component has ever existed in ``src/``
+    (audit §1.2/§1.3).
 
     ConfigManager merges defaults/config.json + user overrides
     from the XDG location (~/.config/unifideck/config.json by

@@ -400,7 +400,6 @@
     "updateCancelledMessage": "{{title}} のアップデートがキャンセルされました。",
     "updateFailed": "アップデート失敗",
     "updateFailedMessage": "アップデートを開始できませんでした。",
-    "storeError": "{{store}} との通信に失敗しました ({{errType}})",
     "captureLogsStarted": "ログを収集中...",
     "captureLogsStartedMessage": "ダウンロードフォルダーに診断パッケージを作成しています。数秒かかります。",
     "captureLogsDone": "ログを収集しました",
@@ -702,8 +701,7 @@
     "signInRequired": "プレイするにはログインが必要です",
     "syncSkippedNoSubscription": "有効な Xbox Game Pass サブスクリプションが見つかりません。xCloud ライブラリは同期されませんでした。",
     "syncSkippedTierUnknown": "Xbox Game Pass サブスクリプションが検出されましたが、プランの確認ができませんでした。利用できないゲームが表示されるのを防ぐため、同期をスキップしました。",
-    "subscriptionCheckFailed": "Xbox Game Pass サブスクリプションを検証できませんでした。xCloud の同期をスキップしました。接続が安定したら再試行してください。",
-    "subscriptionDetected": "有効な Xbox Game Pass {{tier}} サブスクリプションを検出しました。"
+    "subscriptionCheckFailed": "Xbox Game Pass サブスクリプションを検証できませんでした。xCloud の同期をスキップしました。接続が安定したら再試行してください。"
   },
   "playButton": {
     "play": "プレイ",

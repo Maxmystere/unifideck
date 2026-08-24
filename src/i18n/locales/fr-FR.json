@@ -400,7 +400,6 @@
     "updateCancelledMessage": "La mise à jour de {{title}} a été annulée.",
     "updateFailed": "Échec de la mise à jour",
     "updateFailedMessage": "Impossible de démarrer la mise à jour.",
-    "storeError": "Impossible de communiquer avec {{store}} ({{errType}})",
     "captureLogsStarted": "Collecte des journaux...",
     "captureLogsStartedMessage": "Création d'une archive de diagnostic dans votre dossier Téléchargements. Cela prend quelques secondes.",
     "captureLogsDone": "Journaux capturés",
@@ -702,8 +701,7 @@
     "signInRequired": "Connectez-vous pour jouer",
     "syncSkippedNoSubscription": "Aucun abonnement Xbox Game Pass actif détecté. Votre bibliothèque xCloud n'a pas été synchronisée.",
     "syncSkippedTierUnknown": "Votre abonnement Xbox Game Pass a été détecté mais le niveau d'abonnement n'a pas pu être déterminé. Synchronisation ignorée pour éviter d'afficher des jeux indisponibles.",
-    "subscriptionCheckFailed": "Impossible de vérifier votre abonnement Xbox Game Pass. Synchronisation xCloud ignorée. Réessayez lorsque votre connexion sera stable.",
-    "subscriptionDetected": "Abonnement Xbox Game Pass {{tier}} actif."
+    "subscriptionCheckFailed": "Impossible de vérifier votre abonnement Xbox Game Pass. Synchronisation xCloud ignorée. Réessayez lorsque votre connexion sera stable."
   },
   "playButton": {
     "play": "Jouer",

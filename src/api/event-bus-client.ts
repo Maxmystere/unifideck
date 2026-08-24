@@ -70,7 +70,6 @@ const WATCHED_EVENTS: EventName[] = [
   "cloud_sync_down_failed",
   "cloud_sync_up_complete",
   "cloud_sync_up_failed",
-  "store_error",
   "launcher_stage",
   "circuit_state_changed",
 ];

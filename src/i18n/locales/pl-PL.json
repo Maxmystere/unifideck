@@ -400,7 +400,6 @@
     "updateCancelledMessage": "Aktualizacja dla {{title}} została anulowana.",
     "updateFailed": "Aktualizacja nie powiodła się",
     "updateFailedMessage": "Nie udało się rozpocząć aktualizacji.",
-    "storeError": "Błąd komunikacji ze sklepem {{store}} ({{errType}})",
     "captureLogsStarted": "Zbieranie dzienników...",
     "captureLogsStartedMessage": "Tworzenie paczki diagnostycznej w folderze Pobrane. Zajmie to kilka sekund.",
     "captureLogsDone": "Dzienniki przechwycone",
@@ -702,8 +701,7 @@
     "signInRequired": "Zaloguj się, aby zagrać",
     "syncSkippedNoSubscription": "Nie wykryto aktywnej subskrypcji Xbox Game Pass. Twoja biblioteka xCloud nie została zsynchronizowana.",
     "syncSkippedTierUnknown": "Wykryto subskrypcję Xbox Game Pass, ale nie można określić poziomu subskrypcji. Pominięto synchronizację, aby zapobiec wyświetlaniu niedostępnych gier.",
-    "subscriptionCheckFailed": "Nie można zweryfikować subskrypcji Xbox Game Pass. Pominięto synchronizację xCloud. Spróbuj ponownie, gdy połączenie będzie stabilne.",
-    "subscriptionDetected": "Aktywna subskrypcja Xbox Game Pass {{tier}}."
+    "subscriptionCheckFailed": "Nie można zweryfikować subskrypcji Xbox Game Pass. Pominięto synchronizację xCloud. Spróbuj ponownie, gdy połączenie będzie stabilne."
   },
   "playButton": {
     "play": "Graj",

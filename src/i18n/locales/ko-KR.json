@@ -400,7 +400,6 @@
     "updateCancelledMessage": "{{title}} 업데이트가 취소되었습니다.",
     "updateFailed": "업데이트 실패",
     "updateFailedMessage": "업데이트 작업을 시작할 수 없습니다.",
-    "storeError": "{{store}} 연동 서버와 통신할 수 없습니다 ({{errType}})",
     "captureLogsStarted": "로그 수집 중...",
     "captureLogsStartedMessage": "다운로드 폴더에 진단 묶음을 만들고 있습니다. 몇 초 걸립니다.",
     "captureLogsDone": "로그를 수집했습니다",
@@ -702,8 +701,7 @@
     "signInRequired": "플레이하려면 로그인 필요",
     "syncSkippedNoSubscription": "유효한 Xbox Game Pass 멤버십을 찾을 수 없습니다. xCloud 라이브러리 동기화가 취소되었습니다.",
     "syncSkippedTierUnknown": "Xbox Game Pass 구독은 확인되었으나 요금제 정보를 가져올 수 없습니다. 이용할 수 없는 게임이 표시되지 않도록 동기화를 건너뛰었습니다.",
-    "subscriptionCheckFailed": "Xbox Game Pass 멤버십을 확인할 수 없습니다. xCloud 동기화를 건너뛰었습니다. 연결이 원활할 때 다시 시도해 주세요.",
-    "subscriptionDetected": "유효한 Xbox Game Pass {{tier}} 구독을 확인했습니다."
+    "subscriptionCheckFailed": "Xbox Game Pass 멤버십을 확인할 수 없습니다. xCloud 동기화를 건너뛰었습니다. 연결이 원활할 때 다시 시도해 주세요."
   },
   "playButton": {
     "play": "플레이",

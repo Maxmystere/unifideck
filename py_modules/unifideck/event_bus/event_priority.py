@@ -46,8 +46,6 @@ class EventPriority(IntEnum):
 
 
 _DEFAULT_PRIORITY: dict[Events, EventPriority] = {
-    Events.PLUGIN_LOADED: EventPriority.CRITICAL,
-    Events.PLUGIN_UNLOADING: EventPriority.CRITICAL,
     Events.GAME_LAUNCHED: EventPriority.CRITICAL,
     Events.GAME_STOPPED: EventPriority.CRITICAL,
     Events.GAME_UNINSTALLED: EventPriority.NORMAL,
@@ -67,7 +65,6 @@ _DEFAULT_PRIORITY: dict[Events, EventPriority] = {
     Events.DOWNLOAD_CANCELLED: EventPriority.NORMAL,
     Events.DOWNLOAD_FAILED: EventPriority.NORMAL,
     Events.DOWNLOAD_PROGRESS: EventPriority.BACKGROUND,
-    Events.STORE_ERROR: EventPriority.BACKGROUND,
 }
 COALESCE_KEY: dict[Events, str] = {
     # SYNC_PROGRESS is intentionally NOT coalesced — when it is,

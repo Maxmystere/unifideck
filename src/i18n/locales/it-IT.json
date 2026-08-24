@@ -400,7 +400,6 @@
     "updateCancelledMessage": "L'aggiornamento di {{title}} è stato annullato.",
     "updateFailed": "Aggiornamento fallito",
     "updateFailedMessage": "Avvio dell'aggiornamento fallito.",
-    "storeError": "Comunicazione con {{store}} fallita ({{errType}})",
     "captureLogsStarted": "Raccolta dei registri...",
     "captureLogsStartedMessage": "Creazione di un pacchetto diagnostico nella cartella Download. Richiede alcuni secondi.",
     "captureLogsDone": "Registri acquisiti",
@@ -702,8 +701,7 @@
     "signInRequired": "Accedi per giocare",
     "syncSkippedNoSubscription": "Nessun abbonamento Xbox Game Pass attivo rilevato. La tua libreria xCloud non è stata sincronizzata.",
     "syncSkippedTierUnknown": "L'abbonamento Xbox Game Pass è stato rilevato ma non è stato possibile determinare il piano. Sincronizzazione saltata per evitare di elencare giochi non disponibili.",
-    "subscriptionCheckFailed": "Impossibile verificare l'abbonamento Xbox Game Pass. Sincronizzazione xCloud saltata. Riprova quando la connessione si stabilizza.",
-    "subscriptionDetected": "Abbonamento Xbox Game Pass {{tier}} attivo."
+    "subscriptionCheckFailed": "Impossibile verificare l'abbonamento Xbox Game Pass. Sincronizzazione xCloud saltata. Riprova quando la connessione si stabilizza."
   },
   "playButton": {
     "play": "Gioca",

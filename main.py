@@ -160,11 +160,17 @@ class Plugin(
 
         Runs after ``_main`` so the bus and config manager are
         already wired. Stores two pieces of state on the plugin
-        instance : ``_config_validation_result`` (the diff /
-        validation report shown in the UI) and ``_config_degraded``
-        (a boolean flag the frontend reads to display a non-blocking
-        warning when the config is partially broken but the plugin
-        can still operate).
+        instance : ``_config_validation_result`` (the validation
+        report) and ``_config_degraded`` (a boolean saying the config
+        is partially broken but the plugin can still operate).
+
+        Both are **diagnostics only** — they reach a human through the
+        support bundle's ``config_validation`` block
+        (``rpc/mixins/observability.py``), not through any UI. Neither
+        changes plugin behaviour: there is no "degraded mode". This
+        docstring described a frontend warning banner that has never
+        existed (audit §1.2/§1.3); the flag was in fact read by nothing
+        at all until the bundle fold.
         """
         from unifideck.bootstrap.boot import _resolve_defaults_path
         from unifideck.config.startup import validate_config_at_startup

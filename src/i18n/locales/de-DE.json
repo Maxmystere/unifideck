@@ -400,7 +400,6 @@
     "updateCancelledMessage": "Update für {{title}} wurde abgebrochen.",
     "updateFailed": "Update fehlgeschlagen",
     "updateFailedMessage": "Update konnte nicht gestartet werden.",
-    "storeError": "Verbindung mit {{store}} fehlgeschlagen ({{errType}})",
     "captureLogsStarted": "Protokolle werden gesammelt...",
     "captureLogsStartedMessage": "Diagnosepaket wird in Ihrem Downloads-Ordner erstellt. Das dauert einige Sekunden.",
     "captureLogsDone": "Protokolle erfasst",
@@ -702,8 +701,7 @@
     "signInRequired": "Zum Spielen anmelden",
     "syncSkippedNoSubscription": "Kein aktives Xbox Game Pass-Abonnement erkannt. Ihre xCloud-Bibliothek wurde nicht synchronisiert.",
     "syncSkippedTierUnknown": "Ihr Xbox Game Pass-Abonnement wurde erkannt, aber der Tarif konnte nicht ermittelt werden. Synchronisierung übersprungen, um nicht verfügbare Spiele nicht aufzulisten.",
-    "subscriptionCheckFailed": "Ihr Xbox Game Pass-Abonnement konnte nicht verifiziert werden. xCloud-Synchronisierung übersprungen. Versuchen Sie es erneut, wenn sich Ihre Verbindung stabilisiert hat.",
-    "subscriptionDetected": "Aktives Xbox Game Pass {{tier}}-Abonnement."
+    "subscriptionCheckFailed": "Ihr Xbox Game Pass-Abonnement konnte nicht verifiziert werden. xCloud-Synchronisierung übersprungen. Versuchen Sie es erneut, wenn sich Ihre Verbindung stabilisiert hat."
   },
   "playButton": {
     "play": "Spielen",

@@ -5,7 +5,7 @@
  * be handled regardless of whether the Quick Access panel is open:
  *
  *   - `LAUNCHER_STAGE`       → toast or CloudSaveConflictModal
- *   - `STORE_ERROR`          → error toast
+ *   - `SYNC_SKIPPED`         → warning toast explaining the skip
  *   - `STORE_AUTH_COMPLETE`  → navigate to /library/home
  *
  * Started from `definePlugin` and torn down on `onDismount`.
@@ -39,6 +39,27 @@ function showToast(
     console.log(`[BootEventListener] ${title}: ${body}`);
   }
 }
+
+/**
+ * `SYNC_SKIPPED.reason` → the i18n key explaining the skip.
+ *
+ * A skip is an intentional no-op with a user-facing explanation, as distinct
+ * from `SYNC_FAILED`. `MicrosoftStore` is the only emitter today: any of these
+ * three outcomes drops the entire xCloud library from the sync while the bar
+ * still reports success for the other five stores, which reads as "my Game
+ * Pass games vanished". The strings existed and were translated in all 16
+ * locales the whole time — the event was polled and dropped on the floor
+ * (audit §1.3).
+ *
+ * Keyed by reason rather than by store, and unknown reasons fall through
+ * silently, so a future subscription store (EA Play, Ubisoft+) emitting its own
+ * reason adds a row here and nothing else.
+ */
+const SYNC_SKIPPED_KEYS: Record<string, string> = {
+  no_active_subscription: "microsoft.syncSkippedNoSubscription",
+  subscription_tier_unknown: "microsoft.syncSkippedTierUnknown",
+  subscription_check_error: "microsoft.subscriptionCheckFailed",
+};
 
 /**
  * Start the boot-time event listener. Returns a cleanup function
@@ -110,16 +131,12 @@ export function startBootEventListener(): () => void {
     }),
   );
 
-  // ── STORE_ERROR ───────────────────────────────────────
+  // ── SYNC_SKIPPED ──────────────────────────────────────
   unsubs.push(
-    EventBusClient.subscribe("store_error", (payload) => {
-      const store = String(payload.store ?? "?");
-      const errType = String(payload.error_type ?? "error");
-      showToast(
-        String(i18n.t("toasts.storeError", { store, errType })),
-        "",
-        "error",
-      );
+    EventBusClient.subscribe("sync_skipped", (payload) => {
+      const key = SYNC_SKIPPED_KEYS[String(payload.reason)];
+      if (!key) return;
+      showToast(String(i18n.t(key)), "", "warning");
     }),
   );
 

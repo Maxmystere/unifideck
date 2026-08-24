@@ -400,7 +400,6 @@
     "updateCancelledMessage": "Обновление {{title}} было отменено.",
     "updateFailed": "Обновление не удалось",
     "updateFailedMessage": "Не удалось начать обновление.",
-    "storeError": "Не удалось связаться с магазином {{store}} ({{errType}})",
     "captureLogsStarted": "Сбор журналов...",
     "captureLogsStartedMessage": "Создание диагностического архива в папке «Загрузки». Это займёт несколько секунд.",
     "captureLogsDone": "Журналы собраны",
@@ -702,8 +701,7 @@
     "signInRequired": "Войдите, чтобы играть",
     "syncSkippedNoSubscription": "Активная подписка Xbox Game Pass не найдена. Ваша библиотека xCloud не синхронизирована.",
     "syncSkippedTierUnknown": "Подписка Xbox Game Pass обнаружена, но уровень определить не удалось. Синхронизация пропущена во избежание показа недоступных игр.",
-    "subscriptionCheckFailed": "Не удалось проверить подписку Xbox Game Pass. Синхронизация xCloud пропущена. Попробуйте еще раз, когда подключение станет стабильным.",
-    "subscriptionDetected": "Обнаружена активная подписка Xbox Game Pass {{tier}}."
+    "subscriptionCheckFailed": "Не удалось проверить подписку Xbox Game Pass. Синхронизация xCloud пропущена. Попробуйте еще раз, когда подключение станет стабильным."
   },
   "playButton": {
     "play": "Играть",

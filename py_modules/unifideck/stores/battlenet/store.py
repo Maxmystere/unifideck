@@ -152,6 +152,7 @@ class BattlenetStore(WrapperSessionHooks, StoreBase):
         """
         return await build_context(
             self._shortcut_service, self.AUTH_SHORTCUT, self._plugin_dir,
+            bus=self._bus,   # lets a first-time write fetch its tile artwork
         )
 
     def _launcher_path(self) -> str:

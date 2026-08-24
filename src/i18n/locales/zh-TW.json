@@ -409,7 +409,6 @@
     "updateCancelledMessage": "{{title}} 的更新已取消。",
     "updateFailed": "更新失敗",
     "updateFailedMessage": "啟動更新失敗。",
-    "storeError": "無法與商店 {{store}} 通訊（{{errType}}）",
     "captureLogsStarted": "正在收集記錄…",
     "captureLogsStartedMessage": "正在下載資料夾建立診斷壓縮檔，約需幾秒。",
     "captureLogsDone": "已收集記錄",
@@ -725,8 +724,7 @@
     "signInRequired": "需要登入以進行遊玩",
     "syncSkippedNoSubscription": "未偵測到有效的 Xbox Game Pass 會員資格。xCloud 遊戲庫同步已被跳過。",
     "syncSkippedTierUnknown": "偵測到 Xbox Game Pass 訂閱，但無法確認會員等級。為避免顯示無法遊玩的遊戲，已略過同步。",
-    "subscriptionCheckFailed": "無法驗證 Xbox Game Pass 訂閱狀態。已跳過 xCloud 同步。請在網路連線穩定時重試。",
-    "subscriptionDetected": "已偵測到有效的 Xbox Game Pass {{tier}} 訂閱。"
+    "subscriptionCheckFailed": "無法驗證 Xbox Game Pass 訂閱狀態。已跳過 xCloud 同步。請在網路連線穩定時重試。"
   },
   "playButton": {
     "play": "執行",

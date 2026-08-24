@@ -63,6 +63,16 @@ jobs:
       - name: Validate event schemas
         run: python3 scripts/validate_event_schemas.py
 
+      # Static event-WIRING gate, the sibling of the above. The schema gate is
+      # emit-side only, so it cannot see an event with a subscriber and no
+      # emitter (or the reverse) — audit §1.3 found eleven, two of which cost
+      # users real behaviour for a release. Exits 1 unless every enum member
+      # has both a producer and a consumer, or carries an '# unwired: <reason>'
+      # marker. Needs src/ as well as py_modules/, so it runs unconditionally
+      # rather than behind a path filter.
+      - name: Validate event wiring
+        run: python3 scripts/validate_event_wiring.py
+
       # Static architecture-invariant gate: main.py mixin set vs
       # rpc/mixins/__init__.py __all__, store list (cache_registry vs disk),
       # and uses_wine vs WRAPPER_STORES. Exits 1 on any hard mismatch; the

@@ -400,7 +400,6 @@
     "updateCancelledMessage": "{{title}} güncellemesi iptal edildi.",
     "updateFailed": "Güncelleme Başarısız",
     "updateFailedMessage": "Güncelleme başlatılamadı.",
-    "storeError": "{{store}} ile iletişim kurulamadı ({{errType}})",
     "captureLogsStarted": "Günlükler toplanıyor...",
     "captureLogsStartedMessage": "İndirilenler klasörünüzde bir tanılama paketi oluşturuluyor. Bu birkaç saniye sürer.",
     "captureLogsDone": "Günlükler toplandı",
@@ -702,8 +701,7 @@
     "signInRequired": "Oynamak için Giriş Yapın",
     "syncSkippedNoSubscription": "Aktif bir Xbox Game Pass aboneliği bulunamadı. xCloud kütüphaneniz senkronize edilmedi.",
     "syncSkippedTierUnknown": "Xbox Game Pass aboneliği algılandı ancak abonelik düzeyi belirlenemedi. Kullanılamayan oyunların gösterilmesini önlemek için senkronizasyon atlandı.",
-    "subscriptionCheckFailed": "Xbox Game Pass aboneliği doğrulanamadı. xCloud senkronizasyonu atlandı. Bağlantınız kararlı olduğunda tekrar deneyin.",
-    "subscriptionDetected": "Aktif Xbox Game Pass {{tier}} aboneliği algılandı."
+    "subscriptionCheckFailed": "Xbox Game Pass aboneliği doğrulanamadı. xCloud senkronizasyonu atlandı. Bağlantınız kararlı olduğunda tekrar deneyin."
   },
   "playButton": {
     "play": "Oyna",

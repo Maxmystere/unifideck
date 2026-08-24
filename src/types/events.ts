@@ -75,7 +75,6 @@ export const Events = {
   CLOUD_SYNC_UP_COMPLETE: "cloud_sync_up_complete",
   CLOUD_SYNC_UP_FAILED: "cloud_sync_up_failed",
   // Errors and toasts
-  STORE_ERROR: "store_error",
   LAUNCHER_STAGE: "launcher_stage",
   CIRCUIT_STATE_CHANGED: "circuit_state_changed",
 } as const;
