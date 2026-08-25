@@ -191,8 +191,20 @@ class UbisoftStore(StoreBase):
                 ),
             )
 
+    # intentional-divergence: same store_injector hook, no browser monitor —
+    # this store signs in through the vendor client in its own prefix.
     def _rebuild_auth_after_injection(self) -> None:
         """Wire the post-injection shortcut service into the auth facade.
+
+        **Same injector hook, deliberately different body.** The four
+        browser-auth stores share ``shared/browser_auth_rebuild``, which
+        rebuilds an auth flow around a just-injected CDP browser monitor.
+        Ubisoft has no browser monitor — it signs in through the vendor
+        client in its own prefix — so it is not a consumer of that mixin
+        and must not be "consolidated" onto it. ``store_injector`` looks
+        this method up by name, which is the whole contract between them.
+        Audit §3.4 counted this as a fifth copy of the mixin's body; it
+        never was one.
 
         Auto-discovery builds the store — and its auth facade — before
         the service container exists, so the facade captured

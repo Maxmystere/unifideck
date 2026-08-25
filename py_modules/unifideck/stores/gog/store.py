@@ -43,6 +43,10 @@ from unifideck.core.types import (
     StoreInfo,
 )
 from unifideck.services.shortcut import ShortcutService
+from unifideck.stores.shared.browser_auth_rebuild import (
+    BrowserAuthRebuildMixin,
+)
+from unifideck.stores.shared.install_status import merge_install_status
 from unifideck.stores.shared.store_base import StoreBase
 from unifideck.utils.locale import get_unifideck_locale
 
@@ -52,7 +56,7 @@ from .config import GOG_AUTH_URL_FILE, GOGConfig
 from .dlc import GOGDlcManager
 from .exe_resolver import GOGExeResolver
 from .install import GOGInstaller
-from .library import GOGLibrary, merge_install_status
+from .library import GOGLibrary
 from .sessions import GOGSessions
 from .tokens import GOGTokenManager
 from .updates import GOGUpdatesChecker
@@ -64,7 +68,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class GOGStore(StoreBase):
+class GOGStore(BrowserAuthRebuildMixin, StoreBase):
     """Gogstore."""
 
     store_info = StoreInfo(
@@ -172,36 +176,25 @@ class GOGStore(StoreBase):
             resolve_install_info=self._library.get_installed_game_info,
         )
 
-    def _rebuild_auth_after_injection(self) -> None:
-        """(Re-)build the GOG browser-auth flow once a monitor is set.
-
-        Called by `store_injector` after the OAuth browser
-        monitor has been wired into the container. Idempotent —
-        early-returns if `_auth` is already built.
-        """
-        if self._auth is not None:
-            return
-        monitor = getattr(self, "_browser_monitor", None)
-        if monitor is None:
-            logger.debug(
-                "[GOGStore] no browser_monitor; auth disabled",
-            )
-            return
-        orchestrator = AuthOrchestrator(
-            bus=self._bus,
-            browser_monitor=monitor,
-            store_name="gog",
-        )
-        self._auth = GOGBrowserAuth(
+    def _build_auth_flow(self, orchestrator: AuthOrchestrator) -> GOGBrowserAuth:
+        """GOG's half of ``BrowserAuthRebuildMixin``."""
+        return GOGBrowserAuth(
             bus=self._bus,
             orchestrator=orchestrator,
             tokens=self._tokens,
             config=self._gog_config,
         )
-        # Rebuild the gogdl-driven submodules so they reference the live
-        # token manager — `_auth` may have refreshed tokens in the meantime.
+
+    def _after_auth_flow_built(self) -> None:
+        """Rebuild the gogdl-driven submodules against the live tokens.
+
+        The only store that needs this hook: ``_auth`` may have refreshed
+        tokens, and the installer / DLC / update submodules captured the
+        token manager when they were built. Skipping it leaves
+        ``_gogdl_bin`` empty, so ``is_available`` refuses and every install
+        dies at spawn.
+        """
         self._build_gogdl_submodules()
-        logger.info("[GOGStore] auth flow wired")
 
     async def is_available(self) -> bool:
         """Check whether available.
@@ -304,7 +297,14 @@ class GOGStore(StoreBase):
             installed = await asyncio.to_thread(
                 self._library.get_installed_map,
             )
-            return merge_install_status(owned, installed)
+            # Two GOG-only arguments, both load-bearing — see
+            # ``shared/install_status`` for why neither generalises:
+            # the scanned ``executable`` is absolute and reconcile needs
+            # it to write the games.map launch row, and the map comes from
+            # a live walk so re-statting every directory is pure cost.
+            return merge_install_status(
+                owned, installed, exe_key="executable", verify_dir=False,
+            )
         except Exception:
             logger.exception(
                 "[GOGStore] get_library install overlay failed; "

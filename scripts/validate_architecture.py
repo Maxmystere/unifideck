@@ -97,6 +97,16 @@ machine-enforcing rather than re-discovering by hand every release:
     ``preserve_vendor_logs``, so one store cannot vouch for another. Opt out
     with ``# no-vendor-salvage: <reason>``.
 
+11. A helper promoted into ``stores/shared/`` gets copied back. Audit §3.4
+    found five helpers pasted across stores; three had diverged, and one
+    divergence was live — Epic's and Amazon's ``merge_install_status``
+    guarded their disk-existence check on the path being truthy, so a
+    record with a blank path skipped it and marked a deleted game
+    installed. Promotion alone does not prevent the next copy, and a grep
+    for the name finds the shared one and reads as covered. Check 11 pins
+    each promoted helper to its owning module. Opt out with
+    ``# intentional-divergence: <reason>``.
+
 Checks 5 to 7 share one scanner, ``scan_prose``. Their regexes are narrow on
 purpose and each carries the false positive that shaped it: a gate that fires
 on correct, untouched code gets switched off rather than fixed. See the
@@ -452,6 +462,121 @@ def count_exempt_vendor_salvage() -> int:
                 if NO_SALVAGE_RE.search(line)
             )
     return total
+
+
+# --- Check 11: a promoted shared helper is defined exactly once ------------
+
+#: Helpers that have been consolidated into one owning module, mapped to the
+#: path (relative to ``py_modules/unifideck/``) that owns them.
+#:
+#: This is a hand-written list, which is normally the thing this script
+#: exists to stamp out — but here the list *is* the deliverable. Audit §3.4
+#: found five helpers copied across stores; three of them had silently
+#: diverged, and one divergence (an install path that skipped its own
+#: disk check) was a live defect. Promoting a helper into ``shared/`` does
+#: nothing to stop the next store pasting its own copy back, and a grep for
+#: the name finds the shared one and reads as covered. So: when a helper is
+#: promoted, it gets a row here.
+#:
+#: A second definition is a hard failure unless its ``def`` line carries
+#: ``# intentional-divergence: <reason>``. That is not a rubber stamp; it is
+#: for the case where two same-named functions look like duplicates and are
+#: not. There is exactly one today: Ubisoft implements the
+#: ``store_injector`` hook ``_rebuild_auth_after_injection``, which the four
+#: browser-auth stores get from the shared mixin, with a genuinely different
+#: body — it has no browser monitor and wires a shortcut service instead.
+#: §3.4 counted it as a fifth copy of the mixin's body; it never was one.
+#: The same shape as §3.3's ``fix_pfx_symlink`` versus
+#: ``ensure_pfx_symlink``, whose guards are inverses — that pair escapes
+#: this check only because the two were given different names.
+SHARED_HELPERS: dict[str, str] = {
+    "merge_install_status": "stores/shared/install_status.py",
+    "dir_size_bytes": "stores/shared/installed_size.py",
+    "_rebuild_auth_after_injection": "stores/shared/browser_auth_rebuild.py",
+    "rsync_clone": "stores/shared/prefix_clone.py",
+    "write_marker": "stores/shared/prefix_clone.py",
+    "read_cli_user_json": "stores/shared/cli_credentials.py",
+}
+
+DIVERGENCE_RE = re.compile(r"#\s*intentional-divergence:\s*\S")
+
+
+def _is_marked_divergent(lines: list[str], def_index: int) -> bool:
+    """Is the ``def`` at *def_index* opted out of check 11?
+
+    The marker may sit on the ``def`` line itself or anywhere in the
+    contiguous run of comment lines directly above it. Matching only one
+    line up (the house style of ``# no-frontend-caller:``) was too narrow
+    the moment the reason needed two lines to state — which the one real
+    divergence in the tree does.
+    """
+    if DIVERGENCE_RE.search(lines[def_index]):
+        return True
+    index = def_index - 1
+    while index >= 0 and lines[index].lstrip().startswith("#"):
+        if DIVERGENCE_RE.search(lines[index]):
+            return True
+        index -= 1
+    return False
+
+
+def find_duplicate_shared_helpers() -> list[tuple[str, str, str]]:
+    """``(helper, owning module, offending file)`` for every stray copy.
+
+    Matches a ``def``/``async def`` at any indentation, so a method on a
+    class counts — that is how four of the five §3.4 duplicates were
+    written.
+    """
+    strays: list[tuple[str, str, str]] = []
+    patterns = {
+        name: re.compile(rf"^\s*(?:async\s+)?def\s+{re.escape(name)}\s*\(")
+        for name in SHARED_HELPERS
+    }
+    for file in sorted(PY.rglob("*.py")):
+        rel = file.relative_to(PY).as_posix()
+        lines = file.read_text().splitlines()
+        for name, owner in SHARED_HELPERS.items():
+            if rel == owner:
+                continue
+            for index, line in enumerate(lines):
+                if not patterns[name].match(line):
+                    continue
+                if _is_marked_divergent(lines, index):
+                    continue
+                strays.append((name, owner, f"{rel}:{index + 1}"))
+    return strays
+
+
+def count_intentional_divergences() -> int:
+    """Count ``# intentional-divergence:`` markers, printed on a clean run."""
+    return sum(
+        1
+        for file in PY.rglob("*.py")
+        for line in file.read_text().splitlines()
+        if DIVERGENCE_RE.search(line)
+    )
+
+
+def report_shared_helpers() -> int:
+    """Print check 11's verdict; return the number of hard failures."""
+    strays = find_duplicate_shared_helpers()
+    if not strays:
+        marked = count_intentional_divergences()
+        suffix = f" ({marked} marked divergent)" if marked else ""
+        print(
+            f"OK: all {len(SHARED_HELPERS)} shared helpers defined once{suffix}"
+        )
+        return 0
+    for name, owner, where in strays:
+        _fail(f"'{name}' is defined at {where}; it belongs to {owner}")
+    print(
+        "\n  Audit §3.4: five helpers had been copied across stores and three\n"
+        "  had quietly diverged — one copy skipped its own disk check and\n"
+        "  marked a deleted game installed. Import the shared one, or, if the\n"
+        "  two genuinely cannot share a body, mark the def with\n"
+        "  '# intentional-divergence: <reason>'."
+    )
+    return len(strays)
 
 
 def collect_rpc_methods(mixins_path: Path) -> set[str]:
@@ -894,6 +1019,9 @@ def main() -> int:
             "OK: every store with vendor log globs salvages them"
             f"{suffix}"
         )
+
+    # Check 11 (hard): a promoted shared helper is defined exactly once.
+    hard_failures += report_shared_helpers()
 
     if hard_failures:
         print(f"\n{hard_failures} architecture invariant(s) violated")

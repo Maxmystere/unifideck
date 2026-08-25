@@ -17,6 +17,9 @@ from unifideck.core.types import (
     StoreInfo,
 )
 from unifideck.services.shortcut import ShortcutService
+from unifideck.stores.shared.browser_auth_rebuild import (
+    BrowserAuthRebuildMixin,
+)
 from unifideck.stores.shared.store_base import StoreBase
 from unifideck.utils.locale import get_unifideck_locale
 
@@ -31,7 +34,7 @@ if TYPE_CHECKING:
     from unifideck.event_bus.event_bus import EventBus
     from unifideck.services.microsoft_subscription import MicrosoftSubscriptionService
 logger = logging.getLogger(__name__)
-class MicrosoftStore(StoreBase):
+class MicrosoftStore(BrowserAuthRebuildMixin, StoreBase):
     """Microsoft store."""
     store_info = StoreInfo(
         name="microsoft",
@@ -86,34 +89,17 @@ class MicrosoftStore(StoreBase):
         self._auth: MicrosoftBrowserAuth | None = None
         self._poll_task: asyncio.Task[None] | None = None
         self._rebuild_auth_after_injection()
-    def _rebuild_auth_after_injection(self) -> None:
-        """(Re-)build the Microsoft browser-auth flow once a monitor is set.
-
-        Called by `store_injector` after the OAuth browser
-        monitor has been wired into the container. Idempotent —
-        early-returns if `_auth` is already built.
-        """
-        if self._auth is not None:
-            return
-        monitor = getattr(self, "_browser_monitor", None)
-        if monitor is None:
-            logger.debug(
-                "[MicrosoftStore] no browser_monitor; auth disabled",
-            )
-            return
-        orchestrator = AuthOrchestrator(
-            bus=self._bus,
-            browser_monitor=monitor,
-            store_name="microsoft",
-        )
-        self._auth = MicrosoftBrowserAuth(
+    def _build_auth_flow(
+        self, orchestrator: AuthOrchestrator,
+    ) -> MicrosoftBrowserAuth:
+        """Microsoft's half of ``BrowserAuthRebuildMixin``."""
+        return MicrosoftBrowserAuth(
             bus=self._bus,
             orchestrator=orchestrator,
             tokens=self._tokens,
             config=self._ms_config,
             config_manager=self._config_manager,
         )
-        logger.info("[MicrosoftStore] auth flow wired")
 
     # ── Background token refresh ─────────────────────────────────
     #

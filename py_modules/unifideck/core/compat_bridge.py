@@ -62,8 +62,11 @@ def to_unsigned(app_id: int | str) -> int:
     """Normalise a Steam shortcut appid to the unsigned 32-bit form.
 
     ``shortcuts.vdf`` and ``games.map`` store the *signed* value; Steam names
-    the ``compatdata`` directory with the unsigned one. Mirrors
-    ``services/shortcut/orphan_scan._to_unsigned``.
+    the ``compatdata`` directory with the unsigned one.
+
+    This is the only implementation. It used to say it mirrored
+    ``services/shortcut/orphan_scan._to_unsigned``, which stopped being true
+    when that module was changed to import this one.
     """
     return int(app_id) & 0xFFFFFFFF
 

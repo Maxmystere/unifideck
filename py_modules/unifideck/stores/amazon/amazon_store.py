@@ -41,13 +41,17 @@ from unifideck.core.types import (
     StoreInfo,
 )
 from unifideck.services.shortcut import ShortcutService
+from unifideck.stores.shared.browser_auth_rebuild import (
+    BrowserAuthRebuildMixin,
+)
 from unifideck.stores.shared.cli_credentials import read_cli_user_json
+from unifideck.stores.shared.install_status import merge_install_status
 from unifideck.stores.shared.store_base import StoreBase
 from unifideck.utils.config_helpers import get_cfg
 
 from .amazon_auth import AmazonAuthFlow
 from .amazon_install import AmazonInstaller, ProgressCallback
-from .amazon_library import AmazonLibraryReader, merge_install_status
+from .amazon_library import AmazonLibraryReader
 from .amazon_updates import AmazonUpdateChecker
 
 if TYPE_CHECKING:
@@ -57,7 +61,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AmazonStore(StoreBase):
+class AmazonStore(BrowserAuthRebuildMixin, StoreBase):
     """Amazon store."""
 
     store_info = StoreInfo(
@@ -119,39 +123,19 @@ class AmazonStore(StoreBase):
         # against the just-injected monitor.
         self._browser_monitor = browser_monitor
         self._amazon_cfg = amazon_cfg
-        self._bus_ref = bus
         self._auth: AmazonAuthFlow | None = None
         self._rebuild_auth_after_injection()
 
-    def _rebuild_auth_after_injection(self) -> None:
-        """Build the ``AmazonAuthFlow`` if a browser monitor is set.
-
-        Idempotent : the injector may call this multiple times, so
-        we early-return if ``_auth`` is already wired against the
-        current ``_browser_monitor``.
-        """
-        if self._auth is not None:
-            return
-        monitor = getattr(self, "_browser_monitor", None)
-        if monitor is None:
-            logger.debug(
-                "[AmazonStore] no browser_monitor; auth disabled",
-            )
-            return
-        orchestrator = AuthOrchestrator(
-            bus=self._bus_ref,
-            browser_monitor=monitor,
-            store_name="amazon",
-        )
-        self._auth = AmazonAuthFlow(
-            bus=self._bus_ref,
+    def _build_auth_flow(self, orchestrator: AuthOrchestrator) -> AmazonAuthFlow:
+        """Amazon's half of ``BrowserAuthRebuildMixin``."""
+        return AmazonAuthFlow(
+            bus=self._bus,
             orchestrator=orchestrator,
             cli_path=self.cli_path,
             success_markers=self._amazon_cfg[
                 "nile_register_success_markers"
             ],
         )
-        logger.info("[AmazonStore] auth flow wired")
 
     async def is_available(self) -> bool:
         """Check whether available."""
@@ -298,7 +282,9 @@ class AmazonStore(StoreBase):
                 )
             owned = await self._library.read_owned_games()
             installed = await self._library.read_installed_ids()
-            return merge_install_status(owned, installed)
+            # nile records the directory under ``path``; it can outlive the
+            # files, so it is re-checked against disk.
+            return merge_install_status(owned, installed, path_key="path")
         except Exception:
             logger.exception("[AmazonStore] get_library failed")
             return []

@@ -296,7 +296,8 @@ class GOGLibrary:
         Returns ``{game_id: {"install_path": <dir>, "executable": <exe>}}``.
 
         Used by the full-library sync to overlay install status onto the
-        owned list (``get_library`` → :func:`merge_install_status`). A
+        owned list (``get_library`` →
+        ``shared/install_status.merge_install_status``). A
         single pass over every scan dir — vs ``get_installed_game_info``'s
         per-game rescan — so the merge is O(dirs × entries), not
         O(installed × dirs × entries). First match per game id wins (a
@@ -460,52 +461,3 @@ class GOGLibrary:
             extra_headers=headers,
             log_prefix="[GOGLibrary]",
         )
-
-
-def merge_install_status(
-    owned: list[Game],
-    installed: dict[str, dict[str, str | None]],
-) -> list[Game]:
-    """Overlay on-disk install state onto the owned-games list.
-
-    Mirrors Epic/Amazon's ``merge_install_status``: for each owned game
-    with a scanned install dir, rebuild it as ``installed=True`` with the
-    scanned ``install_path``/``exe_path``, preserving every other field.
-
-    Unlike Epic/Amazon — which carry the owned game's ``exe_path`` (None
-    on a fresh fetch) — GOG sets ``exe_path`` from the scanned executable.
-    Reconcile only (re)writes the games.map launch row when BOTH
-    ``game.installed`` and ``game.exe_path`` are truthy, so a missing
-    ``exe_path`` would leave launch broken after a sync rebuilt the row.
-
-    No ``Path(install_path).is_dir()`` guard (unlike Epic): GOG's
-    ``installed`` map comes from a live ``iterdir`` walk, so the dir
-    provably existed at scan time — there's no separate CLI record that
-    can outlive the files. ``size_bytes`` is left untouched (computing it
-    means walking the tree; App-Details resolves it on demand).
-    """
-    merged: list[Game] = []
-    for game in owned:
-        entry = installed.get(game.store_game_id)
-        install_path = entry.get("install_path") if entry else None
-        if entry is None or not install_path:
-            merged.append(game)
-            continue
-        merged.append(
-            Game(
-                app_id=game.app_id,
-                store=game.store,
-                store_game_id=game.store_game_id,
-                title=game.title,
-                installed=True,
-                install_path=install_path,
-                exe_path=(entry.get("executable") or game.exe_path),
-                size_bytes=game.size_bytes,
-                tags=list(game.tags),
-                icon_url=game.icon_url,
-                hero_url=game.hero_url,
-                logo_url=game.logo_url,
-                metadata=dict(game.metadata),
-            )
-        )
-    return merged

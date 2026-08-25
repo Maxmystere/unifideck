@@ -162,6 +162,8 @@ def test_every_check_reports(script_path: Path) -> None:
         "every prose store count agrees",
         "module is documented",
         "CLIENT_STOREFRONTS covers all",
+        "vendor log globs salvages them",
+        "shared helpers defined once",
     ):
         assert expected in res.stdout, f"no output line for: {expected}"
 
@@ -883,3 +885,151 @@ def test_check10_refuses_rather_than_passes_when_the_table_is_gone(
 
     with pytest.raises(SystemExit):
         mod.parse_vendor_log_stores()
+
+
+# ========================================================= #
+# 11. A promoted shared helper is defined exactly once
+# ========================================================= #
+def _plant(root: Path, rel: str, body: str) -> None:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(body, encoding="utf-8")
+
+
+@pytest.fixture
+def helper_tree(monkeypatch, tmp_path: Path, mod):
+    """A tree holding only the owning module for one tracked helper."""
+    _plant(tmp_path, "stores/shared/install_status.py",
+           "def merge_install_status(owned, installed):\n    return owned\n")
+    monkeypatch.setattr(mod, "PY", tmp_path)
+    monkeypatch.setattr(
+        mod, "SHARED_HELPERS",
+        {"merge_install_status": "stores/shared/install_status.py"},
+    )
+    return tmp_path
+
+
+def test_check11_passes_when_the_helper_is_defined_once(helper_tree, mod) -> None:
+    assert mod.find_duplicate_shared_helpers() == []
+
+
+def test_check11_catches_a_copy_pasted_back_into_a_store(
+    helper_tree: Path, mod,
+) -> None:
+    """The §3.4 defect, reintroduced."""
+    _plant(helper_tree, "stores/epic/library.py",
+           "def merge_install_status(owned, installed):\n    return owned\n")
+
+    strays = mod.find_duplicate_shared_helpers()
+
+    assert [(n, w) for n, _, w in strays] == [
+        ("merge_install_status", "stores/epic/library.py:1"),
+    ]
+
+
+def test_check11_catches_a_copy_written_as_a_method(
+    helper_tree: Path, mod,
+) -> None:
+    """Four of the five §3.4 duplicates were methods, not module functions."""
+    _plant(helper_tree, "stores/gog/store.py",
+           "class GOGStore:\n"
+           "    def merge_install_status(self, owned, installed):\n"
+           "        return owned\n")
+
+    assert len(mod.find_duplicate_shared_helpers()) == 1
+
+
+def test_check11_catches_an_async_copy(helper_tree: Path, mod) -> None:
+    _plant(helper_tree, "stores/amazon/lib.py",
+           "async def merge_install_status(owned, installed):\n    return owned\n")
+
+    assert len(mod.find_duplicate_shared_helpers()) == 1
+
+
+def test_check11_reports_the_owning_module_in_the_failure(
+    helper_tree: Path, mod,
+) -> None:
+    """The message has to say where the code should have come from."""
+    _plant(helper_tree, "stores/epic/library.py",
+           "def merge_install_status(owned, installed):\n    return owned\n")
+
+    _, owner, _ = mod.find_duplicate_shared_helpers()[0]
+
+    assert owner == "stores/shared/install_status.py"
+
+
+def test_check11_honours_the_marker_on_the_def_line(
+    helper_tree: Path, mod,
+) -> None:
+    _plant(helper_tree, "stores/epic/library.py",
+           "def merge_install_status(o, i):  "
+           "# intentional-divergence: different contract\n    return o\n")
+
+    assert mod.find_duplicate_shared_helpers() == []
+    assert mod.count_intentional_divergences() == 1
+
+
+def test_check11_honours_a_marker_two_comment_lines_up(
+    helper_tree: Path, mod,
+) -> None:
+    """The live divergence in the tree needs two lines to state its reason.
+
+    A first cut looked only one line above the ``def`` and red-flagged
+    Ubisoft's legitimate hook.
+    """
+    _plant(helper_tree, "stores/epic/library.py",
+           "# intentional-divergence: the two contracts are inverses and\n"
+           "# neither can do the other's job\n"
+           "def merge_install_status(o, i):\n    return o\n")
+
+    assert mod.find_duplicate_shared_helpers() == []
+
+
+def test_check11_marker_does_not_reach_across_code(
+    helper_tree: Path, mod,
+) -> None:
+    """Only the contiguous comment run above the def counts.
+
+    Otherwise one marker anywhere in a file would exempt every later
+    definition in it — a group-level justification standing in for a
+    per-name one, which is audit item 27's defect.
+    """
+    _plant(helper_tree, "stores/epic/library.py",
+           "# intentional-divergence: applies to the helper below only\n"
+           "def unrelated():\n    pass\n"
+           "def merge_install_status(o, i):\n    return o\n")
+
+    assert len(mod.find_duplicate_shared_helpers()) == 1
+
+
+def test_check11_ignores_a_mere_mention_of_the_name(
+    helper_tree: Path, mod,
+) -> None:
+    """Importing or calling the shared helper is the desired state."""
+    _plant(helper_tree, "stores/epic/store.py",
+           "from unifideck.stores.shared.install_status import (\n"
+           "    merge_install_status,\n)\n\n"
+           "def get_library(owned, installed):\n"
+           "    return merge_install_status(owned, installed)\n")
+
+    assert mod.find_duplicate_shared_helpers() == []
+
+
+def test_check11_does_not_fire_mid_word(helper_tree: Path, mod) -> None:
+    _plant(helper_tree, "stores/epic/library.py",
+           "def merge_install_status_legacy(o, i):\n    return o\n")
+
+    assert mod.find_duplicate_shared_helpers() == []
+
+
+def test_check11_every_tracked_owner_exists(mod) -> None:
+    """A row whose owning module has moved would make the check vacuous.
+
+    Same failure mode as check 10's renamed table: the helper name would
+    stop matching anything and the row would silently guard nothing.
+    """
+    for name, owner in mod.SHARED_HELPERS.items():
+        path = mod.PY / owner
+        assert path.is_file(), f"{name}: owning module {owner} is missing"
+        pattern = f"def {name}("
+        assert pattern in path.read_text(), f"{name} is not defined in {owner}"
