@@ -1,16 +1,20 @@
-"""StoreRPCMixin — auth + login-state RPC (subset of StoreHandlers).
+"""StoreRPCMixin — store auth + login-state RPC.
 
 OP-26e | py_modules/unifideck/rpc/mixins/store.py
 
-Mixin form of the auth-related slice of ``StoreHandlers``
-(OP-25g). Where the handler group covers auth + library +
-sync + install, this mixin only covers the auth surface —
-the rest lived in ``SyncRPCMixin`` historically.
+Covers the auth surface only. The neighbouring surfaces live in
+sibling mixins, all composed onto ``Plugin`` in ``main.py``:
 
-Auth-shortcut context RPCs (``get_<store>_auth_shortcut_context``
-+ ``get_compat_tool_for_game``) live in a sibling
-``AuthShortcutsRPCMixin`` (OP-26k) to keep this file under the
-200 LOC ceiling.
+* library and sync — ``SyncRPCMixin``;
+* install and update — ``DownloadRPCMixin``;
+* auth-shortcut context (``get_<store>_auth_shortcut_context``,
+  ``get_compat_tool_for_game``) — ``AuthShortcutsRPCMixin``, split
+  out to keep this file under the 200 LOC ceiling.
+
+Composition is flat: every mixin is a base of ``Plugin`` and reaches
+its dependencies through ``self``. There is no handler-group layer and
+no ``rpc/handlers/`` package; earlier versions of this docstring
+described a structure that was never built.
 """
 
 from __future__ import annotations

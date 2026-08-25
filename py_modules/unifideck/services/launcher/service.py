@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from unifideck.core.types import Result
 from unifideck.launcher.rpc import emit_stage
 from unifideck.launcher.types.context import LaunchContext, RuntimeState
+from unifideck.launcher.types.options import parse_launch_options
 from unifideck.launcher.wrapper_stores import is_wrapper_store
 
 if TYPE_CHECKING:
@@ -199,20 +200,41 @@ class LauncherService:
 
     @staticmethod
     def _build_runtime_state(ctx: LaunchContext) -> RuntimeState:
-        """Construct the mutable runtime state from ``ctx`` overrides.
+        """Construct the mutable runtime state from the user's launch options.
 
-        ``started_at`` is read from the env-override dict because
-        the launcher subprocess may already know its own start
-        time (passed in by the dispatcher). Missing → 0, which
-        lets ``_elapsed_since_launch`` compute from ``time.monotonic``
-        without a special case.
+        Only ``lsfg_requested`` is taken from the parse. The env half is
+        applied at context-construction time instead
+        (``dispatcher._env_overrides_from``), because ``LaunchContext`` is
+        frozen.
+
+        ``wrappers`` and ``game_args`` are deliberately still unpopulated,
+        and audit §2.9 records why. ``parse_launch_options`` was written for
+        a full Steam ``LaunchOptions`` string, where ``%command%`` marks the
+        boundary between wrapper words and game arguments. What reaches the
+        dispatcher is the *post-expansion argv tail*, which frequently has
+        no ``%command%`` left in it -- and the parser's fallback for that
+        case moves every bare token into ``game_args``. Our argv tail
+        legitimately carries the user's own wrapper words (the frontend's
+        ``extractUserParams`` preserves ``mangohud``/``gamemoderun`` into the
+        temp-shortcut options), so wiring it would have appended
+        ``mangohud gamemoderun`` to the *game's* command line. Measured, not
+        theorised: see the §2.9 worked example.
+
+        Deciding what a bare token in the argv tail means is a design call,
+        not a wiring one. Until it is made, these stay empty, which is the
+        behaviour every release so far has shipped.
 
         Extracted from ``launch`` (lot 13a) to keep that
         method's fan-out under the gate.
         """
-        return RuntimeState(
-            started_at=float(ctx.env_overrides.get("started_at", "0")),
-        )
+        # Not ``started_at``: nothing has ever populated it (the dispatcher
+        # never passed one, despite an older docstring here claiming it did)
+        # and nothing reads it. Elapsed time comes from
+        # ``self._launch_started_at``, set in ``launch`` off
+        # ``time.monotonic``. Reading a user-controlled dict for an internal
+        # timestamp would be a trap now that the dict is populated.
+        parsed = parse_launch_options(ctx.raw_options)
+        return RuntimeState(lsfg_requested=parsed.lsfg_requested)
 
     async def _handle_auth_path(self, ctx: LaunchContext) -> Result:
         """Route a non-launch context to the right handler.
@@ -268,7 +290,7 @@ class LauncherService:
             )
         state = self._build_runtime_state(ctx)
         try:
-            plan, _ = await prepare_windows_plan(self, ctx, state)
+            plan = await prepare_windows_plan(self, ctx, state)
             rc = await handler(plan)
         finally:
             self._active_subprocess = None
@@ -473,7 +495,7 @@ class LauncherService:
         state: RuntimeState,
         *,
         tool_id: str | None = None,
-    ) -> tuple[ProtonLaunchPlan, object]:
+    ) -> ProtonLaunchPlan:
         """Delegate to ``helpers.prepare_windows_plan``."""
         from .helpers import prepare_windows_plan
         return await prepare_windows_plan(self, ctx, state, tool_id=tool_id)

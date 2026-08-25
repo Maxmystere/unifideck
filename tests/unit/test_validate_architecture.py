@@ -12,10 +12,19 @@ failed twice. Check 1 owns the one statement of the set that has to be right
 (``main.py`` vs ``__all__``); check 5 stops a third statement appearing
 anywhere else.
 
+Checks 6, 7 and 8 arrived with the §2.2, §2.4 and §2.5 passes and share check
+5's scanner. Their false-positive tests are the point of this file, not
+padding: a first cut of check 6 fired on seven correct ``3-layer merge`` lines
+in ``config/``, and a first cut of check 7 reported 23 correct subset
+statements ("Amazon is the one store whose…") in a single run. Both are
+parametrised below with the verbatim lines, because a gate that reds untouched
+code gets switched off rather than fixed.
+
 What is pinned:
 
-1. the real repo passes all five checks, and the live mixin count is printed
-   so the set cannot change silently;
+1. the real repo passes every check, each check still prints its own line
+   (one that stops printing has stopped running), and the live mixin count is
+   printed so the set cannot change silently;
 2. check 1 flips the exit code and names the offending class in BOTH
    directions — composed-but-not-exported and exported-but-not-composed —
    because the fix differs per direction;
@@ -23,7 +32,16 @@ What is pinned:
    the live figure, and honours its ``mixin-count-ok:`` opt-out on the line
    and on the line above;
 4. check 5's exclusions and its lookbehind hold, since a checker that fires
-   on ``Layer-6 RPC mixins`` gets switched off rather than fixed.
+   on ``Layer-6 RPC mixins`` gets switched off rather than fixed;
+5. check 6 catches every historical layer-count phrasing, including the two
+   workflow comments the audit's own list missed, and leaves both the config
+   merge and ordinal ``Layer N`` references alone. Its marker reach is pinned
+   at one line, so widening it fails a test;
+6. check 7 verifies rather than bans: a stale total fails, a correct total
+   passes, subset statements are untouched, and the same figure fails once
+   the store count moves under it;
+7. check 8 names a subpackage absent from the layer map, skips ``__init__``
+   and ``__pycache__``, and stays silent when the doc itself is missing.
 
 The clean-tree case runs the script as a subprocess against the real repo.
 The failure cases build a throwaway mirror of the repo — symlinks for every
@@ -136,6 +154,9 @@ def test_every_check_reports(script_path: Path) -> None:
         "uses_wine agrees with WRAPPER_STORES",
         "have a frontend caller",
         "no mixin count restated in prose",
+        "no layer count restated in prose",
+        "every prose store count agrees",
+        "module is documented",
     ):
         assert expected in res.stdout, f"no output line for: {expected}"
 
@@ -403,3 +424,254 @@ def test_check5_failure_names_the_file_line_and_live_count(
     assert "'20 RPC mixin'" in out
     assert f"main.py composes {len(composed)}" in out
     assert "mixin-count-ok: <reason>" in out
+
+
+# ========================================================= #
+# 6. Check 6 — the layer count, banned in prose
+# ========================================================= #
+@pytest.mark.parametrize("phrasing", [
+    "The 5-layer backend, EventBus, RPC mixins, and build flow.",
+    "Python, Decky Loader RPC, a 5-layer architecture with an EventBus",
+    "The full 5-layer stack doesn't cleanly map to the current tree",
+    "Architecture role : Layer 3 of the plan's five-layer model",
+    "aligned with the five-layer architecture of the technical document",
+    "The full 5-layer stack is documented in the technical doc",
+])
+def test_check6_catches_every_form_the_defect_actually_took(
+    tmp_path: Path, mod, phrasing: str,
+) -> None:
+    """The parametrised strings are the real §2.2 sites, verbatim.
+
+    Two of them (the two workflow comments) were not in the audit's own
+    list; check 6 is how they were found.
+    """
+    _doc(tmp_path, "docs/architecture.md", phrasing + "\n")
+    assert mod.find_prose_layer_counts(tmp_path), f"not caught: {phrasing!r}"
+
+
+@pytest.mark.parametrize("phrasing", [
+    "ConfigManager : 3-layer runtime config (defaults, user, code)",
+    "Catches the case where a new call site skips the 3-layer merge",
+    '"""3-layer configuration manager."""',
+    "Initialize with 3-layer merge.",
+    "``ConfigManager`` with 3-layer merge (defaults + user + code)",
+])
+def test_check6_leaves_the_config_merge_alone(
+    tmp_path: Path, mod, phrasing: str,
+) -> None:
+    """The config merge really is 3-layer and has nothing to do with the stack.
+
+    These are verbatim ``config/`` and ``bootstrap/`` lines. A first version
+    of check 6 banned any cardinal before "layer" and fired on all of them.
+    A gate that reds seven correct lines gets switched off rather than fixed,
+    so the trailing architecture noun is load-bearing.
+    """
+    _doc(tmp_path, "py_modules/unifideck/config/config_manager.py",
+         phrasing + "\n")
+    assert mod.find_prose_layer_counts(tmp_path) == [], (
+        f"false positive: {phrasing!r}")
+
+
+@pytest.mark.parametrize("phrasing", [
+    "Layer 3 — StoreBase (stores/shared/)",
+    "The services layer sits between the Layer-4 stores",
+    "Layer-6 RPC mixins + main.py",
+    "### Layer 2 — `core/`",
+])
+def test_check6_does_not_read_an_ordinal_as_a_count(
+    tmp_path: Path, mod, phrasing: str,
+) -> None:
+    """``Layer 3`` names one layer; only a count *before* the word is a total."""
+    _doc(tmp_path, "docs/architecture.md", phrasing + "\n")
+    assert mod.find_prose_layer_counts(tmp_path) == [], (
+        f"false positive: {phrasing!r}")
+
+
+def test_check6_honours_the_marker_on_the_line(tmp_path: Path, mod) -> None:
+    _doc(tmp_path, "docs/engineering-roadmap.md",
+         "<!-- layer-count-ok: historical --> It said 5-layer backend.\n")
+    assert mod.find_prose_layer_counts(tmp_path) == []
+
+
+def test_check6_honours_the_marker_on_the_line_above(
+    tmp_path: Path, mod,
+) -> None:
+    _doc(tmp_path, "docs/engineering-roadmap.md",
+         "<!-- layer-count-ok: historical -->\nIt said 5-layer backend.\n")
+    assert mod.find_prose_layer_counts(tmp_path) == []
+
+
+def test_check6_marker_does_not_reach_two_lines_down(
+    tmp_path: Path, mod,
+) -> None:
+    """Pins the reach. Widening it silently excuses the line after the next."""
+    _doc(tmp_path, "docs/engineering-roadmap.md",
+         "<!-- layer-count-ok: historical -->\nfiller\n5-layer backend\n")
+    assert len(mod.find_prose_layer_counts(tmp_path)) == 1
+
+
+def test_check6_failure_names_the_file_and_line(
+    tmp_path: Path, repo_root: Path, mod, capsys,
+) -> None:
+    root = _mirror(tmp_path, repo_root, (repo_root / "main.py").read_text())
+    (root / "docs").unlink()
+    _doc(root, "docs/architecture.md", "a 5-layer architecture with a bus\n")
+    _repoint(mod, root)
+
+    assert mod.main() == 1
+    out = capsys.readouterr().out
+    assert "docs/architecture.md:1" in out
+    assert "5-layer architecture" in out
+    assert "layer-count-ok: <reason>" in out
+
+
+# ========================================================= #
+# 7. Check 7 — the store count, verified rather than banned
+# ========================================================= #
+@pytest.mark.parametrize("phrasing", [
+    "The five store connectors implement the same contract",
+    "all five stores authenticate the same way",
+    "a five-store system with per-store auth",
+    "a five-store setup",
+])
+def test_check7_catches_a_stale_total(
+    tmp_path: Path, mod, phrasing: str,
+) -> None:
+    """§2.4: every doc said five for a release after Battle.net landed."""
+    _doc(tmp_path, "docs/architecture.md", phrasing + "\n")
+    assert mod.find_wrong_store_counts(tmp_path, 6), f"not caught: {phrasing!r}"
+
+
+@pytest.mark.parametrize("phrasing", [
+    "the sole dispatcher for all six stores' DOWNLOAD_* events",
+    "Six store connector sub-packages, each self-contained",
+    "6 store connectors",
+    "flows across all 6 stores:",
+])
+def test_check7_passes_a_correct_total(
+    tmp_path: Path, mod, phrasing: str,
+) -> None:
+    """A right figure is not a defect. This is why check 7 verifies."""
+    _doc(tmp_path, "docs/architecture.md", phrasing + "\n")
+    assert mod.find_wrong_store_counts(tmp_path, 6) == [], (
+        f"false positive: {phrasing!r}")
+
+
+@pytest.mark.parametrize("phrasing", [
+    "Amazon is the one store whose sign-in leaves the shared Edge profile",
+    "Battle.net is the one store that reaches this module",
+    "four stores report credential permissions through one channel",
+    "Default SD / removable-media install base for one store.",
+    "Two stores need this path:",
+    "sync bar reported success for the other five stores.",
+    "Tile-patch infrastructure from 0.7 store badges makes this cheap",
+    "Four of Unifideck's six stores (Epic, GOG, Amazon, Microsoft)",
+])
+def test_check7_leaves_subset_statements_alone(
+    tmp_path: Path, mod, phrasing: str,
+) -> None:
+    """Verbatim lines from the tree, all correct, none a total.
+
+    A first version of check 7 matched any cardinal before "store" and
+    reported 23 of these in one run. Only a total claim is checked, because
+    a count below the total is nearly always naming a subset.
+    """
+    _doc(tmp_path, "py_modules/unifideck/stores/shared/install_base.py",
+         phrasing + "\n")
+    assert mod.find_wrong_store_counts(tmp_path, 6) == [], (
+        f"false positive: {phrasing!r}")
+
+
+def test_check7_catches_the_count_going_stale_upward(
+    tmp_path: Path, mod,
+) -> None:
+    """The direction that matters next: a correct six once a seventh lands."""
+    _doc(tmp_path, "docs/architecture.md", "all six stores are wired\n")
+    assert mod.find_wrong_store_counts(tmp_path, 6) == []
+    assert mod.find_wrong_store_counts(tmp_path, 7)
+
+
+def test_check7_honours_the_marker(tmp_path: Path, mod) -> None:
+    _doc(tmp_path, "docs/engineering-roadmap.md",
+         "<!-- store-count-ok: historical --> It said five store connectors.\n")
+    assert mod.find_wrong_store_counts(tmp_path, 6) == []
+
+
+def test_check7_reports_both_the_stated_and_the_real_count(
+    tmp_path: Path, repo_root: Path, mod, capsys,
+) -> None:
+    root = _mirror(tmp_path, repo_root, (repo_root / "main.py").read_text())
+    (root / "docs").unlink()
+    _doc(root, "docs/architecture.md", "The five store connectors share it\n")
+    _repoint(mod, root)
+
+    assert mod.main() == 1
+    out = capsys.readouterr().out
+    assert "docs/architecture.md:1" in out
+    assert "says 5" in out
+    assert "the tree has 6" in out
+    assert "store-count-ok: <reason>" in out
+
+
+# ========================================================= #
+# 8. Check 8 — every subpackage appears in the layer map
+# ========================================================= #
+def _fake_tree(root: Path, *, services=(), core=(), event_bus=()) -> None:
+    base = root / "py_modules" / "unifideck"
+    for name in services:
+        (base / "services" / name).mkdir(parents=True, exist_ok=True)
+    for package, modules in (("core", core), ("event_bus", event_bus)):
+        directory = base / package
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "__init__.py").write_text("", encoding="utf-8")
+        for name in modules:
+            (directory / name).write_text("", encoding="utf-8")
+
+
+def test_check8_catches_an_undocumented_service_package(
+    tmp_path: Path, mod,
+) -> None:
+    _fake_tree(tmp_path, services=("download", "support_bundle"))
+    _doc(tmp_path, "docs/architecture.md", "| `services/download/` | queue |\n")
+
+    missing = mod.find_undocumented_subpackages(
+        tmp_path, tmp_path / "docs" / "architecture.md")
+    assert missing == ["services/support_bundle"]
+
+
+def test_check8_catches_an_undocumented_core_module(
+    tmp_path: Path, mod,
+) -> None:
+    _fake_tree(tmp_path, core=("paths.py", "marker_sweep.py"))
+    _doc(tmp_path, "docs/architecture.md", "| `paths.py` | path resolution |\n")
+
+    missing = mod.find_undocumented_subpackages(
+        tmp_path, tmp_path / "docs" / "architecture.md")
+    assert missing == ["core/marker_sweep.py"]
+
+
+def test_check8_ignores_dunder_init_and_pycache(tmp_path: Path, mod) -> None:
+    """``__init__.py`` documents nothing, and ``__pycache__`` is not a package."""
+    _fake_tree(tmp_path, services=("__pycache__",), core=("paths.py",))
+    _doc(tmp_path, "docs/architecture.md", "`paths.py`\n")
+    assert mod.find_undocumented_subpackages(
+        tmp_path, tmp_path / "docs" / "architecture.md") == []
+
+
+def test_check8_passes_when_everything_is_documented(
+    tmp_path: Path, mod,
+) -> None:
+    _fake_tree(
+        tmp_path, services=("artwork",), core=("paths.py",),
+        event_bus=("event_bus.py",))
+    _doc(tmp_path, "docs/architecture.md",
+         "`artwork/` `paths.py` `event_bus.py`\n")
+    assert mod.find_undocumented_subpackages(
+        tmp_path, tmp_path / "docs" / "architecture.md") == []
+
+
+def test_check8_is_silent_when_the_doc_is_missing(tmp_path: Path, mod) -> None:
+    """No doc means a broken checkout, not 44 violations to wade through."""
+    _fake_tree(tmp_path, services=("artwork",))
+    assert mod.find_undocumented_subpackages(
+        tmp_path, tmp_path / "docs" / "nope.md") == []

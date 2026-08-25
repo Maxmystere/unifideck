@@ -14,12 +14,18 @@ class ParsedOptions:
     game_args: list[str] = field(default_factory=list)
     env_overrides: dict[str, str] = field(default_factory=dict)
     lsfg_requested: bool = False
-def _tokenize_options(raw: str) -> list[str]:
+def tokenize_options(raw: str) -> list[str]:
     """Split a launch-options string respecting shell quoting.
 
     Falls back to a naive whitespace split if ``shlex`` chokes
     on malformed input — the previous behaviour Steam shipped
     before Proton 8 and we don't want to error out on it.
+
+    Public because the dispatcher's ``_promote_env_tokens`` shares it.
+    That function used to split with a bare ``raw.split()``, which loses a
+    quoted value containing a space; the frontend's ``extractUserParams``
+    regex already anticipates quoted values, so the two were one bad
+    launch-options string away from disagreeing (audit §2.9).
     """
     try:
         return shlex.split(raw)
@@ -80,7 +86,7 @@ def parse_launch_options(raw: str) -> ParsedOptions:
     if not raw or not raw.strip():
         return result
 
-    tokens = _tokenize_options(raw)
+    tokens = tokenize_options(raw)
     remaining = _split_env_overrides(tokens, result)
     home = str(Path("~").expanduser())
     lsfg_filtered = _filter_lsfg_marker(remaining, result, home)

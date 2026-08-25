@@ -2,13 +2,12 @@
 
 OP-26i | py_modules/unifideck/rpc/mixins/download.py
 
-Mixin merging two slices that the handler groups split apart:
+Carries two related surfaces:
 
-* per-game lifecycle (``install_game`` / ``uninstall_game`` /
-  ``update_game``) — these live in ``StoreHandlers`` in
-  the newer API;
-* download-queue management (``cancel_download`` /
-  ``get_download_queue``) — these live in ``DownloadHandlers``.
+* per-game lifecycle — ``install_game`` / ``uninstall_game`` /
+  ``update_game``;
+* download-queue management — ``cancel_download`` /
+  ``get_download_queue``.
 
 Storage-location RPCs (``get_storage_locations``,
 ``set_default_storage_location``, ``set_custom_install_path``)

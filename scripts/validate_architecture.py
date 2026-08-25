@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate the Unifideck architecture invariants that keep drifting.
 
-Three silent drifts have recurred through the 0.7.x series and are worth
+Several silent drifts have recurred through the 0.7.x series and are worth
 machine-enforcing rather than re-discovering by hand every release:
 
 1. The RPC mixin set was documented inconsistently: at the 2026-08 audit
@@ -49,6 +49,33 @@ machine-enforcing rather than re-discovering by hand every release:
    as ``# no-frontend-caller:`` above and ``# unwired:`` in
    ``validate_event_wiring.py``: the reason lives next to the text.
 
+6. A layer count written into prose has the same failure mode, and audit §2.2
+   found four mutually contradictory ones, two of them saying "five" while
+   enumerating six. The diagram in ``docs/architecture.md`` is the single
+   enumeration. Banned like the mixin count; opt out with
+   ``layer-count-ok: <reason>``.
+
+7. A store count in prose is *verified* rather than banned, which is the one
+   place these checks differ. Many live sites state a count correctly while
+   explaining something, so the figure is compared against the store
+   directories on disk and only a wrong one fails. Only a total claim is
+   examined ("all N stores", "N store connectors"), because a count below the
+   total is nearly always naming a subset. Opt out with
+   ``store-count-ok: <reason>``.
+
+8. A subpackage missing from the layer map reads as nonexistent to whoever
+   plans the next change. Audit §2.5 found the tables listing 6 of 20
+   ``core/`` modules and 10 of 15 ``services/`` packages, with
+   ``compatibility`` (the ProtonDB path) and ``support_bundle`` (Capture
+   Logs) both invisible. Check 8 asserts membership rather than trusting a
+   hand-maintained table, since those drift exactly the way a count does.
+
+Checks 5 to 7 share one scanner, ``scan_prose``. Their regexes are narrow on
+purpose and each carries the false positive that shaped it: a gate that fires
+on correct, untouched code gets switched off rather than fixed. See the
+comment above each pattern, and the parametrised false-positive tests in
+``tests/unit/test_validate_architecture.py``.
+
 Stdlib-only on purpose: the script runs in CI before dependencies are
 installed and must not import the plugin (which would execute store
 constructors and touch the network).
@@ -74,12 +101,12 @@ SRC = REPO_ROOT / "src"
 # Directories under stores/ that are not stores.
 _NON_STORE_DIRS = {"shared", "__pycache__"}
 
-# --- Check 5: mixin counts written into prose -------------------------------
+# --- Checks 5-7: architecture facts written into prose ----------------------
 
 # Everything an agent or a contributor reads to learn the architecture.
 # ``main.py`` and the mixin package are included deliberately: their
 # docstrings are where the original defect lived.
-_MIXIN_COUNT_GLOBS = (
+_PROSE_GLOBS = (
     "CLAUDE.md",
     "docs/**/*.md",
     ".claude/skills/**/*.md",
@@ -92,9 +119,15 @@ _MIXIN_COUNT_GLOBS = (
 # ``docs/archive/`` is superseded by definition (see CLAUDE.md) and
 # ``architecture-audit.md`` is the register whose job is recording the
 # historical figures. Both would be pure noise.
-_MIXIN_COUNT_EXCLUDE = ("docs/archive/", "docs/architecture-audit.md")
+_PROSE_EXCLUDE = ("docs/archive/", "docs/architecture-audit.md")
+
+# Kept under the old names: the guard test addresses check 5 by these.
+_MIXIN_COUNT_GLOBS = _PROSE_GLOBS
+_MIXIN_COUNT_EXCLUDE = _PROSE_EXCLUDE
 
 _MIXIN_COUNT_OK = "mixin-count-ok:"
+_LAYER_COUNT_OK = "layer-count-ok:"
+_STORE_COUNT_OK = "store-count-ok:"
 
 _CARDINAL = (
     r"\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
@@ -115,6 +148,69 @@ _CARDINAL = (
 _MIXIN_COUNT_RE = re.compile(
     rf"(?<![-\w])({_CARDINAL})\s+(?:rpc\s+)?mixin", re.IGNORECASE,
 )
+
+# Check 6 — the layer count. Banned outright, like the mixin count: the
+# diagram in docs/architecture.md is the single enumeration, and audit §2.2
+# found four mutually contradictory prose counts feeding off each other.
+#
+# The trailing noun is load-bearing, and is the same lesson as the mixin
+# lookbehind. ``config/`` legitimately describes a "3-layer merge" (defaults,
+# user, code) in seven places, and ``config_manager.py`` a "3-layer
+# configuration manager" -- all true, none of them about the architecture
+# stack. Requiring an architecture noun after the word separates the two
+# without needing seven opt-out markers on correct code. Every historical
+# violation named one of those nouns, the last of them being
+# layer-count-ok: the spec of this check, quoting the shape it catches
+# "the plan's five-layer model" in event_bus/__init__.py.
+_LAYER_COUNT_RE = re.compile(
+    rf"(?<![-\w.])({_CARDINAL})[- ]layer(?:ed)?\s+"
+    r"(?:backend|architecture|stack|model|design)",
+    re.IGNORECASE,
+)
+
+# Check 7 — the store count. NOT banned, verified: unlike the mixin and layer
+# counts, live sites state it as part of explaining something and are
+# correct, so the figure is compared against the store directories on disk
+# (the same source check 2 uses) and only a WRONG one fails. That catches the
+# audit §2.4 defect -- every doc said "five" for a release after Battle.net
+# landed -- and keeps catching it from the other side when a seventh arrives.
+#
+# Only a *total* claim is checked, in the forms below, which are how every
+# historical violation was written.
+# store-count-ok: the spec of this check, quoting the shapes it catches
+#   ("The five store connectors" / "a five-store system")
+#
+# The narrowing matters more than it looks: a first version matched any
+# cardinal before "store" and produced 23 false positives in one run, every
+# one of them a correct subset statement -- "Amazon is the one store whose
+# sign-in leaves the shared Edge profile", "four stores report credential
+# permissions through one channel", "Two stores need this path". A count
+# below the total is nearly always naming a subset, so requiring "all" or a
+# collection noun is what separates the two. With this form the tree needs no
+# opt-out anywhere else, including the drift-guard skill lines that quote
+# "five stores" verbatim.
+_STORE_COUNT_RE = re.compile(
+    rf"\ball\s+({_CARDINAL})\s+stores?\b"
+    rf"|(?<![-\w.])({_CARDINAL})[- ]store\s+(?:connector|system)"
+    rf"|(?<![-\w.])({_CARDINAL})-store\s+(?:setup|architecture)",
+    re.IGNORECASE,
+)
+
+_CARDINAL_VALUES = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
+    "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19,
+    "twenty": 20,
+}
+
+
+def _cardinal_to_int(text: str) -> int | None:
+    """Return the integer a cardinal word or numeral denotes, else None."""
+    stripped = text.strip().lower()
+    if stripped.isdigit():
+        return int(stripped)
+    return _CARDINAL_VALUES.get(stripped)
 
 
 def _fail(msg: str) -> None:
@@ -248,7 +344,10 @@ def collect_rpc_methods(mixins_path: Path) -> set[str]:
 
     ``@auto_wrap_rpc_methods`` wraps every public coroutine on a mixin, so
     a public ``async def`` on a ``*Mixin`` class is the RPC surface. Module
-    level helpers (``cleanup_sweeps.py`` etc.) and sync methods are not.
+    level helpers and sync methods are not. The class filter is what does
+    that work, so a helper module landing in this directory is skipped
+    without an allowlist; ``cleanup_sweeps.py`` was the one such module and
+    has since moved to ``core/``, where it belonged.
 
     Methods carrying an inline ``# no-frontend-caller: <reason>`` marker —
     on the ``async def`` line or the line directly above it — are excluded
@@ -349,6 +448,41 @@ def find_dead_rpc(methods: set[str]) -> list[str]:
     return sorted(dead)
 
 
+def scan_prose(
+    root: Path, pattern: re.Pattern[str], marker: str,
+) -> list[tuple[str, int, re.Match[str]]]:
+    """Return ``(relpath, lineno, match)`` for every hit of ``pattern``.
+
+    Shared by checks 5, 6 and 7 so one scanner owns the file walk, the
+    exclusions and the opt-out semantics. Lines carrying ``marker``, on the
+    line itself or the line above, are exempt; the line-above form is what
+    lets a marker sit in a comment over the line it excuses.
+    """
+    hits: list[tuple[str, int, re.Match[str]]] = []
+    seen: set[Path] = set()
+    for glob in _PROSE_GLOBS:
+        for path in sorted(root.glob(glob)):
+            if not path.is_file() or path in seen:
+                continue
+            seen.add(path)
+            rel = path.relative_to(root).as_posix()
+            if rel.startswith(_PROSE_EXCLUDE):
+                continue
+            lines = path.read_text(
+                encoding="utf-8", errors="replace",
+            ).splitlines()
+            for lineno, line in enumerate(lines, start=1):
+                if marker in line:
+                    continue
+                if lineno >= 2 and marker in lines[lineno - 2]:
+                    continue
+                # finditer, not search: a line carrying two counts should
+                # report both, or fixing one just re-reds the gate.
+                for match in pattern.finditer(line):
+                    hits.append((rel, lineno, match))
+    return hits
+
+
 def find_prose_mixin_counts(root: Path) -> list[tuple[str, int, str]]:
     """Return ``(relpath, lineno, matched_text)`` per prose mixin count.
 
@@ -359,29 +493,88 @@ def find_prose_mixin_counts(root: Path) -> list[tuple[str, int, str]]:
     did. Lines carrying a ``mixin-count-ok:`` marker, on the line itself or
     the line above, are exempt.
     """
-    hits: list[tuple[str, int, str]] = []
-    seen: set[Path] = set()
-    for pattern in _MIXIN_COUNT_GLOBS:
-        for path in sorted(root.glob(pattern)):
-            if not path.is_file() or path in seen:
-                continue
-            seen.add(path)
-            rel = path.relative_to(root).as_posix()
-            if rel.startswith(_MIXIN_COUNT_EXCLUDE):
-                continue
-            lines = path.read_text(
-                encoding="utf-8", errors="replace",
-            ).splitlines()
-            for lineno, line in enumerate(lines, start=1):
-                if _MIXIN_COUNT_OK in line:
-                    continue
-                if lineno >= 2 and _MIXIN_COUNT_OK in lines[lineno - 2]:
-                    continue
-                # finditer, not search: a line carrying two counts should
-                # report both, or fixing one just re-reds the gate.
-                for match in _MIXIN_COUNT_RE.finditer(line):
-                    hits.append((rel, lineno, match.group(0)))
-    return hits
+    return [
+        (rel, lineno, match.group(0))
+        for rel, lineno, match in scan_prose(
+            root, _MIXIN_COUNT_RE, _MIXIN_COUNT_OK,
+        )
+    ]
+
+
+def find_prose_layer_counts(root: Path) -> list[tuple[str, int, str]]:
+    """Return ``(relpath, lineno, matched_text)`` per prose layer count.
+
+    The layer model is drawn once, in ``docs/architecture.md``. Audit §2.2
+    found four prose counts contradicting each other and the diagram, two of
+    them saying "five" while enumerating six. Opt-out:
+    ``layer-count-ok: <reason>``.
+    """
+    return [
+        (rel, lineno, match.group(0))
+        for rel, lineno, match in scan_prose(
+            root, _LAYER_COUNT_RE, _LAYER_COUNT_OK,
+        )
+    ]
+
+
+def find_wrong_store_counts(
+    root: Path, actual: int,
+) -> list[tuple[str, int, str, int]]:
+    """Return ``(relpath, lineno, text, stated)`` per WRONG prose store count.
+
+    A correct figure passes: see ``_STORE_COUNT_RE`` for why this check
+    verifies rather than bans. ``actual`` comes from the store directories on
+    disk. Opt-out: ``store-count-ok: <reason>``.
+    """
+    wrong: list[tuple[str, int, str, int]] = []
+    for rel, lineno, match in scan_prose(
+        root, _STORE_COUNT_RE, _STORE_COUNT_OK,
+    ):
+        # One group per alternative in _STORE_COUNT_RE; exactly one is set.
+        captured = next((g for g in match.groups() if g), None)
+        if captured is None:
+            continue
+        stated = _cardinal_to_int(captured)
+        if stated is not None and stated != actual:
+            wrong.append((rel, lineno, match.group(0), stated))
+    return wrong
+
+
+def find_undocumented_subpackages(
+    root: Path, doc: Path,
+) -> list[str]:
+    """Return subpackage/module names absent from the architecture doc.
+
+    Audit §2.5: the layer tables listed 6 of 20 ``core/`` modules and 10 of
+    15 ``services/`` packages, so whole subsystems (``compatibility``, the
+    ProtonDB path; ``support_bundle``, the Capture Logs path) read as
+    nonexistent to anyone planning a change. Hand-maintained tables drift the
+    same way a hand-maintained count does, so the membership is checked
+    rather than trusted.
+    """
+    if not doc.is_file():
+        return []
+    text = doc.read_text(encoding="utf-8", errors="replace")
+    expected: list[str] = []
+    services = root / "py_modules" / "unifideck" / "services"
+    if services.is_dir():
+        expected += [
+            f"services/{p.name}"
+            for p in sorted(services.iterdir())
+            if p.is_dir() and p.name != "__pycache__"
+        ]
+    for package in ("core", "event_bus"):
+        pkg_dir = root / "py_modules" / "unifideck" / package
+        if not pkg_dir.is_dir():
+            continue
+        expected += [
+            f"{package}/{p.name}"
+            for p in sorted(pkg_dir.glob("*.py"))
+            if p.name != "__init__.py"
+        ]
+    # Match on the bare name: the doc's tables key on ``artwork/`` or
+    # ``cache_manager.py``, not on the full path from the package root.
+    return [name for name in expected if name.split("/")[-1] not in text]
 
 
 def main() -> int:
@@ -492,6 +685,56 @@ def main() -> int:
         )
     else:
         print("OK: no mixin count restated in prose")
+
+    # Check 6 (hard): the layer count is not restated in prose.
+    layer_counts = find_prose_layer_counts(REPO_ROOT)
+    if layer_counts:
+        hard_failures += len(layer_counts)
+        for rel, lineno, text in layer_counts:
+            _fail(
+                f"{rel}:{lineno}: layer count written into prose "
+                f"({text.strip()!r})"
+            )
+        print(
+            "\n  The layer model is drawn once, in docs/architecture.md.\n"
+            "  Point at that diagram instead of restating a figure, or, for\n"
+            "  a deliberate historical citation, mark the line or the line\n"
+            "  above it:\n"
+            "      layer-count-ok: <reason>"
+        )
+    else:
+        print("OK: no layer count restated in prose")
+
+    # Check 7 (hard): a prose store count agrees with the tree.
+    wrong_stores = find_wrong_store_counts(REPO_ROOT, len(discovered))
+    if wrong_stores:
+        hard_failures += len(wrong_stores)
+        for rel, lineno, text, stated in wrong_stores:
+            _fail(
+                f"{rel}:{lineno}: store count says {stated} "
+                f"({text.strip()!r}) but the tree has {len(discovered)}"
+            )
+        print(
+            "\n  Correct the figure, or, for a deliberate historical\n"
+            "  citation, mark the line or the line above it:\n"
+            "      store-count-ok: <reason>"
+        )
+    else:
+        print(f"OK: every prose store count agrees ({len(discovered)})")
+
+    # Check 8 (hard): every subpackage appears in the architecture doc.
+    arch_doc = REPO_ROOT / "docs" / "architecture.md"
+    undocumented = find_undocumented_subpackages(REPO_ROOT, arch_doc)
+    if undocumented:
+        hard_failures += len(undocumented)
+        for name in undocumented:
+            _fail(f"{name} is absent from docs/architecture.md")
+        print(
+            "\n  A subsystem missing from the layer map reads as nonexistent\n"
+            "  to whoever plans the next change. Add a row for it."
+        )
+    else:
+        print("OK: every services/, core/ and event_bus/ module is documented")
 
     if hard_failures:
         print(f"\n{hard_failures} architecture invariant(s) violated")

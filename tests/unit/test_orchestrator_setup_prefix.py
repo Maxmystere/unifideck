@@ -34,7 +34,7 @@ def _ctx():
 def _fake_service():
     svc = MagicMock()
     plan = SimpleNamespace()
-    svc._prepare_windows_plan = AsyncMock(return_value=(plan, None))
+    svc._prepare_windows_plan = AsyncMock(return_value=plan)
     svc._cloud_sync_phase = AsyncMock()
     svc._run_game_subprocess = AsyncMock(return_value=0)
     svc._resolve_exit_code = MagicMock(return_value=0)
@@ -95,7 +95,7 @@ async def test_launch_plan_is_rebuilt_from_the_tool_setup_settled_on(monkeypatch
     svc = _fake_service()
     launch_plan = SimpleNamespace(name="rebuilt")
     svc._prepare_windows_plan = AsyncMock(
-        side_effect=[(SimpleNamespace(name="phase1"), None), (launch_plan, None)],
+        side_effect=[SimpleNamespace(name="phase1"), launch_plan],
     )
 
     await orch.launch_windows(svc, _ctx(), SimpleNamespace(rc=0, proton_tool_id="proton_11"))

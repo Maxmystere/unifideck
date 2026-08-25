@@ -76,16 +76,39 @@ Infrastructure primitives. No store or service knowledge.
 | Module/Package                  | Purpose                                   |
 | ------------------------------- | ----------------------------------------- |
 | `cache_manager.py`              | Namespace-keyed in-memory + disk cache    |
-| `sync_service.py`               | Cross-store library sync orchestration    |
 | `manifest.py`                   | Plugin installation manifest reader       |
 | `metrics_collector.py`          | Latency/counter telemetry                 |
 | `exe_finder.py`                 | Heuristic executable discovery            |
 | `paths.py`                      | Canonical path resolution                 |
+| `store_urls.py`                 | Per-store storefront/search URL builders  |
+| `cross_source_dedupe.py`        | Drops a title owned on two stores at once |
+| `safe_delete.py`                | Guarded delete used by every sweep        |
+| `cleanup_sweeps.py`             | The blocking sweeps behind "delete all data" |
+| `marker_sweep.py`               | Install-dir ownership via `.unifideck*` markers |
+| `stale_installs.py`             | Detects install records with no files left |
+| `compat_bridge.py`              | Reads Steam's compat-tool selection       |
+| `compat_tool_bridge.py`         | Resolves a compat-tool id to a Proton path |
 | `io/async_file_ops.py`          | Async file read/write/remove              |
 | `io/safe_file_op.py`            | Atomic write with rollback                |
 | `binaries/binary_resolver.py`   | Resolves `bin/` tool paths                |
 | `binaries/binary_signatures.py` | SHA-256 verification for bundled binaries |
 | `binaries/cli_timeouts.py`      | Per-tool subprocess timeout config        |
+
+The library sync is split across an orchestrator and the mixins it composes,
+enumerated below, all in `core/` rather than in `rpc/`. That placement is
+deliberate but it does blur the "rpc is thin" boundary, since these hold logic
+an RPC mixin calls into:
+
+| Module                   | Purpose                                        |
+| ------------------------ | ---------------------------------------------- |
+| `sync_service.py`        | Cross-store library sync orchestration         |
+| `sync_run_mixin.py`      | Drives one sync run across the stores          |
+| `sync_cache_mixin.py`    | Reads and writes the library cache             |
+| `sync_queries_mixin.py`  | Per-game lookups against a synced library      |
+| `sync_results_mixin.py`  | Assembles the per-store result envelope        |
+| `sync_finalize_mixin.py` | Post-sync reconcile and cleanup                |
+| `sync_progress.py`       | Phase/percentage model behind the sync bar     |
+| `sync_availability.py`   | Whether a store can be synced right now        |
 
 ### Layer 3 — `stores/shared/`
 
@@ -123,6 +146,11 @@ Infrastructure services that subscribe to the EventBus and own cross-cutting con
 | `services/security/`               | Token store, bruteforce protection, audit log |
 | `services/microsoft_subscription/` | Game Pass entitlement probing                 |
 | `services/launch_history/`         | Per-game launch timestamps                    |
+| `services/achievements/`           | Achievement fetch + last-session summary      |
+| `services/compatibility/`          | ProtonDB + Deck-Verified ratings              |
+| `services/playtime_sync/`          | Pushes playtime back to GOG/Epic              |
+| `services/support_bundle/`         | Capture Logs: collects the diagnostic zip     |
+| `services/updater/`                | Plugin self-update check and download         |
 | `services/bootstrap/`              | DI container, service constructor, teardown   |
 | `metadata_service.py`              | Metacritic + UnifiDB metadata aggregation     |
 | `account_service.py`               | Multi-account lifecycle                       |
@@ -164,7 +192,7 @@ These sit alongside the layered stack and can be imported by any layer.
 | `auth/`          | OAuth browser monitor + multi-store auth orchestrator + Edge browser shims                                 |
 | `cdp/`           | Chrome DevTools Protocol injection utilities                                                               |
 | `compatibility/` | Proton/Wine prefix management and helper wrappers                                                          |
-| `event_bus/`     | `EventBus`, `PriorityDispatcher`, replay buffer, supervision (watchdog + metrics handler)                  |
+| `event_bus/`     | The message backbone. Broken out below, because half of it is not on the emit path                          |
 | `config/`        | Config manager, JSON schema validator, i18n schema, startup validation                                     |
 | `bootstrap/`     | DI wiring: `boot_plugin`, `unload_plugin`, `build_eventbus_pipeline`, cache registry                       |
 | `security/`      | Ephemeral credential store, secure I/O, device fingerprint, audit emission, redaction                      |
@@ -174,6 +202,33 @@ These sit alongside the layered stack and can be imported by any layer.
 | `launcher/`      | Game launcher dispatcher, Proton infrastructure, language setup, cloud save trigger, CDP flows, game fixes |
 | `actions/`       | `dispatch.py` — `unifideck://` URI handler; `unifideck_uri.py` — URI parser                                |
 | `rpc/`           | `auto_wrap_rpc_methods` decorator + `rpc/mixins/` composition                                               |
+
+### `event_bus/` in detail
+
+Split out because the package contains two layers and only one of them runs.
+`EventBus.emit` writes straight to the replay buffer; it never feeds
+`PriorityDispatcher`. So the whole priority/coalescing/back-pressure layer and
+the handler watchdog are unreachable in production, which a Capture Logs
+bundle confirms empirically (`bus_health.dispatcher` reports
+`emitted_total: 0` on a session where events demonstrably flowed, and
+`bus_health.watchdog` is `{}`). Their fate is register items 4e and 4g in
+`architecture-audit.md`: either make the dispatcher the real emit path, or
+delete the layer. Do not build on it before that is decided.
+
+| Module                      | On the emit path? | Purpose                                        |
+| --------------------------- | ----------------- | ---------------------------------------------- |
+| `event_bus.py`              | yes               | `EventBus`: subscribe, emit, 60s handler timeout |
+| `bus_pipeline.py`           | yes               | Assembles the bus and its collaborators at boot |
+| `event_replay.py`           | yes               | Per-event replay ring, so a late subscriber catches up |
+| `event_bus_devex.py`        | yes               | `subscribe`/`auto_wire` decorators, schema extraction |
+| `event_bus_extensions.py`   | yes               | Typed payloads, schema registry, dead-letter queue |
+| `event_bus_reliability.py`  | yes               | Retry and dead-letter handling                 |
+| `priority_dispatcher.py`    | **no**            | Priority queue + coalescing; never fed         |
+| `event_priority.py`         | **no**            | `EventPriority` enum + the coalescing key map  |
+| `event_bus_scaling.py`      | **no**            | Back-pressure helpers for the dispatcher       |
+
+`supervision/` holds the two handler wrappers: `metrics_handler.py` (live) and
+`watchdog_handler.py` (nothing registers with it, see 4g).
 
 ---
 

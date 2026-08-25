@@ -76,7 +76,7 @@ Written at the v0.7.0 handoff (2026-07-02, commit c64dbe0) after an audit of the
 
 ## 10. Cross-store parametrized test harness — High impact / High effort
 
-**Problem**: The five store connectors implement the same contract (auth-gated library fetch, install-status overlay, exe resolution) with store-specific code; regressions are found store-by-store, in production.
+**Problem**: Every store connector implements the same contract (auth-gated library fetch, install-status overlay, exe resolution) with store-specific code; regressions are found store-by-store, in production.
 **Evidence**: The GOG install-overlay regression (installed games flipping to "not installed" after every sync) was a contract violation that a parametrized suite would have caught for every store at once. Store bugs dominate the issue tracker.
 **Sketch**: `tests/stores/test_store_contract.py` parametrized over all registered stores: `get_library` overlays installs and sets `exe_path`; empty-on-auth-failure never reports an empty owned library; ids are stable across syncs. Feed with recorded fixtures, not live APIs.
 **Files**: `tests/stores/` (new), `py_modules/unifideck/stores/shared/`.

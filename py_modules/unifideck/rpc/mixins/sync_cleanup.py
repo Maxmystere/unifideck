@@ -15,10 +15,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from unifideck.core import marker_sweep
+from unifideck.core import cleanup_sweeps, marker_sweep
 from unifideck.core.compat_bridge import to_unsigned
 from unifideck.core.safe_delete import safe_rmtree
-from unifideck.rpc.mixins import cleanup_sweeps
 from unifideck.rpc.mixins.cleanup_finalize import _CleanupFinalizeMixin
 
 logger = logging.getLogger(__name__)

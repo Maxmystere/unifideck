@@ -1,4 +1,4 @@
-"""rpc/mixins/cleanup_sweeps.py — blocking filesystem sweeps for cleanup.
+"""core/cleanup_sweeps.py — blocking filesystem sweeps for cleanup.
 
 Pure, thread-offloaded helpers extracted from ``sync_cleanup.py`` (which had
 crossed the 550-LOC volumetry cap). Each ``sweep_*`` performs one blocking
@@ -7,6 +7,12 @@ them via ``asyncio.to_thread``. Keeping them free of mixin state — and out of
 the async methods as un-nested module functions — keeps the mixin's
 per-function cognitive complexity under the gate and makes each sweep
 trivially testable in isolation.
+
+Lives in ``core/`` rather than beside its caller in ``rpc/mixins/``, where
+audit §2.8 found it: this module defines no mixin, and filesystem sweep
+primitives are what ``core/`` is for (``safe_delete``, ``marker_sweep`` and
+``stale_installs`` are its immediate neighbours, and it calls two of them).
+Sitting in the RPC leaf made ``rpc/`` look thicker than it is.
 """
 from __future__ import annotations
 

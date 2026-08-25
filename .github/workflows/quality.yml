@@ -93,9 +93,9 @@ jobs:
       #      root, outside the unifideck package) imports it.
       #   2. core.types must stay a pure data island — its
       #      dataclasses can be imported anywhere without cycles.
-      # The full 5-layer stack is documented in the technical
-      # doc §7.7 but not codified here — see .importlinter for
-      # the rationale behind the narrow-invariants approach.
+      # The full layer stack is drawn in docs/architecture.md but
+      # not codified here — see .importlinter for the rationale
+      # behind the narrow-invariants approach.
       - name: import-linter (hard gate)
         run: PYTHONPATH=py_modules lint-imports --config .importlinter
 

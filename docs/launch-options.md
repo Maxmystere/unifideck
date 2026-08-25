@@ -52,6 +52,19 @@ launcher inherits `MANGOHUD`/`DXVK_HUD` and the game picks them up.
 > After editing, launch once to confirm it took effect (e.g. `MANGOHUD=1` should show the
 > overlay). Behavior depends on Steam's `%command%` handling for non-Steam shortcuts.
 
+Since 0.7.5 there is a second route that does not depend on Steam's `%command%` handling:
+any `VAR=value` token you leave **after** the `store:game_id` token is read by the launcher
+itself and applied to the game's environment. So both of these work:
+
+```
+WINEDLLOVERRIDES="icuuc=b" %command% epic:Salt     ← Steam sets it
+epic:Salt WINEDLLOVERRIDES="icuuc=b"               ← the launcher sets it
+```
+
+The launcher applies its own overrides **last**, so a variable you set this way wins over
+the one Unifideck would have chosen for that game. That is the point (it is how you override
+a bad default) and also the risk, so change one variable at a time.
+
 ### Useful variables
 
 | Variable | Effect |
@@ -103,26 +116,31 @@ launch. The default (no choice) is the latest GE-Proton.
 
 ---
 
-## Planned / not yet wired
+## LSFG frame generation
 
-The launcher contains a parser (`parse_launch_options` in
-`py_modules/unifideck/launcher/types/options.py`) for the options below, but it is **not yet
-invoked by the launch path**, so these have **no effect today**. They are documented here so
-you know the intended syntax (and because earlier 0.x releases supported them):
+[lsfg-vk](https://github.com/xXJSONDeruloXx/decky-lsfg-vk) is opted into with either env
+flag, after the `store:game_id` token:
 
-- **Wrapper programs** — run something around the game, e.g.
-  `gamemoderun %command%` or `mangohud %command%` (as a wrapper word, not the `MANGOHUD=1`
-  env var which *does* work today).
-- **LSFG frame generation** ([lsfg-vk](https://github.com/xXJSONDeruloXx/decky-lsfg-vk)) —
-  the intended form is the plugin's wrapper script `~/lsfg %command%`, or the env flags
-  `LSFG=1` / `ENABLE_LSFG=1`. Requires Lossless Scaling (Steam) + the Decky LSFG-VK plugin +
-  a configured profile.
-- **`PROTON=GE-ProtonX-Y`** — pick a Proton by name from launch options. (Use Steam's
-  Compatibility dropdown instead — see above.)
-- **Game arguments** after `%command%` and explicit wrapper/`%command%` ordering.
+```
+epic:Salt LSFG=1
+epic:Salt ENABLE_LSFG=1
+```
 
-> When this parser is reconnected to the launcher, this section will move up into
-> "What works today."
+The launcher reads the `export` lines out of the plugin's `~/lsfg` script and applies them
+to the game, so a configured profile is picked up. Anything you set explicitly in launch
+options still wins over the script's value. Requires Lossless Scaling (Steam) plus the Decky
+LSFG-VK plugin plus a configured profile.
+
+## Not supported
+
+- **Wrapper programs as launch-option words** — `gamemoderun` or `mangohud` written as a
+  bare word. Use Steam's own `%command%` form (`mangohud %command% epic:Salt`), which Steam
+  applies before the launcher ever runs, or the `MANGOHUD=1` env var. A bare word left after
+  the `store:game_id` token is ignored: by the time Steam has expanded `%command%`, the
+  launcher cannot tell a wrapper program from a game argument, and guessing wrong would pass
+  `mangohud` to the game as an argument.
+- **Game arguments** — same reason. Tracked in `docs/architecture-audit.md` §2.9.
+- **`PROTON=GE-ProtonX-Y`** — never implemented. Use Steam's Compatibility dropdown, above.
 
 ---
 

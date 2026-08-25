@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from unifideck.launcher.proton.infrastructure.core import ProtonLaunchPlan
     from unifideck.launcher.types.context import LaunchContext, RuntimeState
 
     from .service import LauncherService
@@ -279,7 +280,7 @@ async def prepare_windows_plan(
     state: RuntimeState,
     *,
     tool_id: str | None = None,
-) -> tuple[Any, Any]:
+) -> ProtonLaunchPlan:
     """Prepare the Proton launch plan for a Windows game.
 
     Resolves the three things ``proton_prepare`` needs — a
@@ -312,7 +313,7 @@ async def prepare_windows_plan(
         # ``proton_prepare`` is synchronous (prefix mkdir + umu-id
         # lookup); call it directly — the launcher subprocess has
         # nothing else on its event loop.
-        plan = proton_prepare(
+        return proton_prepare(
             ctx,
             state,
             python_bin=python_bin,
@@ -320,8 +321,6 @@ async def prepare_windows_plan(
             proton_tool_id=proton_tool_id,
             on_process_start=_on_process_start,
         )
-        # parsed_options reserved for LSFG/wrapper parsing.
-        return plan, None
     except Exception:
         logger.exception("[Helpers] prepare_windows_plan failed")
         raise

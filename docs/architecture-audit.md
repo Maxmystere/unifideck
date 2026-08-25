@@ -232,13 +232,42 @@ No single agreed layer model exists:
 
 Direct contradictions: "five" vs six enumerated layers; Layer 1 is `core/types` vs `paths/I/O`; Layer 3 is `store_base` vs `stores/shared` vs `event_bus/cache/config`.
 
+**RESOLVED 2026-08-25 — and the first resolution missed more sites than it fixed.** Register item 13 scoped itself to `docs/architecture.md`, so the four sites above were cleaned and the drift was declared closed. Re-derived against the current tree, five restatements were still live, none of them in the file item 13 named:
+
+| Site | Said | |
+|---|---|---|
+| `README.md:94` | "The 5-layer backend" | the public face of the repo |
+| `README.md:175` | "a 5-layer architecture" | |
+| `event_bus/__init__.py:16` | "Layer 3 of the plan's five-layer model" | cites a "plan" no living doc contains |
+| `.github/workflows/complexity.yml:4` | "the five-layer architecture of the technical document v1.1" | **found by the new check, not by this audit** |
+| `.github/workflows/quality.yml:96` | "The full 5-layer stack" | **found by the new check, not by this audit** |
+
+Plus `.importlinter:3` ("The full 5-layer stack doesn't cleanly map…"), whose sentence exists to explain why the contract is narrow and needs no figure at all.
+
+Fix: removed the numeral from all six, and added **check 6** to `validate_architecture.py` so a seventh cannot appear. The two workflow comments are the point: this section listed four sites, the fix cleaned four sites, and a machine check immediately found two more. Per §2.1's lesson, the check is the fix and the edits are incidental.
+
+**The check's own false-positive class is worth recording.** A first cut banned any cardinal before "layer" and fired on seven correct lines: `config/` legitimately describes a "3-layer merge" (defaults, user, code), and `config_manager.py` a "3-layer configuration manager". Neither is about the architecture stack. Requiring an architecture noun after the word (`backend|architecture|stack|model|design`) separates them without seven opt-out markers on untouched code. Ordinal use (`Layer 3`, `Layer-6`) is excluded for free, because those put the number after the word. Both classes are parametrised with verbatim lines in `tests/unit/test_validate_architecture.py`.
+
 ### 2.3 StoreBase contract is documented wrong
 
 `docs/architecture.md:90-91` says StoreBase "defines the five abstract methods … `get_library()`, `install()`, `uninstall()`, `launch()`, `get_updates()`." The real `store_base.py:51-97` defines **10** abstract methods (`is_available`, `start_auth`, `complete_auth`, `logout`, `get_library`, `install_game`, `uninstall_game`, `update_game`, `check_for_updates`, `get_game_size`) and has **no `launch()`** (launch lives in `launcher/dispatcher.py`, not the store contract). None of the four documented method names matches reality.
 
+**RESOLVED, re-verified 2026-08-25.** `architecture.md:92` now says "the ten abstract methods" and lists exactly the ten the ABC declares, in order, with an explicit note that launching is owned by `launcher/dispatcher.py`. Checked name by name against the tree; no drift. This is the one Part 2 item that needed nothing.
+
 ### 2.4 Battle.net is a sixth store the docs deny
 
 `docs/architecture.md` ("five store connectors"), `stores.md`, `launcher.md`, `CLAUDE.md`, and multiple in-code "five stores" comments all describe a five-store system. The code has six: `stores/battlenet/` is a full connector (store, library, install, agent_status, id_map, ownership, product_db, prefix), plus 8 `launcher/proton/handlers/battlenet*.py` files, and `bootstrap/cache_registry.py:18` already says "Six stores". The only Battle.net doc is `docs/feasibility/battlenet.md`, still framed as a feasibility study of an unimplemented store.
+
+**RESOLVED 2026-08-25.** Two of the register's open notes were already stale: `docs/feasibility/battlenet.md` opens with "**Status: implemented.** Battle.net shipped as the sixth store", and `architecture.md` says six in both its diagram and its prose. Two live residuals remained:
+
+- `docs/engineering-roadmap.md:79` — "The five store connectors implement the same contract". This is the *evidence line* for a roadmap item, so it understated that item's own scope by a store.
+- `CLAUDE.md:3` — the store list itself read "Epic, GOG, Amazon, Ubisoft, and Xbox Cloud Gaming", omitting Battle.net. A missing list entry, not a wrong count, so no count check can catch it.
+
+Fix: corrected both, and added **check 7**, which *verifies* the count against the store directories on disk rather than banning it.
+
+**Verifying rather than banning was forced by the data, and it is the opposite of checks 5 and 6.** A ban would red about ten live sites that state the count correctly while explaining something ("the sole dispatcher for all six stores' `DOWNLOAD_*` events"). Worse, a first cut matching any cardinal before "store" reported **23 false positives in one run**, every one a correct subset statement: "Amazon is the one store whose sign-in leaves the shared Edge profile", "four stores report credential permissions through one channel", "Two stores need this path". A count *below* the total is nearly always naming a subset. So check 7 examines only total-claim forms (`all N stores`, `N store connectors`, `N-store system`) and compares them against the tree. With that narrowing the whole repo needs no opt-out marker, including the drift-guard skill lines that quote "five stores" verbatim.
+
+**Lesson: a count that is often correct needs a verifier; a count that should not exist needs a ban.** Reaching for the ban first would have produced a gate someone switched off within a release.
 
 ### 2.5 Undocumented subpackages and self-contradictions
 
@@ -248,6 +277,16 @@ Direct contradictions: "five" vs six enumerated layers; Layer 1 is `core/types` 
 - **`core/` has ~30 modules vs ~11 documented**; notably six `sync_*_mixin.py` modules moved RPC-mixin logic *into* `core/`, blurring the documented "rpc is thin" boundary.
 - **`event_bus/` has five undocumented modules** (`event_bus_devex`, `event_bus_extensions`, `event_bus_reliability`, `event_bus_scaling`, `event_priority`); `event_priority.py` vs the documented `priority_dispatcher.py` suggests two priority mechanisms.
 
+**RESOLVED 2026-08-25. One bullet named a file that does not exist, and the counts were wrong in both directions.**
+
+- **The `accounts/` bullet was two bullets, and only the harmless one was fixed.** `accounts/` is in the layer map now (`architecture.md:163`). But the docstring bullet blamed `accounts/account.py`, and there is no such file. The real contradiction was between `accounts/__init__.py` and `rpc/mixins/account.py:50`, and it survived: the package docstring still told every reader that `check_account_switch` / `migrate_account_data` "were never carried over, so the modal never appeared". All false. Both RPCs exist, `rpc-routes.ts:102-103` routes them, `bootstrap-tasks.tsx:335` calls them at boot, and `AccountSwitchModal.tsx` renders the result. **This was the highest-value item in Part 2** and the cheapest: a reader acting on it would delete a live feature whose job is stopping one Steam account's library and saves being served to another, and a §1.2-style dead-RPC pass would have flagged both RPCs as suspects on its authority. Rewritten to point at the mixin, with an explicit line telling the next reader not to trust an older copy of itself.
+- **Re-derived counts.** Services: 10 `services/*` packages documented against 15 on disk (the audit said 13 against 21, counting registered DI keys rather than packages, which is why its missing-list named things like `metrics` and `db_path` that are keys, not packages). The genuinely absent packages were `achievements`, `compatibility`, `playtime_sync`, `support_bundle` and `updater`. `core/`: 6 documented against 20 on disk, not "~11 vs ~30" (`manifest.py` shrank when §1.1.1 deleted its discovery half). `event_bus/`: the five named were right.
+- Worth naming what was invisible: `compatibility` is the ProtonDB and Deck-Verified path, and `support_bundle` is Capture Logs. Both read as nonexistent to anyone planning a change, and Capture Logs is the first thing to reach for on a bug report.
+
+Fix: added the missing rows, split the sync orchestrator and its mixins into their own table (they are the "rpc is thin" blur this section flagged, and naming them is better than implying they belong in `rpc/`), and gave `event_bus/` a real table with an explicit **"On the emit path?"** column. Three modules are marked **no**, citing register items 4e and 4g, so the doc records that the priority/coalescing layer and the watchdog are unreachable rather than describing them as working. Documenting them as functional is how the layer stayed hidden for a release.
+
+Then added **check 8**, which asserts every `services/*/` package and every `core/` and `event_bus/` module appears in `architecture.md`. A hand-maintained table drifts exactly the way a hand-maintained count does, so membership is checked rather than trusted. It caught 25 omissions on its first run.
+
 ### 2.6 Version drift
 
 - `py_modules/unifideck/__init__.py:22` = `0.7.1`.
@@ -256,9 +295,17 @@ Direct contradictions: "five" vs six enumerated layers; Layer 1 is `core/types` 
 - Current branch = `0.7.5`.
 - Every skill file says "Last verified 2026-07-02 against v0.7.0" and has not been re-verified against the current tree.
 
+**RESOLVED 2026-08-25, by deleting rather than bumping.** `__version__` had **zero readers** anywhere: not in `py_modules/unifideck`, `main.py`, `scripts`, `tests` or `bin`, and not via `getattr` or `importlib.metadata` either. Meanwhile `package.json` already had three: the updater (`services/updater/service.py:139`), the support bundle (which labels it "Installed plugin version (source of truth)", `support_bundle/sources.py:268`), and `build-plugin.sh:137`. So the drift was between one file everything read and one file nothing read. Bumping it would have re-armed exactly what §2.1 warns about; it is gone, with a docstring where it sat explaining why not to re-add it, and the `unifideck-drift-guard` lockstep row now says so too.
+
+`CLAUDE.md` was self-contradicting on adjacent lines: the H1 said `(v0.7.0)` while line 3 said "Version source of truth: `package.json`". The numeral is gone from the H1.
+
+**The `Last verified:` stamps were deliberately left alone.** A stamp reading "2026-07-02 against v0.7.0" is an accurate freshness signal, not drift. Bumping it without re-reading that file forges the signal, which is the precise failure roadmap item 8 exists to prevent. Re-verifying the six stale skill files is real work and is tracked separately.
+
 ### 2.7 Machine enforcement is narrower than claimed
 
 `docs/architecture.md:41-42` claims the stack is "enforced by `.importlinter`." The `.importlinter` file itself admits "The full 5-layer stack doesn't cleanly map to the current tree" and enforces only two invariants (`rpc-is-leaf`, `types-is-leaf`), which §9 of the same doc correctly states. §3 and §9 of `architecture.md` disagree with each other.
+
+**RESOLVED, re-verified 2026-08-25.** `architecture.md:44` now reads "The machine-enforced invariants are in §9 (`.importlinter`)", so §3 defers to §9 instead of contradicting it, and `.importlinter` still declares exactly the two contracts §9 documents (both verified KEPT by a `lint-imports` run). Never had a register line of its own; closed under item 13.
 
 ### 2.8 Dead code / phantom design vocabulary
 
@@ -268,6 +315,81 @@ Direct contradictions: "five" vs six enumerated layers; Layer 1 is `core/types` 
 - `store.py:182` `inject_game_to_appinfo` is an explicit no-op stub returning `success=True`.
 - `cleanup_sweeps.py` in `rpc/mixins/` defines no mixin; it is filesystem sweep I/O sitting in the "thin adapter" RPC leaf.
 - `architecture.md:129-148` mixin method table is ~half wrong: `get_library`, `sync_library`, `launch_game`, `kill_game`, `get_store_status`, `rotate_device_key`, `get_downloads`, `get_play_sessions`, `get_ui_state`, `set_locale`, `get_cloud_failures`, `retry_cloud_sync` do not exist as RPC methods.
+
+**Re-derived 2026-08-25, bullet by bullet. Four resolved, one inverted, one deferred.** This section's site lists were wrong in both directions more often than any other in Part 2.
+
+1. ~~`parse_launch_options` is dead code.~~ **INVERTED — see §2.9.** True that nothing imports it, and misleading in every way that matters. Split into its own section because it is not a dead-code finding at all.
+2. ~~Phantom "handler group" vocabulary.~~ **RESOLVED, and the file list was wrong in both directions.** `auto_wire.py`, named here, is clean. Two sites this bullet never listed were not: `download.py:5` ("two slices that the handler groups split apart", pointing at phantom `StoreHandlers` and `DownloadHandlers` classes) and `action.py:5` ("Mixin equivalent of `ActionHandlers`", contrasting the real composition style against an injected-dependency handler class that does not exist). With `store.py:6`, all three rewritten to describe flat mixin composition onto `Plugin`, each stating outright that there is no `handlers/` package, so the next reader does not go looking. Confirmed by grep that `StoreHandlers`, `DownloadHandlers` and `ActionHandlers` appear nowhere but in those docstrings.
+3. **`OP-XX` markers — deferred, and the scale was understated by two orders of magnitude.** Not "threaded through mixin docstrings": **233 occurrences of 149 distinct ids across 162 files**, spanning `event_bus/`, `services/`, `core/` and `stores/`. Comment-only, so a single mechanical commit; kept out of this pass so it cannot drown the review of everything else.
+4. **`inject_game_to_appinfo` — deferred by decision, finding corrected.** The bullet omits that it has a **live caller**: `AppDetailsPatch.tsx:140` calls it on every AppDetails open, via `app-store-patcher.ts`'s `injectGameToAppinfo`, which does real work (`forceInjectMetadataForShortcut`) and *then* round-trips to the stub. So this is a wasted RPC per navigation, and it survived §1.2's dead-RPC gate precisely because it has a caller. The stub's own docstring admits it returns `success=True` only so "the frontend's fire-and-forget call doesn't log a failure on every navigation". Also, the persistence it promises looks **redundant rather than missing**, the same shape as §1.1.1's artwork-on-install: `applyAppStorePatch` calls `loadFromBackend` and re-spoofs from the backend cache on every plugin load, so surviving a Steam restart is already handled by re-patching, not by writing `appinfo.vdf`. Whoever picks this up should delete the RPC and the round-trip rather than build the writer.
+5. ~~`cleanup_sweeps.py` sits in the RPC leaf.~~ **RESOLVED.** Moved to `core/cleanup_sweeps.py` (`git mv`, no logic change), where `safe_delete`, `marker_sweep` and `stale_installs` already live and two of which it calls. No new dependency class: `core/sync_service.py` and `core/sync_run_mixin.py` already do lazy `services` imports, and `.importlinter` explicitly acknowledges that pattern. Both contracts still KEPT. The validator's carve-out comment went with it: `collect_rpc_methods` filters on `*Mixin` classes, so a helper module in that directory was always skipped by the class filter rather than by an allowlist. Validated through `test_cleanup_full_wipe.py` (89 tests) and `lint-imports`, deliberately **not** by running a real wipe on the dev device: this is the code UD-006 made dangerous.
+6. ~~Mixin method table is ~half wrong.~~ **RESOLVED, verified exhaustively.** All 44 method names in the rewritten 17-row table were checked one by one against `async def` in `rpc/`; every one exists. None of the 12 phantom names in the bullet survives.
+
+### 2.9 The launch-options parser is not dead code, it is an unfinished feature
+
+Split out of §2.8, whose bullet reads "`parse_launch_options` — dead, imported nowhere". Nothing imports it, and every other implication of that sentence is wrong. Found by looking for *replicated* logic before deleting, which is the only reason it was caught.
+
+**The module is entirely unimported, not just that one function.** `launcher/types/options.py` is 198 lines with zero importers; `launcher/types/__init__.py` is empty, so nothing re-exports it; and `apply_lsfg_env`, which looked like the live half, has no external caller either. Vulture runs as a **hard** gate over `py_modules/unifideck` and did not catch it, because `min_confidence = 80` reports unused imports and variables but not unused functions or whole unimported modules. That threshold is its own finding.
+
+**Its destination, however, is fully built and consumed in eleven places.** `ParsedOptions`'s fields are mirrored exactly by live dataclass fields that nothing ever writes:
+
+| Field | Consumers | Written by |
+|---|---|---|
+| `LaunchContext.env_overrides` | `helpers.py:94` and `proton/infrastructure/core.py:384`, both `env.update(...)` applied **last** so a user value beats the plugin's compat env — and covered by `test_proton_prepare_store_env.py:207` | nothing |
+| `RuntimeState.wrappers` | 6: `helpers.py:119` (native argv), `generic.py:67`/`:91`, `epic.py:265`, `epic_launch_params.py:207`, `gog.py:295` | nothing |
+| `RuntimeState.game_args` | 5: `helpers.py:142`, `generic.py:74`/`:97`, `epic.py:302`, `gog.py:298` | nothing |
+| `RuntimeState.lsfg_requested` | none | nothing |
+
+`LaunchContext.raw_options` *is* populated, at all four dispatcher construction sites. `RuntimeState.to_log_dict` already reports `wrappers_count`, `game_args_count` and `lsfg_requested`. Tests already build state with wrappers and args, one of them named `test_wrappers_and_game_args_are_preserved`. And `prepare_windows_plan` returns `tuple[Any, Any]` whose second element is always `None`, with `helpers.py:323` commenting "parsed_options reserved for LSFG/wrapper parsing" and `orchestrator.py:34` documenting an "options" step that never runs. The feature is roughly 90% built and missing one call.
+
+**It is also promised to users.** `docs/launch-options.md:106-127` has a "Planned / not yet wired" section naming this file and specifying the syntax for wrapper words, game args after `%command%`, and LSFG. Deleting the module would silently convert a documented "planned" feature into a removed one.
+
+**There is genuine duplication, and it is not where the audit looked.** Four handlers parse a Steam launch-options string, three of them live:
+
+| Where | Job | Status |
+|---|---|---|
+| `services/shortcut/launch_options.py` | regex-extract `store:id`; `preserve_user_params` swaps our core, keeping theirs | live (sync/reconcile) |
+| `steam-bridge/wrapper-shortcut-launch.ts` `extractUserParams` | strip our tokens, keep user `mangohud`/`gamemoderun`/`#%command%` | live (frontend) |
+| `launcher/dispatcher.py:41` `_promote_env_tokens` | promote `UNIFIDECK_*` `KEY=value` from argv into `os.environ` | live (launch hot path) |
+| `launcher/types/options.py` | shlex tokenize, all env vars, LSFG overlay, `%command%` split | the missing call |
+
+`_promote_env_tokens` is a 12-line reimplementation of `_tokenize_options` + `_split_env_overrides`, deliberately narrower (only `UNIFIDECK_*`, `setdefault`, never overwrite) but splitting with a naive `raw.split()` where the dead one uses `shlex.split`. No live collision today, because `stores/ubisoft/auth/shortcut.py:33-34` and `buildTemporaryLaunchOptions` both emit space-free unquoted values, but the frontend's `extractUserParams` regex already anticipates quoted values, so it is a latent corruption. The other two are *not* duplicates: they work on different data in different processes and directions, and `is_unifideck_owned` already consumes the first as an injected callback, which is the right shape.
+
+Note also that env-var passthrough works today **without** the plugin: Steam sets `VAR=value %command%` vars itself and the launcher inherits them, which is why the parser was never needed for that half and why its absence went unnoticed.
+
+**Two hazards to handle when wiring it:**
+
+- **`env_overrides` is doing double duty.** `service.py:214` reads `float(ctx.env_overrides.get("started_at", "0"))` from it as a dispatcher-to-service data channel, while two other call sites splat the same dict into the game's environment. Nothing populates it today, so that read is dead and `started_at` is always `0.0` despite a docstring claiming it is "passed in by the dispatcher". A lowercase key cannot arrive from parsing (`_ENV_TOKEN_RE` is uppercase-only), so wiring does not collide, but `started_at` wants its own field rather than growing the overload.
+- **Wiring makes `ctx.env_overrides` non-empty for the first time.** That is the feature and its main risk: both consumers apply it *last*, specifically so a user value overrides the plugin's own compat env. `ge-proton11-3-builtin-icuuc-stub` and `ld-library-path-leak-umu-127-libz` are both recorded incidents where that env's precision was load-bearing.
+
+**PARTIALLY RESOLVED 2026-08-25. The env half is wired; the wrapper half was stopped by a measurement taken while wiring it.**
+
+What shipped:
+
+- **`ctx.env_overrides` is populated**, at all four dispatcher construction sites, so a user's `KEY=value` token now reaches the game's environment. Both consumers already applied it last, and `test_proton_prepare_store_env.py:207` already asserted that ordering, so this needed no change to either env builder.
+- **LSFG works**, by merging `apply_lsfg_env`'s overlay *under* the user's explicit tokens in the same dict. Putting it there rather than in the env builders is what let both the native and Proton paths pick it up without either growing a parameter. `RuntimeState.lsfg_requested` finally has a writer.
+- **The duplicated tokenizer is merged.** `_promote_env_tokens` now splits with the parser's `tokenize_options` (shlex) instead of its own `raw.split()`, so `KEY="a b"` stops promoting a truncated value. Its narrow policy (`UNIFIDECK_*` only, `setdefault`) was deliberate and is unchanged; only the splitting was duplicated. `_tokenize_options` was renamed public for the second consumer.
+- **The reserved return slot is gone.** `prepare_windows_plan` returns the plan, properly typed `ProtonLaunchPlan` instead of `tuple[Any, Any]`, and the three call sites plus `orchestrator.py:34`'s "options" claim are updated.
+- **The `started_at` overload is gone.** `_build_runtime_state` no longer reads an internal timestamp out of a now-user-controlled dict. It never worked (nothing populated it, nothing read it, and `_launch_started_at` is the real clock), and leaving it would have been a genuine trap.
+- **`dispatcher.py` hit the 550-LOC cap** at 584 and was split, not allowlisted: the three functions that interpret the argv tail moved to a new `launcher/argv_options.py`, taking it to 513.
+
+**What was stopped, and why.** `state.wrappers` and `state.game_args` are still unpopulated. `parse_launch_options` was written for a full Steam `LaunchOptions` string, where `%command%` separates wrapper words from game arguments. The dispatcher receives the **post-expansion argv tail** (`" ".join(argv[2:])`), which frequently has no `%command%` left in it, and the parser's fallback for that case moves *every* bare token into `game_args`. Since every argv builder does `argv.extend(state.game_args)`, and the frontend's own `extractUserParams` deliberately preserves the user's `mangohud`/`gamemoderun` into the temp-shortcut options, wiring it produced this:
+
+```
+argv tail : UNIFIDECK_UBISOFT_ACTION=auth mangohud gamemoderun
+wrappers  : []
+game_args : ['mangohud', 'gamemoderun']   ← appended to the GAME's argv
+```
+
+That is a launch-breaking regression on exactly the feature the wiring was meant to deliver. Deciding what a bare token in the argv tail *means* is a design call with at least four answers (treat as args, treat as wrappers, require an explicit `%command%`, or recognise known wrapper binaries), and it is not a wiring decision. Left empty, which is what every release so far shipped. `tests/unit/test_launch_options_wiring.py` pins both halves, so re-wiring it is a deliberate act against a red test, and the worked example above is a test of its own.
+
+`docs/launch-options.md` now documents the env and LSFG routes under "What works today", and lists wrapper words and game arguments under "Not supported" with the reason, rather than promising them as "planned". The stale "DEAD CODE" note in the `launcher.md` skill is corrected.
+
+**Two lessons.**
+
+*"Imported nowhere" is a fact about the module, not a verdict on the feature.* Before deleting, check whether the destination is built and whether a user-facing doc promises it. This one had eleven live consumers, a reserved return slot, passing tests, and a documented syntax, and the register had it down as one dead function.
+
+*And the converse: code being unreached is sometimes load-bearing.* The parser's `%command%` assumption was silently wrong for its own call site, and nothing revealed that until it ran. Wiring dead code is a behaviour change, so it needs the same measurement a fix does; the fallback branch here would have shipped as a regression on the strength of the code "already being written and tested".
 
 ---
 
@@ -362,9 +484,18 @@ Ordered by risk-to-value. Tick the box when a fix lands and the user has validat
 
 ### P2 — documentation re-sync (zero code risk)
 
-- [x] 13. Standardize on one layer model; delete the "5-layer"/"six-layer" prose counts in `docs/architecture.md` (diagram is authoritative). *(done this audit)*
+- [x] 13. ~~Standardize on one layer model; delete the "5-layer"/"six-layer" prose counts in `docs/architecture.md`.~~ **CLOSED 2026-08-25 — the first pass scoped itself to one file and left five.** Item 13 cleaned `architecture.md` and stopped; `README.md` (×2), `event_bus/__init__.py`, `.importlinter` and **two workflow comments the audit never listed** still restated a count. De-numbered all six and added `validate_architecture.py` **check 6**, which found the two workflow sites this register could not. §2.7 (the `.importlinter` over-claim) closes here too: `architecture.md:44` now defers to §9, and `lint-imports` confirms both contracts KEPT. Check 6 required a trailing architecture noun to avoid firing on seven correct `3-layer merge` lines in `config/`. See the rewritten §2.2. *(gate-level validation only; nothing user-visible)*
 - [x] 14. ~~Correct the mixin count and complete `rpc/mixins/__init__.py.__all__` to all 20.~~ **CLOSED 2026-08-25 — the first pass fixed the code half and re-armed the doc half.** `__all__` and check 1 held through the §1.2 deletions (20 → 17); the four prose sites were hand-corrected to 20 instead of de-numbered and were stale again in the same release, plus three more sites this section's table never listed. Closed by removing the numeral everywhere and adding `validate_architecture.py` **check 5**, which fails on any mixin count written into prose (opt-out: `mixin-count-ok: <reason>`). Fixed a false positive on `Layer-6 RPC mixins` and the `tests.yml` comment that called the hard dead-RPC gate "report-only". Guarded by `tests/unit/test_validate_architecture.py`, mutation-tested. See the rewritten §2.1. *(gate-level validation only; nothing here is user-visible or deployed)*
-- [ ] 15. Update every "five stores" reference to six; re-frame `docs/feasibility/battlenet.md` as implemented. *(docs/architecture.md, skill, and in-code comments done this audit; `docs/feasibility/battlenet.md` still framed as feasibility)*
-- [x] 16. Correct the StoreBase contract in `architecture.md` (10 methods, no `launch()`). *(done this audit)*
-- [ ] 17. Remove the phantom "handler groups" docstrings and `OP-XX` markers; document the five undocumented `event_bus/` and `core/sync_*_mixin` modules; add `accounts/` to the layer map. *(mixins/__init__.py docstring + accounts/ done this audit; `store.py`/`auto_wire.py` docstrings + event_bus/core module docs remain)*
-- [x] 18. Re-verify the `unifideck-architecture` skill against the current tree and bump its "Last verified" line. *(done this audit)* Remaining version-string reconciliation (`__init__.py.__version__` 0.7.1 vs `package.json` 0.7.4) is deferred to the next release (see `unifideck-release` skill).
+- [x] 15. ~~Update every "five stores" reference to six; re-frame `docs/feasibility/battlenet.md` as implemented.~~ **CLOSED 2026-08-25.** The `battlenet.md` half was already done and this line was stale ("**Status: implemented.** Battle.net shipped as the sixth store"). Two real residuals fixed: `engineering-roadmap.md:79` (the evidence line for a roadmap item, understating its own scope by a store) and `CLAUDE.md:3`, whose store *list* omitted Battle.net entirely. Added **check 7**, which verifies a prose count against the store dirs rather than banning it, because a ban reported 23 correct subset statements in one run. See the rewritten §2.4. *(gate-level validation only)*
+- [x] 16. Correct the StoreBase contract in `architecture.md` (10 methods, no `launch()`). *(done this audit; re-verified name by name against the ABC 2026-08-25, no drift)*
+- [x] 17. ~~Remove the phantom "handler groups" docstrings and `OP-XX` markers; document the undocumented `event_bus/` and `core/sync_*` modules; add `accounts/` to the layer map.~~ **CLOSED 2026-08-25 except the OP-XX sweep, which is split out as item 21.** The docstring half named `auto_wire.py`, which is clean, and missed `download.py` and `action.py`, which were not; all three rewritten. The `accounts/` half was half-done: the layer-map row existed, but `accounts/__init__.py` still told readers the account-switch modal never appeared, which was the highest-value defect in Part 2 (a live feature, described as dead, in the file a reader opens first). Documented the missing 5 services, 14 `core/` modules and 9 `event_bus/` modules, the last with an explicit "On the emit path?" column marking the three that are not, per 4e/4g. Added **check 8** so the tables cannot drift again; it caught 25 omissions on its first run. See the rewritten §2.5. *(gate-level validation only)*
+- [x] 18. Re-verify the `unifideck-architecture` skill against the current tree and bump its "Last verified" line. *(done this audit)* **Version reconciliation closed 2026-08-25 by deleting, not bumping:** `__init__.py.__version__` had zero readers anywhere while `package.json` had three, so it is gone, with the drift-guard lockstep row rewritten to forbid re-adding it. The `CLAUDE.md` H1 numeral (which contradicted line 3's own "source of truth: `package.json`") is gone too. The stale skill `Last verified:` stamps are deliberately **not** bumped: an accurate old stamp is a freshness signal, and bumping without re-reading forges it. Tracked as item 22. See the rewritten §2.6.
+- [x] 20a. **Move `cleanup_sweeps.py` out of the RPC leaf.** `git mv` to `core/cleanup_sweeps.py`, no logic change, both import-linter contracts still KEPT, 89 cleanup tests green. Validated through the suite rather than by running a real wipe on the dev device. (§2.8 bullet 5.)
+
+### Opened by the Part 2 pass
+
+- [ ] 21. **Strip the 233 `OP-XX` markers** (149 distinct ids across 162 files). Comment-only, so one mechanical commit; kept out of the Part 2 pass so it could not drown the review. Split from item 17.
+- [ ] 22. **Re-verify the six stale skill `Last verified:` stamps** (`unifideck-ci-gates`, `unifideck-dev-loop` + `debugging-playbook`, `unifideck-bug-triage`, `unifideck-release` + `unifidb-pipeline`). Real work per file: read it against the current tree, fix what drifted, *then* bump. Do not bump alone.
+- [x] 23. **Wire up the launch-options parser** (§2.9). **Env half + LSFG + the tokenizer merge + the reserved return slot: DONE.** `dispatcher.py` was split at the LOC cap into `launcher/argv_options.py`. *(awaiting user device validation — V4 through V9, V12 in the plan; V4, the no-options baseline, is the one that matters)*
+- [ ] 23a. **Decide what a bare token in the argv tail means**, then wire `state.wrappers` / `state.game_args` (§2.9). Stopped mid-wiring because the parser's `%command%` split does not hold for the post-expansion argv tail it actually receives: the fallback appended `mangohud gamemoderun` to the game's own command line. Four candidate answers in §2.9. Whoever takes it should start from `test_bare_argv_tokens_would_become_game_args`, which is the measurement, and settle first what Steam actually leaves in argv for a non-Steam shortcut whose `LaunchOptions` contains `%command%` — that fact was not established and it decides the design.
+- [ ] 24. **Vulture cannot see an unimported module.** `min_confidence = 80` reports unused imports and variables, not unused functions or whole unimported modules, which is how §2.9's 198 dead lines sat behind a *hard* gate for a release. A check that every first-party module under `py_modules/unifideck` is imported by something would close it. Expect a batch of hits needing individual triage, so give it its own change.
