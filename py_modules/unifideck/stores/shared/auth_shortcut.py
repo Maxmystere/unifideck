@@ -22,10 +22,17 @@ Two Steam behaviours drive the shape here:
   CRC of launcher plus identity, and the same inputs must always give the
   same appid or the shortcut is orphaned on the next run.
 
-Ubisoft keeps its own richer implementation for now (it also prunes legacy
-template shortcuts and integrates with its registry). Migrating it onto
-this is a follow-up that wants device testing, since it is a shipped and
-working auth path.
+**Ubisoft keeps its own implementation, and that is a decision rather than
+a backlog item.** ``ubisoft/auth/shortcut.py`` + ``shortcut_ops.py`` carry
+behaviour this module has no equivalent for: pruning legacy
+``ubisoft:.template`` rows and stray ``upc.exe`` rows (declaring those
+deletions to the shortcuts write guard by appid, because an empty ``Exe``
+reads as the user's row and not ours), ``validate_auth_shortcut`` field
+self-heal, compat-tool clearing, and shortcut-registry integration.
+Porting all of that here would move ~580 lines into ``shared/`` for a
+single consumer, on the store with the longest incident history in the
+sign-in path. Battle.net is the only consumer by design; a *new* wrapper
+store is still a spec rather than another module.
 """
 
 from __future__ import annotations

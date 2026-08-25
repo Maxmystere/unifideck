@@ -770,3 +770,116 @@ def test_check9_refuses_rather_than_passes_when_the_map_is_gone(
     """
     with pytest.raises(SystemExit):
         mod.parse_client_storefronts(_ts(tmp_path, "const OTHER = {};\n"))
+
+
+# ── check 10: vendor-log globs without a salvage call ──────────────────────
+#
+# The defect class this closes is the audit's most repeated one: material
+# written, measured and shipped, with the call site never built. A grep for
+# ``VENDOR_LOG_GLOBS`` found a complete Ubisoft row and read as covered,
+# while every failed Ubisoft install deleted UPC's own logs with the prefix.
+
+
+def test_check10_reads_the_store_keys_not_the_globs(mod) -> None:
+    """Keys are indented four spaces, glob strings eight.
+
+    Without the indent anchor the globs themselves would be read as store
+    names and the check would compare nonsense against the tree.
+    """
+    stores = mod.parse_vendor_log_stores()
+    assert stores == {"battlenet", "ubisoft"}
+
+
+def test_check10_passes_on_the_real_tree(mod) -> None:
+    """Both stores with globs actually call ``preserve_vendor_logs``."""
+    assert mod.find_unsalvaged_vendor_logs() == set()
+
+
+def test_check10_catches_a_store_that_never_salvages(
+    monkeypatch, tmp_path: Path, mod,
+) -> None:
+    """The planted violation: globs declared, call site absent."""
+    store = tmp_path / "stores" / "ghoststore"
+    store.mkdir(parents=True)
+    (store / "install.py").write_text(
+        "async def cleanup():\n    pass\n", encoding="utf-8",
+    )
+    monkeypatch.setattr(mod, "PY", tmp_path)
+    monkeypatch.setattr(mod, "parse_vendor_log_stores", lambda: {"ghoststore"})
+
+    assert mod.find_unsalvaged_vendor_logs() == {"ghoststore"}
+
+
+def test_check10_will_not_let_one_store_vouch_for_another(
+    monkeypatch, tmp_path: Path, mod,
+) -> None:
+    """The call must live in the store's OWN package.
+
+    Battle.net calling ``preserve_vendor_logs`` is precisely what made
+    Ubisoft's missing call invisible to a whole-tree grep.
+    """
+    (tmp_path / "stores" / "battlenet").mkdir(parents=True)
+    (tmp_path / "stores" / "battlenet" / "install.py").write_text(
+        "await preserve_vendor_logs(STORE_ID, prefix, dest)\n", encoding="utf-8",
+    )
+    (tmp_path / "stores" / "ubisoft").mkdir(parents=True)
+    (tmp_path / "stores" / "ubisoft" / "installer.py").write_text(
+        "async def cleanup():\n    pass\n", encoding="utf-8",
+    )
+    monkeypatch.setattr(mod, "PY", tmp_path)
+    monkeypatch.setattr(
+        mod, "parse_vendor_log_stores", lambda: {"battlenet", "ubisoft"},
+    )
+
+    assert mod.find_unsalvaged_vendor_logs() == {"ubisoft"}
+
+
+def test_check10_honours_the_opt_out_marker(
+    monkeypatch, tmp_path: Path, mod,
+) -> None:
+    """``# no-vendor-salvage: <reason>``, in the house style."""
+    store = tmp_path / "stores" / "ghoststore"
+    store.mkdir(parents=True)
+    (store / "install.py").write_text(
+        "# no-vendor-salvage: the client writes its logs outside the prefix\n"
+        "async def cleanup():\n    pass\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(mod, "PY", tmp_path)
+    monkeypatch.setattr(mod, "parse_vendor_log_stores", lambda: {"ghoststore"})
+
+    assert mod.find_unsalvaged_vendor_logs() == set()
+    assert mod.count_exempt_vendor_salvage() == 1
+
+
+def test_check10_ignores_a_store_with_globs_but_no_package(
+    monkeypatch, tmp_path: Path, mod,
+) -> None:
+    """A glob row outliving its store is a stale row, not a missing call.
+
+    Failing here would blame the wrong thing and could not be fixed by
+    adding a call anywhere.
+    """
+    monkeypatch.setattr(mod, "PY", tmp_path)
+    monkeypatch.setattr(mod, "parse_vendor_log_stores", lambda: {"removed"})
+
+    assert mod.find_unsalvaged_vendor_logs() == set()
+
+
+def test_check10_refuses_rather_than_passes_when_the_table_is_gone(
+    monkeypatch, tmp_path: Path, mod,
+) -> None:
+    """A renamed table must fail loudly, not report an empty store set.
+
+    An empty set would make the check silently vacuous — the exact failure
+    mode it exists to catch, reproduced in the checker itself.
+    """
+    shared = tmp_path / "stores" / "shared"
+    shared.mkdir(parents=True)
+    (shared / "prefix_forensics.py").write_text(
+        "OTHER_TABLE = {}\n", encoding="utf-8",
+    )
+    monkeypatch.setattr(mod, "PY", tmp_path)
+
+    with pytest.raises(SystemExit):
+        mod.parse_vendor_log_stores()

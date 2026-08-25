@@ -86,6 +86,17 @@ machine-enforcing rather than re-discovering by hand every release:
    reachable from pytest, so it is checked here. A wrapper store missing
    from it makes the cart button do nothing at all — no error, no toast.
 
+10. A store can declare where its vendor client writes logs and then never
+    salvage them. Audit §3.3 filed this as redundancy ("only Battle.net
+    consumes ``prefix_forensics``"); re-deriving it found a complete, measured
+    Ubisoft row in ``VENDOR_LOG_GLOBS`` that nothing called, so every failed
+    Ubisoft install deleted UPC's own logs with the prefix — for a wrapper
+    store the prefix *is* the install. This is the audit's most repeated
+    defect class: the material shipped, the delivery channel was never
+    built. Check 10 asks whether the store's **own package** calls
+    ``preserve_vendor_logs``, so one store cannot vouch for another. Opt out
+    with ``# no-vendor-salvage: <reason>``.
+
 Checks 5 to 7 share one scanner, ``scan_prose``. Their regexes are narrow on
 purpose and each carries the false positive that shaped it: a gate that fires
 on correct, untouched code gets switched off rather than fixed. See the
@@ -369,6 +380,78 @@ def _has_no_caller_marker(lines: list[str], def_lineno: int) -> bool:
         if NO_CALLER_RE.search(lines[i]):
             return True
     return False
+
+
+NO_SALVAGE_RE = re.compile(r"#\s*no-vendor-salvage:\s*\S")
+
+
+def parse_vendor_log_stores() -> set[str]:
+    """Store keys declared in ``prefix_forensics.VENDOR_LOG_GLOBS``."""
+    source = (
+        PY / "stores" / "shared" / "prefix_forensics.py"
+    ).read_text()
+    match = re.search(
+        r"VENDOR_LOG_GLOBS[^=]*=\s*\{(.*?)\n\}", source, flags=re.S,
+    )
+    if match is None:
+        _fail("prefix_forensics.py: could not locate VENDOR_LOG_GLOBS")
+        raise SystemExit(1)
+    # Store keys sit at exactly four spaces of indent; the glob strings
+    # inside each tuple are indented eight, so this cannot mistake a glob
+    # for a key.
+    return set(re.findall(r'^ {4}"(\w+)":', match.group(1), flags=re.M))
+
+
+def find_unsalvaged_vendor_logs() -> set[str]:
+    """Stores that declare vendor log globs but never salvage them.
+
+    The defect class this closes is the most repeated one in the 2026-08
+    audit: material written, shipped and documented, with the call site
+    never built. ``VENDOR_LOG_GLOBS`` carried a full Ubisoft row — measured
+    log paths, ready to use — while nothing in ``stores/ubisoft/`` called
+    ``preserve_vendor_logs``, so every failed Ubisoft install deleted UPC's
+    own logs along with the prefix. A grep for the globs found them and read
+    as covered, which is exactly how it survived a release.
+
+    Deliberately asks whether the *store's own package* calls it, not
+    whether the symbol appears anywhere: Battle.net vouching for Ubisoft is
+    the failure this is written to prevent.
+
+    Opt out with an inline ``# no-vendor-salvage: <reason>`` marker anywhere
+    in the store package, in the house style of ``# no-frontend-caller:``.
+    """
+    unsalvaged: set[str] = set()
+    for store in parse_vendor_log_stores():
+        package = PY / "stores" / store
+        if not package.is_dir():
+            continue
+        salvages = False
+        exempt = False
+        for file in package.rglob("*.py"):
+            text = file.read_text()
+            if "preserve_vendor_logs(" in text:
+                salvages = True
+            if NO_SALVAGE_RE.search(text):
+                exempt = True
+        if not salvages and not exempt:
+            unsalvaged.add(store)
+    return unsalvaged
+
+
+def count_exempt_vendor_salvage() -> int:
+    """Count ``# no-vendor-salvage:`` markers, printed on every clean run."""
+    total = 0
+    for store in parse_vendor_log_stores():
+        package = PY / "stores" / store
+        if not package.is_dir():
+            continue
+        for file in package.rglob("*.py"):
+            total += sum(
+                1
+                for line in file.read_text().splitlines()
+                if NO_SALVAGE_RE.search(line)
+            )
+    return total
 
 
 def collect_rpc_methods(mixins_path: Path) -> set[str]:
@@ -785,6 +868,31 @@ def main() -> int:
     else:
         print(
             f"OK: CLIENT_STOREFRONTS covers all {len(wrapper_set)} wrapper stores"
+        )
+
+    # Check 10 (hard): a store with vendor-log globs actually salvages them.
+    unsalvaged = find_unsalvaged_vendor_logs()
+    if unsalvaged:
+        hard_failures += len(unsalvaged)
+        for store in sorted(unsalvaged):
+            _fail(
+                f"store '{store}' has VENDOR_LOG_GLOBS but never calls "
+                "preserve_vendor_logs"
+            )
+        print(
+            "\n  For a wrapper store the prefix IS the install, so a failed\n"
+            "  install deletes the vendor client's own logs — the only\n"
+            "  first-hand account of why it failed. Writing the globs without\n"
+            "  the call reads as covered and collects nothing: Ubisoft's row\n"
+            "  sat there unused for a release. Add the call at the site that\n"
+            "  removes the prefix, or opt out with '# no-vendor-salvage:'."
+        )
+    else:
+        exempt = count_exempt_vendor_salvage()
+        suffix = f" ({exempt} exempt)" if exempt else ""
+        print(
+            "OK: every store with vendor log globs salvages them"
+            f"{suffix}"
         )
 
     if hard_failures:

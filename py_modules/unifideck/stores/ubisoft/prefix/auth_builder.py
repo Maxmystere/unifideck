@@ -23,6 +23,8 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from unifideck.stores.shared.prefix_clone import rsync_clone
+
 if TYPE_CHECKING:
     from unifideck.stores.ubisoft.config import UbisoftConfig
     from unifideck.stores.ubisoft.installer.cache import UbisoftInstallerCache
@@ -129,10 +131,14 @@ class _AuthPrefixBuilder:
                 label,
             )
             await asyncio.to_thread(lambda: Path(auth_dir).mkdir(parents=True, exist_ok=True))
-            ok = await self._helpers.rsync_clone(
-                src,
-                auth_dir,
+            # ``checksum``: the auth prefix is not deleted before a rebuild,
+            # so this can be a repair over an existing tree — where rsync's
+            # quick check silently skips same-size identity files.
+            ok = await rsync_clone(
+                Path(src),
+                Path(auth_dir),
                 exclude_games=True,
+                checksum=True,
             )
             if not ok:
                 logger.error(

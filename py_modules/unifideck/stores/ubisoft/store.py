@@ -32,11 +32,13 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from unifideck.core.types import AuthResult, Events, Game, InstallResult, Result, StoreInfo
 from unifideck.event_bus.event_bus_devex import auto_wire, subscribe
 from unifideck.stores.shared.store_base import StoreBase
+from unifideck.stores.shared.wrapper_session_hooks import await_client_exit
 
 from .specialists import build_ubisoft_specialists
 
@@ -116,6 +118,11 @@ class UbisoftStore(StoreBase):
         after every play. ``capture()`` is guarded (auth-only, skips a
         logged-out / smaller source), so a normal exit that didn't rotate — or
         an explicit logout — is a safe no-op.
+
+        UPC flushes its rotated credential as it shuts down, so the read waits
+        (bounded) for the client to actually be gone first. Reading too early
+        gets a torn vault, and ``propagate_all_to_all`` below would then push
+        it to every Ubisoft prefix.
         """
         if kwargs.get("store") != "ubisoft":
             return
@@ -124,6 +131,7 @@ class UbisoftStore(StoreBase):
             return
         try:
             prefix_path = self._paths.get_prefix_path(game_id)
+            await await_client_exit("ubisoft", Path(prefix_path))
             captured = await asyncio.to_thread(
                 self._session.capture, prefix_path,
             )
