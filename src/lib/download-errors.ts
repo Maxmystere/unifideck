@@ -59,6 +59,14 @@ const CODE_KEYS: ReadonlyArray<readonly [RegExp, string]> = [
   // legendary refuses a second concurrent install and exits 0 while doing it.
   [/^legendary_install_lock_busy$/, "errors.download.lockConflict"],
   [/^marker_write_failed$|^mkdir_failed$/, "errors.download.processFailed"],
+  // A store that cannot install at all (the cloud-only store refuses every
+  // install / update / uninstall — audit §3.5, register item 11). Mapped to
+  // the generic string rather than given its own key: the path is guarded
+  // twice over on the way in, so this exists to guarantee that if it is ever
+  // reached the user gets a sentence instead of the token `not_supported` —
+  // which is exactly the defect the §3.2 pass fixed for GOG. Give it a
+  // precise string of its own the day something can actually reach it.
+  [/^not_supported$/, "errors.download.generic"],
 ];
 
 export function friendlyDownloadError(

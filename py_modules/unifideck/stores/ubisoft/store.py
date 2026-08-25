@@ -345,7 +345,19 @@ class UbisoftStore(StoreBase):
         return await self._installer.update_game(game_id)
 
     async def check_for_updates(self) -> list[str]:
-        """Check for updates."""
+        """Check for updates.
+
+        # unwired: returns ``[]`` unconditionally, which makes this store's
+        # whole update path unreachable. ``get_available_updates`` — the one
+        # source every Update affordance reads — is fed from
+        # ``update_check_cache`` and therefore from here, so :meth:`update_game`
+        # and the ``update_op`` behind it can never be triggered from the UI.
+        # Not deleted, because the update code works and UPC updates are a real
+        # user need; but see :meth:`update_game`'s own note, which records that
+        # the window it opens does not render in Gaming Mode. Build the trigger
+        # and the watcher-based window together, or delete both.
+        # Audit §3.5 bullet 3.
+        """
         return await self._installer.check_for_updates()
 
     async def get_game_size(

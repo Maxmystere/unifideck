@@ -25,7 +25,9 @@ playtime, categories and artwork.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +38,7 @@ from .ownership import (
     InstalledGame,
     MergedCatalog,
     evaluate_catalog,
+    read_catalog,
     read_installed,
     read_licences,
 )
@@ -160,6 +163,31 @@ def _index_by_uid(installed: dict[str, InstalledGame]) -> dict[str, InstalledGam
     return by_uid
 
 
+async def install_row(
+    game_id: str, prefix: Path | None,
+) -> InstalledGame | None:
+    """This game's row in the client's install records, or ``None``.
+
+    Keyed on the uid asked for. The earlier form returned the *first* game
+    in the prefix, which is only ever right by accident — a prefix that
+    picked up a second Blizzard title reported that one's path and size
+    under this game's id.
+
+    Moved off the store (2026-08-26) for its LOC cap; it reads the same
+    client state as everything else here. The caller resolves the prefix,
+    since only it holds the id map.
+    """
+    from . import paths
+
+    if prefix is None:
+        return None
+    drive_c = paths.drive_c(prefix)
+    if drive_c is None:
+        return None
+    state = await asyncio.to_thread(install_state_by_uid, drive_c, prefix)
+    return state.get(game_id)
+
+
 def install_state_by_uid(drive_c: Path, prefix: Path) -> dict[str, InstalledGame]:
     """Install state for one prefix, keyed the way the rest of the code asks.
 
@@ -171,6 +199,36 @@ def install_state_by_uid(drive_c: Path, prefix: Path) -> dict[str, InstalledGame
     return _index_by_uid(read_install_state(drive_c, prefix))
 
 
+def count_game_account_gated(
+    catalog: MergedCatalog, facts: AccountFacts,
+) -> int:
+    """How many extra programs would be granted if game-account facts existed.
+
+    A lower bound on the titles this account is losing to
+    :attr:`AccountFacts.game_account_programs` being empty. Measured by
+    re-evaluating the same catalog with every program in it assumed to have
+    a game account, and diffing the granted set — a lower bound rather than
+    an exact figure because a ``game_account`` rule may name a program id
+    that is not itself a catalog key.
+
+    This exists because the gap is otherwise **completely silent**: nothing
+    in the tree ever writes the ``game_accounts`` cache the store reads, so
+    ``game_account_programs`` is always empty, every free-to-play and
+    subscription title is dropped, and the library simply looks smaller
+    than the account. See audit §3.5 finding A.
+    """
+    if facts.game_account_programs:
+        return 0
+    probe = AccountFacts(
+        licence_ids=facts.licence_ids,
+        game_account_programs=frozenset(catalog.program_configurations),
+        flags=facts.flags,
+    )
+    with_accounts = evaluate_catalog(catalog.program_configurations, probe)
+    without = evaluate_catalog(catalog.program_configurations, facts)
+    return max(0, len(with_accounts) - len(without))
+
+
 def build_library(
     catalog: MergedCatalog,
     facts: AccountFacts,
@@ -180,6 +238,14 @@ def build_library(
 ) -> list[Game]:
     """Join ownership, catalog metadata and install state into Games."""
     granted = evaluate_catalog(catalog.program_configurations, facts)
+    gated = count_game_account_gated(catalog, facts)
+    if gated:
+        logger.warning(
+            "[Battlenet] %d program(s) need game-account facts we do not "
+            "have — free-to-play and subscription titles are missing from "
+            "this library (no writer for the game_accounts cache)",
+            gated,
+        )
     by_uid = _index_by_uid(installed)
     games = _granted_games(granted, catalog, by_uid, launcher_path)
     seen = {g.store_game_id for g in games}
@@ -249,6 +315,44 @@ def read_account_facts(drive_c: Path, game_account_programs: frozenset[str]) -> 
     return AccountFacts(
         licence_ids=licences.licence_ids,
         game_account_programs=game_account_programs,
+    )
+
+
+async def read_library(
+    drive_c: Path,
+    *,
+    game_account_programs: frozenset[str],
+    collect_installed: Callable[[], dict[str, Any]],
+    launcher_path: str,
+) -> list[Game] | None:
+    """Read the whole library off client-local state, or ``None``.
+
+    Split out of ``store.get_library`` (2026-08-26) for the store file's
+    LOC cap; it belongs next to :func:`build_library` anyway, since every
+    step is a read of the same client state.
+
+    ``None`` means *we could not read*, which is a different claim from
+    *you own nothing*: an empty list is authoritative downstream and lets
+    the shortcut reconcile delete every Battle.net shortcut the user has
+    (audit §3.5, finding B). Both unreadable cases return it — a missing
+    prefix, and a catalog cache the client has not populated, without
+    which every ownership rule has nothing to match against.
+
+    Every read is filesystem/SQLite work, so each runs off the loop.
+    """
+    catalog = await asyncio.to_thread(read_catalog, drive_c)
+    if not catalog.program_configurations:
+        logger.warning(
+            "[Battlenet] PUB catalog cache is empty — launch the client "
+            "once so it populates; library reported unknown, not empty",
+        )
+        return None
+    facts = await asyncio.to_thread(
+        read_account_facts, drive_c, game_account_programs,
+    )
+    installed = await asyncio.to_thread(collect_installed)
+    return build_library(
+        catalog, facts, installed, launcher_path=launcher_path,
     )
 
 

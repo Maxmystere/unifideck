@@ -365,6 +365,37 @@ class MicrosoftStore(BrowserAuthRebuildMixin, StoreBase):
             tier.value,
         )
         return True
+    # ── Install lifecycle: refused, not faked ────────────────────────────
+    #
+    # This store's titles are Xbox Cloud Gaming streams. There is nothing to
+    # download, nothing on disk, and nothing to update — so the three
+    # ``StoreBase`` install hooks the ABC requires cannot be satisfied and
+    # say so.
+    #
+    # They used to return ``success=True`` and do nothing, which is a
+    # phantom success: the caller is told a game was installed (or
+    # uninstalled) that never was.
+    #
+    # Install and update were unreachable — two independent guards, neither
+    # of them ``store_info.supports_install``, which gates nothing at all
+    # because it has no readers (audit register item 26). ``usePlaySection``
+    # short-circuits any game carrying the ``xcloud`` tag to its own play
+    # state before the not-installed branch, so the Install button never
+    # mounts; and ``DownloadWorker._execute_install`` carried its own
+    # store-name rejection ahead of the dispatch. That second guard is gone
+    # now, because a refusal here does its job better (see the note there).
+    #
+    # **Uninstall never had a backend guard**, only the frontend's
+    # ``is_installed`` gate — so it is the one of the three that a caller
+    # could actually reach, and the one whose ``success=True`` would have
+    # let a shortcut flip out of an install state it never held.
+    #
+    # The obvious next feature for this store — PC Game Pass, i.e. titles
+    # that really do install — is exactly a Microsoft game *without* the
+    # ``xcloud`` tag, which is what makes refusing here worth doing: it
+    # arrives as a visible failure instead of a phantom success.
+    _NOT_SUPPORTED = "not_supported"
+
     async def install_game(
         self,
         game_id: str,
@@ -372,19 +403,33 @@ class MicrosoftStore(BrowserAuthRebuildMixin, StoreBase):
         progress_cb: Any = None,
         **kwargs: Any,
     ) -> InstallResult:
-        """Install game."""
-        logger.info("[MicrosoftInstall] install_game game_id=%s base_path=%s", game_id, base_path)
+        """Refuse: xCloud titles stream, so there is nothing to install."""
+        logger.warning(
+            "[MicrosoftInstall] refusing install for game_id=%s — xCloud "
+            "titles stream and have no local install", game_id,
+        )
         return InstallResult(
-            success=True,
+            success=False,
             store="microsoft",
             game_id=game_id,
             install_path=None,
+            error=self._NOT_SUPPORTED,
+            error_code=self._NOT_SUPPORTED,
         )
     async def uninstall_game(
         self, game_id: str, **kwargs: Any,
     ) -> Result:
-        """Uninstall game."""
-        return Result(success=True)
+        """Refuse: nothing was installed, so nothing can be reclaimed.
+
+        Reporting success here told the caller a game had been uninstalled
+        and let the shortcut flip out of its installed state, both untrue.
+        """
+        return Result(
+            success=False,
+            store="microsoft",
+            error=self._NOT_SUPPORTED,
+            error_code=self._NOT_SUPPORTED,
+        )
 
     async def update_game(
         self,
@@ -392,12 +437,13 @@ class MicrosoftStore(BrowserAuthRebuildMixin, StoreBase):
         progress_cb: Any = None,
         **kwargs: Any,
     ) -> InstallResult:
-
-        """Update game."""
+        """Refuse: the stream is always current, so there is no update."""
         return InstallResult(
-            success=True,
+            success=False,
             store="microsoft",
             game_id=game_id,
+            error=self._NOT_SUPPORTED,
+            error_code=self._NOT_SUPPORTED,
         )
     async def check_for_updates(self) -> list[str]:
         """Check for updates."""

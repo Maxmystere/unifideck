@@ -434,8 +434,19 @@ class GOGStore(BrowserAuthRebuildMixin, StoreBase):
         """GOG's authoritative total time played for ``game_id``, in seconds."""
         return await self._sessions.get_total_secs(game_id)
 
+    # ── DLC: implemented end to end, reachable from nowhere ──────────────
+    #
+    # unwired: :meth:`get_game_dlcs`, :meth:`install_dlc` and
+    # :meth:`get_game_store_url` have no callers — no RPC route, no frontend.
+    # **No store has a DLC surface**, so this is not a GOG gap: audit §3.5
+    # bullet 4 records it as "amazon lacks DLC", which reads per-store and is
+    # really a feature nobody has. Kept rather than deleted (working logic
+    # against a live API); decide as one unit — build the surface, or delete
+    # this, the manager and ``shared/dlc.py`` together. NOT
+    # ``get_available_languages``: that is live, feeding the language picker.
+
     async def get_game_dlcs(self, game_id: str) -> list[dict[str, Any]]:
-        """Get game dlcs."""
+        """Get game dlcs. (unwired — see the note above.)"""
         return await self._dlc.get_game_dlcs(game_id)
 
     async def get_available_languages(self, game_id: str) -> list[str]:
@@ -449,7 +460,7 @@ class GOGStore(BrowserAuthRebuildMixin, StoreBase):
         base_path: str | None = None,
         progress_cb: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> Result:
-        """Install dlc."""
+        """Install dlc. (unwired — see the DLC note above.)"""
         return await self._dlc.install_dlc(
             game_id=game_id,
             dlc_id=dlc_id,
@@ -458,7 +469,7 @@ class GOGStore(BrowserAuthRebuildMixin, StoreBase):
         )
 
     async def get_game_store_url(self, game_id: str) -> str | None:
-        """Get game store URL."""
+        """Get game store URL. (unwired — see the DLC note above.)"""
         return await self._dlc.get_game_store_url(game_id)
 
     async def get_game_slug(self, game_id: str) -> str | None:

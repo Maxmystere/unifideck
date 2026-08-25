@@ -124,7 +124,7 @@ CANONICAL_SCHEMA: dict[str, set[str]] = {
     "STORE_LOGOUT":                 {"store"},
     "STORE_REGISTERED":             set(),
     "SYNC_CANCELLED":               set(),
-    "SYNC_COMPLETE":                {"duration_ms", "errors", "fetch_artwork", "games", "is_force", "registered_stores", "resync_artwork", "stores_synced"},
+    "SYNC_COMPLETE":                {"duration_ms", "errors", "fetch_artwork", "games", "is_force", "resync_artwork", "stores_synced"},
     "SYNC_FAILED":                  {"error", "store"},
     "SYNC_PROGRESS":                {"current_game", "progress_percent", "status", "store", "synced_games", "total_games"},
     "SYNC_SKIPPED":                 {"reason", "store"},

@@ -177,10 +177,16 @@ class _WorkerMixin:
         store = self._registry.get_store(item.store)
         if not store:
             raise RuntimeError(f"Store {item.store} not found in registry")
-        # Microsoft/xCloud games are streamed, not downloaded.
-        if item.store == "microsoft":
-            await self._reject_microsoft(item)
-            return
+        # NOTE: there is deliberately no store-name branch here for the
+        # cloud-only store. One existed — `_reject_microsoft` — and it
+        # bypassed `_emit_failure`, so the queue row never reached "failed"
+        # and never got an `error` set, while the toast echoed a hardcoded
+        # English sentence straight past `friendlyDownloadError`'s code
+        # table. The store itself now refuses with `not_supported` (audit
+        # §3.5, register item 11), so the ordinary failure path below does
+        # the whole job: correct row state, one classified error, one
+        # translated toast. A store's own refusal is the right place for
+        # this; the worker should not need to know which stores can install.
         await self._begin_install(item)
 
         async def progress_cb(progress: float | dict[str, Any]) -> None:
@@ -196,21 +202,6 @@ class _WorkerMixin:
                 result.error,
             )
             await self._emit_failure(item, result.error, key)
-
-    async def _reject_microsoft(self, item: DownloadItem) -> None:
-        """Emit DOWNLOAD_FAILED for cloud-only Microsoft titles."""
-        from unifideck.core.types.events import Events
-
-        logger.warning(
-            "[DownloadWorker] Microsoft games are cloud-only, cannot download",
-        )
-        if self._bus:
-            await self._bus.emit(
-                Events.DOWNLOAD_FAILED,
-                item=item.to_dict(),
-                error="Microsoft games are streamed via Xbox Cloud Gaming",
-                error_type="cloud_only",
-            )
 
     async def _begin_install(self, item: DownloadItem) -> None:
         """Flip the item to ``running`` and emit DOWNLOAD_STARTED.
@@ -351,7 +342,7 @@ class _WorkerMixin:
         """Run install-time prefix setup, surfaced as a "preparing" phase.
 
         Only for the stores that own a per-game prefix — Ubisoft bootstraps its
-        own prefix via UPC, and Microsoft is cloud-only, so both are skipped.
+        own prefix via UPC, so it is skipped.
         Also skipped for a GOG *Linux-native* depot (root-level ``start.sh`` —
         the same signal ``GOGExeResolver``/the native-launch DOSBox dispatch
         use): those games never touch Proton/Wine, so creating a prefix for
@@ -364,7 +355,10 @@ class _WorkerMixin:
         picks up the new ``download_phase`` (same mechanism Ubisoft's
         "manual" phase uses).
         """
-        if uses_manual_download_phase(item.store) or item.store == "microsoft":
+        # The cloud-only store used to be named here too. It no longer needs
+        # to be: this runs on the success path only, and that store now
+        # refuses every install outright, so the arm was unreachable.
+        if uses_manual_download_phase(item.store):
             return
         if item.store == "gog" and (Path(item.install_path) / "start.sh").is_file():
             logger.info(

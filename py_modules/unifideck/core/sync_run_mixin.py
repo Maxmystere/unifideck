@@ -376,11 +376,28 @@ class _SyncRunMixin:
         machinery) + LAUNCHER_STAGE (a user-facing retry toast carrying
         an ``unifideck://refresh-library/<store>`` deep link), and
         return an empty list with the error string.
+
+        ``get_library`` returning ``None`` is the ABC's "I could not read
+        my library" signal and is reported as the ``library_unreadable``
+        error rather than as an empty library. Collapsing the two was a
+        real defect: the shortcut reconcile treats an empty answer as
+        authoritative and deletes every shortcut the store owns, so a
+        store whose local state was temporarily unreadable lost the
+        user's whole library for that store (audit §3.5, finding B).
+        No SYNC_FAILED / toast here — unlike a raise, this is a normal
+        state (a vendor client that has never been opened), and a toast
+        on every sync would be noise.
         """
         try:
             games = await store.get_library(force=is_force)
             if games is None:
-                games = []
+                logger.warning(
+                    "[SyncService] %s could not read its library — keeping "
+                    "its existing shortcuts rather than treating this as an "
+                    "empty library",
+                    store.store_name,
+                )
+                return [], "library_unreadable"
             logger.info(
                 "[SyncService] %s: %d games", store.store_name, len(games),
             )

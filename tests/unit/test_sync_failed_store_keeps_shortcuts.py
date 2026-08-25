@@ -1,0 +1,199 @@
+"""A store that could not answer must not lose its shortcuts.
+
+Audit §3.5, finding B. The post-sync reconcile decides which stores' stale
+shortcuts it may delete. It used to be handed *every registered store*,
+which meant a store contributing zero games had every shortcut it owned
+deleted — and a store contributes zero games without owning zero games in
+four different ways: it raised, it timed out, it returned ``None`` ("I
+could not read"), or it was unavailable and never fetched at all. The last
+one records no error, so it was invisible in the logs too.
+
+The live example this closes: GOG's ``is_available`` refuses when
+``bin/gogdl`` is missing or non-executable (audit §3.2), so a half-applied
+update that lost the exec bit made the next sync delete every GOG shortcut
+in the library.
+
+Two halves are pinned here, and the second is the one that fails if the fix
+is written too broadly:
+
+1. a store that did not answer is **not** sweepable;
+2. a store that answered with an **empty** library still **is** — that is
+   the phantom-row cleanup the original widening existed for.
+"""
+from __future__ import annotations
+
+from unifideck.services.shortcut.events import _sweepable_stores
+from unifideck.services.shortcut.games_map import UNIFIDECK_TAG
+from unifideck.services.shortcut.protected import (
+    LEGACY_SWEEP_IDS,
+    PROTECTED_IDS,
+)
+from unifideck.services.shortcut.stale_predicate import (
+    is_stale_managed_shortcut,
+)
+
+_is_stale = is_stale_managed_shortcut
+
+_LAUNCHER = "/home/deck/homebrew/plugins/Unifideck/bin/unifideck-launcher"
+
+
+def _managed(launch: str, appid: int) -> dict:
+    """A genuine Unifideck shortcut: launcher ``Exe`` + store:id token."""
+    return {
+        "appid": appid,
+        "Exe": f'"{_LAUNCHER}"',
+        "LaunchOptions": launch,
+        "tags": {"0": UNIFIDECK_TAG, "1": launch.split(":", 1)[0]},
+    }
+
+
+# ── which stores this sync may sweep ─────────────────────────────────────
+
+def test_store_that_answered_cleanly_is_sweepable():
+    assert _sweepable_stores(
+        {"stores_synced": ["epic", "gog"], "errors": {}},
+    ) == {"epic", "gog"}
+
+
+def test_store_that_answered_empty_is_still_sweepable():
+    """An authoritative "you own nothing" still sweeps.
+
+    This is the phantom-Ubisoft / legacy-row cleanup the widening was
+    added for, and narrowing the rule must not take it away. ``errors``
+    is empty, so ubisoft answered — it just answered with no games.
+    """
+    assert "ubisoft" in _sweepable_stores(
+        {"stores_synced": ["ubisoft", "epic"], "errors": {}},
+    )
+
+
+def test_store_that_raised_is_not_sweepable():
+    assert _sweepable_stores(
+        {
+            "stores_synced": ["epic", "gog"],
+            "errors": {"epic": "HTTPError: 503"},
+        },
+    ) == {"gog"}
+
+
+def test_store_that_timed_out_is_not_sweepable():
+    assert "gog" not in _sweepable_stores(
+        {"stores_synced": ["epic", "gog"], "errors": {"gog": "timeout"}},
+    )
+
+
+def test_store_that_could_not_read_is_not_sweepable():
+    """``get_library() -> None`` arrives as ``library_unreadable``."""
+    assert "battlenet" not in _sweepable_stores(
+        {
+            "stores_synced": ["battlenet", "epic"],
+            "errors": {"battlenet": "library_unreadable"},
+        },
+    )
+
+
+def test_unavailable_store_never_fetched_is_not_sweepable():
+    """The case that recorded no error at all.
+
+    An unavailable store is not in ``available_stores``, so it never
+    reaches ``libraries`` and never lands in ``errors`` either. Keying on
+    ``stores_synced`` is what covers it; keying on ``errors`` alone would
+    not. This is the gogdl-exec-bit regression path.
+    """
+    assert _sweepable_stores(
+        {"stores_synced": ["epic"], "errors": {}},
+    ) == {"epic"}
+
+
+def test_every_store_failing_sweeps_nothing():
+    """Not ``None`` — an empty set means "sweep nothing".
+
+    ``reconcile`` treats ``valid_stores=None`` as "default to the stores
+    that returned games", so returning ``None`` here would re-enable the
+    sweep for exactly the run where nothing can be trusted.
+    """
+    result = _sweepable_stores(
+        {"stores_synced": ["epic"], "errors": {"epic": "boom"}},
+    )
+    assert result == set()
+    assert result is not None
+
+
+def test_malformed_payload_sweeps_nothing():
+    assert _sweepable_stores({}) == set()
+    assert _sweepable_stores({"stores_synced": "epic"}) == set()
+    assert _sweepable_stores(
+        {"stores_synced": ["epic"], "errors": "boom"},
+    ) == {"epic"}
+
+
+# ── the shortcuts themselves survive ─────────────────────────────────────
+
+def test_shortcut_of_a_failed_store_survives_the_sweep():
+    """End of the chain: the entry is not deleted.
+
+    Asserted on the entry rather than on "reconcile ran", because the
+    broken version also ran reconcile — it just deleted this row.
+    """
+    entry = _managed("gog:1207658930", appid=999)
+    sweepable = _sweepable_stores(
+        {
+            "stores_synced": ["epic", "gog"],
+            "errors": {"gog": "library_unreadable"},
+        },
+    )
+    assert not _is_stale(
+        entry,
+        valid_app_ids=set(),
+        valid_stores=sweepable,
+        launcher_path=_LAUNCHER,
+    )
+
+
+def test_shortcut_of_an_empty_but_healthy_store_is_still_swept():
+    entry = _managed("ubisoft:123", appid=999)
+    sweepable = _sweepable_stores(
+        {"stores_synced": ["ubisoft"], "errors": {}},
+    )
+    assert _is_stale(
+        entry,
+        valid_app_ids=set(),
+        valid_stores=sweepable,
+        launcher_path=_LAUNCHER,
+    )
+
+
+# ── the legacy escape hatch ──────────────────────────────────────────────
+
+def test_legacy_row_swept_even_though_its_store_never_answered():
+    """The one artifact the narrowing would otherwise strand.
+
+    A user who upgraded from 0.6.x and never signed into Microsoft has
+    this row and an unavailable Microsoft store, so the narrow rule can
+    never reach it. Naming the id is the fix; widening the store rule was
+    what let a signed-out store lose its whole library.
+    """
+    entry = _managed("microsoft:ms-auth", appid=555)
+    assert _is_stale(
+        entry, valid_app_ids=set(), valid_stores=set(),
+        launcher_path=_LAUNCHER,
+    )
+
+
+def test_legacy_sweep_does_not_override_ownership():
+    """A foreign shortcut carrying the legacy id is still not ours."""
+    entry = {
+        "appid": 555,
+        "Exe": '"/home/deck/.local/share/NonSteamLaunchers/nsl.sh"',
+        "LaunchOptions": "microsoft:ms-auth",
+        "tags": {},
+    }
+    assert not _is_stale(
+        entry, valid_app_ids=set(), valid_stores=set(),
+        launcher_path=_LAUNCHER,
+    )
+
+
+def test_legacy_sweep_and_protected_sets_are_disjoint():
+    """An id in both would resolve differently depending on call order."""
+    assert not (LEGACY_SWEEP_IDS & PROTECTED_IDS)

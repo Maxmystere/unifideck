@@ -123,16 +123,15 @@ export const GameInfoCompatRow: FC<Props> = ({
 
   // The compat row only exposes Uninstall — Install / Cancel are
   // already covered by the main play section directly above. Show
-  // it only when the game is installed and not mid-(re)download,
-  // preserving the Microsoft "not_compatible" exclusion.
-  const showAction =
-    !!game &&
-    Boolean(game.is_installed) &&
-    !isDownloading &&
-    !(
-      game.store === "microsoft" &&
-      (game.store_tags ?? []).includes("not_compatible" as never)
-    );
+  // it only when the game is installed and not mid-(re)download.
+  //
+  // A third clause used to exclude Microsoft games tagged
+  // `not_compatible`. No backend ever emitted that tag — it existed
+  // only in this expression (audit §2.8's phantom-vocabulary class),
+  // so the clause could never be false and the `as never` cast was
+  // there because the tag is absent from `GameTag` too. `is_installed`
+  // is the real gate: cloud titles are never installed.
+  const showAction = !!game && Boolean(game.is_installed) && !isDownloading;
 
   const compatColors = COMPAT_COLORS[meta.deck_compatibility];
 

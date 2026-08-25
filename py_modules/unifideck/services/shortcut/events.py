@@ -121,6 +121,49 @@ async def _update_icons_from_grid(svc: Any) -> int:
             )
     return updated
 
+
+def _sweepable_stores(payload: dict[str, Any]) -> set[str]:
+    """The stores whose stale shortcuts this sync is allowed to delete.
+
+    **A store's shortcuts may only be swept when we hold a current,
+    authoritative statement of what that store contains** — that is, the
+    store was fetched this run *and* answered without error. Everything
+    else keeps its shortcuts.
+
+    This used to read ``registered_stores`` instead: every registered
+    store was sweepable, whether or not it had answered. The reasoning was
+    sound for what it named (phantom Ubisoft rows and the legacy
+    ``microsoft:ms-auth`` row should not linger forever) but the rule was
+    far wider than the reason, and it overrode the guard
+    ``_is_stale_managed_shortcut`` documents as *"how staging avoided
+    nuking the user's Epic shortcuts after they logged out of Epic"*.
+    A store contributes zero games without owning zero games in four ways:
+    it raised, it timed out, it returned ``None`` ("I could not read"), or
+    it was unavailable and never fetched at all. Each of those deleted
+    every shortcut that store owned. The last one records no error, so it
+    was invisible in the logs too.
+
+    That is not hypothetical. GOG's ``is_available`` now refuses when
+    ``bin/gogdl`` is missing or non-executable (audit §3.2, correctly) —
+    so under the old rule a half-applied update that lost the exec bit
+    made the next sync delete every GOG shortcut in the library.
+
+    Kept deliberately: a store that answers with an *empty* library is
+    still swept, which is the phantom-row cleanup the widening existed
+    for. The cost of the narrowing is that those rows now survive until
+    the store is signed in again, which is the strictly safer failure
+    mode — a stale tile costs one sync, a deleted library costs the
+    user's library. The one artifact that cannot be reached that way is
+    handled by name; see ``protected.LEGACY_SWEEP_IDS``.
+    """
+    fetched = payload.get("stores_synced") or []
+    errors = payload.get("errors") or {}
+    if not isinstance(fetched, (list, tuple, set)):
+        return set()
+    failed = set(errors) if isinstance(errors, dict) else set()
+    return {s for s in fetched if isinstance(s, str) and s not in failed}
+
+
 if TYPE_CHECKING:
     # This is a mixin; `self` will be the ShortcutService facade
     # at runtime. The facade provides ``mark_installed``,
@@ -214,17 +257,11 @@ class EventsMixin:
         if not games:
             return
         is_force = bool(kwargs.get("is_force", False))
-        # Widen the stale-sweep to every registered store (not just the
-        # ones that returned games) so shortcuts for a logged-out or
-        # empty store — phantom Ubisoft entries, the legacy
-        # ``microsoft:ms-auth`` row — get dropped on this sync instead of
-        # lingering forever.
-        registered = kwargs.get("registered_stores")
-        valid_stores = set(registered) if registered else None
+        valid_stores = _sweepable_stores(kwargs)
         logger.info(
             "[ShortcutService] SYNC_COMPLETE → reconciling %d games "
-            "(force=%s, valid_stores=%s)",
-            len(games), is_force, sorted(valid_stores) if valid_stores else None,
+            "(force=%s, sweepable_stores=%s)",
+            len(games), is_force, sorted(valid_stores),
         )
         result = await self.reconcile(
             games, force=is_force, valid_stores=valid_stores,

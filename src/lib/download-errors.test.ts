@@ -123,6 +123,23 @@ describe("friendlyDownloadError — bare backend codes", () => {
       friendlyDownloadError("gogdl_exit_1: could not open /opt/not_found: disk space exhausted", t),
     ).toBe("errors.download.diskSpace");
   });
+
+  it("renders a store's not_supported refusal as a sentence", () => {
+    // The cloud-only store refuses install / update / uninstall outright
+    // (audit §3.5, register item 11). Unmapped, this would echo the bare
+    // token `not_supported` — the exact defect the §3.2 pass fixed for
+    // GOG's `download_failed`. Guarded even though the path is closed
+    // twice over on the way in, because that is what makes it safe to
+    // leave closed.
+    expect(friendlyDownloadError("not_supported", t)).toBe("errors.download.generic");
+  });
+
+  it("does not swallow a longer code that merely ends in not_supported", () => {
+    // Anchored both ends: a future `dlc_not_supported` is a different
+    // failure and must not inherit this string. The `_not_found$` pattern
+    // in this file already made the unanchored version of this mistake.
+    expect(friendlyDownloadError("dlc_not_supported", t)).toBe("dlc_not_supported");
+  });
 });
 
 describe("every key this maps to is translated everywhere", () => {

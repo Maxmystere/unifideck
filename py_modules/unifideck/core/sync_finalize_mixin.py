@@ -153,12 +153,17 @@ class _SyncFinalizeMixin:
         await self._bus.emit(
             Events.SYNC_COMPLETE,
             games=result.games,
+            # Every store this run actually fetched, errored or not.
+            # ``ShortcutService`` subtracts ``errors`` from this to decide
+            # whose stale shortcuts it may sweep, so the two must stay
+            # consistent — see ``shortcut/events._sweepable_stores``.
+            #
+            # A ``registered_stores`` key used to ride along here so the
+            # reconcile could sweep a store that never answered. It was
+            # removed rather than left unread: keeping it would invite the
+            # next reader to re-adopt a rule that deleted a signed-out
+            # store's entire library (audit §3.5, finding B).
             stores_synced=list(libraries.keys()),
-            # Every registered store, not just the ones that returned
-            # games — lets ShortcutService.reconcile sweep stale
-            # shortcuts for a logged-out / empty store (phantom Ubisoft
-            # entries, the legacy microsoft:ms-auth row).
-            registered_stores=self._registry.store_ids(),
             errors=errors,
             duration_ms=duration_ms,
             fetch_artwork=fetch_artwork,
