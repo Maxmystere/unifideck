@@ -35,6 +35,7 @@ from unifideck.auth.orchestrator import AuthOrchestrator
 from unifideck.core.safe_delete import canonical_prefix, safe_rmtree
 from unifideck.core.types import (
     AuthResult,
+    CLITool,
     Events,
     Game,
     InstallResult,
@@ -74,6 +75,12 @@ class GOGStore(StoreBase):
         supports_install=True,
     )
 
+    CLI_TOOL = CLITool(
+        name="gogdl",
+        search_paths=["bin/gogdl"],
+        version_flag="--version",
+    )
+
     def __init__(
         self,
         bus: EventBus,
@@ -95,6 +102,9 @@ class GOGStore(StoreBase):
         self._shortcut_service = shortcut_service
         self._edge = edge_browser
         self._tokens = GOGTokenManager(self._gog_config, bus=bus)
+        # Set before either _build_gogdl_submodules() path below, so
+        # is_available never reads an unset attribute.
+        self._gogdl_bin: str = ""
         self._build_core_components()
         # Auth is late-bound : at boot ``browser_monitor`` is
         # ``None`` (auto-discovery doesn't see the service
@@ -133,7 +143,9 @@ class GOGStore(StoreBase):
         :meth:`_rebuild_auth_after_injection` once the monitor wires in —
         ``_auth`` may have refreshed tokens in the meantime.
         """
-        gogdl_bin = self._resolve_gogdl_bin()
+        # Cached on the instance so ``is_available`` can gate on it without
+        # re-running the resolver (and its hash check) on every status poll.
+        gogdl_bin = self._gogdl_bin = self._resolve_gogdl_bin()
         self._installer = GOGInstaller(
             config=self._gog_config,
             tokens=self._tokens,
@@ -192,7 +204,20 @@ class GOGStore(StoreBase):
         logger.info("[GOGStore] auth flow wired")
 
     async def is_available(self) -> bool:
-        """Check whether available."""
+        """Check whether available.
+
+        The gogdl gate matches Epic's and Amazon's, which both refuse when
+        their CLI is missing. Without it a broken gogdl left GOG showing
+        **connected** — the library syncs fine, because that path is pure
+        HTTP — and every install then died at spawn time with a raw
+        ``OSError`` string in the download row (audit §3.2).
+        """
+        if not self._gogdl_bin:
+            logger.warning(
+                "[GOGStore] gogdl unavailable — reporting store as unavailable",
+            )
+            self._cached_available = False
+            return False
         if not self._gog_config.is_valid():
             self._cached_available = False
             return False
@@ -473,23 +498,32 @@ class GOGStore(StoreBase):
         return self._library.migrate_old_markers()
 
     def _resolve_gogdl_bin(self) -> str:
-        """Resolve GOGDL bin."""
-        if not self._plugin_dir:
-            logger.warning(
-                "[GOGStore] no plugin_dir; gogdl path unresolvable",
-            )
+        """Locate ``gogdl`` through the shared resolver, like Epic and Amazon.
+
+        This used to hardcode ``<plugin>/bin/gogdl``, ``is_file()``-check it
+        and return the path *anyway* when the check failed. Going through
+        ``StoreBase._find_binary`` restores three things the hand-rolled
+        version skipped (audit §3.2):
+
+        * the **SHA256 check** — ``binary_resolver`` verifies a Tier-1 hit
+          against ``_KNOWN_HASHES``, which already carries a ``gogdl`` entry
+          that nothing was ever comparing against. A half-applied update or
+          a hand-swapped binary now costs one ERROR line instead of days of
+          triage aimed at "GOG is broken";
+        * the **executable-bit test** — ``is_file()`` passes on a file whose
+          exec bit was lost in transit (the exact case
+          ``scripts/ensure_executable_bits.py`` exists for), where the
+          resolver skips it and falls through;
+        * **Tier 2/3 fallback** to ``PATH`` and ``~/.local/bin``.
+
+        Returns ``""`` when nothing was found, which ``is_available`` reads
+        as "this store cannot install" — the same gate Epic and Amazon have.
+        """
+        path = self._find_binary(self.CLI_TOOL)
+        if not path:
+            logger.warning("[GOGStore] gogdl binary not found in any tier")
             return ""
-        path = str(Path(self._plugin_dir) / "bin" / "gogdl")
-        if not Path(path).is_file():
-            logger.warning(
-                "[GOGStore] gogdl binary not found at %s",
-                path,
-            )
-        else:
-            logger.info(
-                "[GOGStore] using gogdl at %s",
-                path,
-            )
+        logger.info("[GOGStore] using gogdl at %s", path)
         return path
 
     def _browser_monitor_from_auth(self) -> OAuthBrowserMonitor | None:

@@ -28,14 +28,17 @@ shortly after any rotation.
 
 from __future__ import annotations
 
+import json
 import logging
 import stat
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from unifideck.security import emit_permissions_check
+from unifideck.security import emit_external_auth_check_failed, emit_permissions_check
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from unifideck.event_bus.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
@@ -53,6 +56,66 @@ _TOO_OPEN = stat.S_IRWXG | stat.S_IRWXO
 #: diagnosis. The rename preserves the original mode, so those copies are
 #: world-readable too — and they still contain the credentials.
 _QUARANTINE_GLOB = "{name}.corrupt-*"
+
+
+def read_cli_user_json(
+    store: str,
+    cli_path: str | None,
+    user_file: str,
+    bus: EventBus,
+    *,
+    validate: Callable[[dict[str, Any]], bool],
+) -> bool:
+    """Is this CLI store signed in? Reads and hardens its ``user.json``.
+
+    Epic and Amazon both answer "am I authenticated?" the same way — the
+    bundled CLI must be resolvable, its ``user.json`` must exist, parse, and
+    be a JSON object, and one store-specific key must be present inside it.
+    That was ~35 structurally identical lines duplicated across
+    ``epic/store.py`` and ``amazon_store.py``, differing in exactly three
+    places: the store label, the config key (resolved by the caller), and the
+    final predicate. Those three are the parameters here (audit §3.2).
+
+    The risk this closes is a change made to one copy and not the other, which
+    has already happened once: ``nile`` is pinned at 1.1.2 specifically
+    because 1.2.0 deletes the very ``user.json`` the Amazon copy reads, and
+    nothing structural connected that constraint to Epic's identical reader.
+
+    ``validate`` receives the parsed object and returns whether it represents
+    a signed-in user. Every failure path emits the same
+    ``SECURITY_EXTERNAL_AUTH_CHECK_FAILED`` audit reason both copies emitted,
+    so the support bundle's security block is unchanged. Returns ``False``
+    rather than raising: this runs on the store-status refresh, where an
+    exception surfaces as a spurious "signed out".
+    """
+    if not cli_path:
+        emit_external_auth_check_failed(
+            bus, store, "cli_not_found",
+            f"{store} CLI binary missing from search paths",
+        )
+        return False
+    path = Path(user_file)
+    if not path.is_file():
+        return False
+    # The CLI rewrites user.json at 0644 on every token refresh, so tighten
+    # here — the path that runs on each status refresh — rather than once at
+    # sign-in. Cheap: a stat, and a chmod only on drift.
+    harden_cli_credential_file(str(path), store, bus)
+    try:
+        with path.open(encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        logger.debug("[%s] user.json invalid: %s", store, e)
+        emit_external_auth_check_failed(
+            bus, store, "parse_error", f"{type(e).__name__}",
+        )
+        return False
+    if not isinstance(data, dict):
+        emit_external_auth_check_failed(
+            bus, store, "malformed_payload", "not a JSON object",
+        )
+        return False
+    return validate(data)
 
 
 def harden_cli_credential_file(

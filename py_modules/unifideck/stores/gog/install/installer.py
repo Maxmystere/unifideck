@@ -41,7 +41,7 @@ from unifideck.stores.gog.tokens import GOGTokenManager
 from .helpers import _InstallHelpers
 from .marker import _PostInstallMarker
 from .planner import GOGInstallPlanner
-from .progress import _GogdlProgressMonitor
+from .progress import _GogdlProgressMonitor, format_gogdl_error
 from .uninstall_pipeline import _UninstallPipeline
 
 logger = logging.getLogger(__name__)
@@ -98,27 +98,6 @@ class GOGInstaller:
         return await self._uninstall_pipeline.uninstall_game(
             game_id,
             install_path,
-        )
-
-    async def _run_gogdl_with_progress(
-        self,
-        install_mode: str,
-        game_id: str,
-        platform: str,
-        path: str,
-        support_dir: str,
-        languages: list[str],
-        progress_cb: Callable[[dict[str, Any]], Awaitable[None]] | None,
-    ) -> bool:
-        """Run GOGDL with progress."""
-        return await self._progress_monitor.run_gogdl_with_progress(
-            install_mode,
-            game_id,
-            platform,
-            path,
-            support_dir,
-            languages,
-            progress_cb,
         )
 
     async def _run_gogdl_repair_pass(
@@ -338,7 +317,7 @@ class GOGInstaller:
             ctx.supported_langs,
         )
         started_as_repair = ctx.install_mode == "repair"
-        download_ok = await self._run_gogdl_with_progress(
+        outcome = await self._progress_monitor.run_gogdl_with_progress(
             install_mode=ctx.install_mode,
             game_id=ctx.game_id,
             platform=ctx.platform,
@@ -347,7 +326,7 @@ class GOGInstaller:
             languages=languages,
             progress_cb=ctx.progress_cb,
         )
-        if not download_ok and started_as_repair:
+        if not outcome.ok and started_as_repair:
             # ``repair`` couldn't verify (e.g. the local manifest is missing or
             # stale). Don't treat the existing valid install as a failed partial
             # download — retry as a manifest-driven ``download`` that writes in
@@ -358,7 +337,7 @@ class GOGInstaller:
                 ctx.game_id,
             )
             ctx.install_mode = "download"
-            download_ok = await self._run_gogdl_with_progress(
+            outcome = await self._progress_monitor.run_gogdl_with_progress(
                 install_mode="download",
                 game_id=ctx.game_id,
                 platform=ctx.platform,
@@ -367,13 +346,18 @@ class GOGInstaller:
                 languages=languages,
                 progress_cb=ctx.progress_cb,
             )
-        if not download_ok:
+        if not outcome.ok:
             # Never delete a pre-existing valid install just because a repair
             # (and its download fallback) failed — only clean up a partial
             # FRESH download.
+            #
+            # The error carries gogdl's own last lines, not a bare
+            # ``download_failed``: the frontend classifier reads the message
+            # text, so this is what turns a full disk or a dropped connection
+            # into a translated string instead of a raw machine token.
             return self._install_failed(
                 ctx.game_id,
-                "download_failed",
+                format_gogdl_error(outcome),
                 cleanup_path=None if started_as_repair else ctx.base_path,
                 cleanup_folder=None if started_as_repair else ctx.folder_name,
             )

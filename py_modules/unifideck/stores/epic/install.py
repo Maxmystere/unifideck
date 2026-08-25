@@ -42,10 +42,13 @@ from unifideck.core.types import Events, InstallResult, Result
 from unifideck.event_bus.event_bus import EventBus
 from unifideck.stores.shared import dlc
 from unifideck.stores.shared.cli_install_helpers import (
+    DEFAULT_STALL_TIMEOUT_S,
+    InstallStalledError,
     TailRingBuffer,
     drain_install_output,
+    join_tail,
     parse_eta_seconds,
-    parse_progress_line,
+    parse_percent_re,
     parse_speed_bps,
     terminate_process_tree,
     wait_with_timeout,
@@ -314,19 +317,27 @@ class EpicInstaller:
             env=clean_cli_env(),
         )
         tail_buf = TailRingBuffer()
+        stalled: InstallStalledError | None = None
         drain_exc: BaseException | None = None
         try:
             await self._drain_install_output(proc, game_id, progress_cb, tail_buf)
+        except InstallStalledError as e:
+            stalled = e
         except BaseException as e:
             drain_exc = e
-        if drain_exc is not None:
+        if stalled is not None or drain_exc is not None:
             # Cancelling the download task only unwinds *our* coroutine —
             # legendary keeps running, and its multiprocessing children
             # keep legendary's install lock held, which makes every later
             # install exit 0 without installing. Kill the tree before
-            # propagating, or a cancel poisons the whole queue.
+            # propagating, or a cancel poisons the whole queue. A stall
+            # takes the same exit: the queue is serial, so a wedged
+            # legendary blocks every game behind it until it is killed.
             await terminate_process_tree(proc, "[epic_install]")
+        if drain_exc is not None:
             raise drain_exc
+        if stalled is not None:
+            return _RunOutcome(rc=-1, tail=join_tail(str(stalled), tail_buf))
         rc = await self._wait_with_timeout(proc)
         return _RunOutcome(rc=rc, tail=tail_buf.tail())
 
@@ -372,6 +383,7 @@ class EpicInstaller:
             game_id,
             progress_cb,
             functools.partial(self._handle_install_line, tail_buf=tail_buf),
+            stall_s=DEFAULT_STALL_TIMEOUT_S,
         )
 
     async def _wait_with_timeout(self, proc: Any) -> int:
@@ -414,7 +426,7 @@ class EpicInstaller:
             tail_buf.append(line)
             logger.debug("[legendary install] %s", line)
             return
-        pct = parse_progress_line(line, _PROGRESS_RE)
+        pct = parse_percent_re(line, _PROGRESS_RE)
         if pct is None:
             return
         update: dict[str, Any] = {"percentage": pct}

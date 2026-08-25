@@ -27,7 +27,6 @@ appropriate sub-component.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import socket
 from pathlib import Path
@@ -45,9 +44,8 @@ from unifideck.core.types import (
     Result,
     StoreInfo,
 )
-from unifideck.security import emit_external_auth_check_failed
 from unifideck.services.shortcut import ShortcutService
-from unifideck.stores.shared.cli_credentials import harden_cli_credential_file
+from unifideck.stores.shared.cli_credentials import read_cli_user_json
 from unifideck.stores.shared.store_base import StoreBase
 from unifideck.utils.config_helpers import get_cfg
 
@@ -195,47 +193,24 @@ class EpicStore(StoreBase):
         return ok
 
     def _check_legendary_authenticated(self) -> bool:
-        """Check LEGENDARY authenticated."""
-        if not self.cli_path:
-            emit_external_auth_check_failed(
-                self._bus,
-                "epic",
-                "cli_not_found",
-                "legendary binary missing from search paths",
-            )
-            return False
-        user_file = str(Path(get_cfg(
+        """Check LEGENDARY authenticated.
+
+        The read, the permission hardening and the audit emits are shared
+        with Amazon in ``stores/shared/cli_credentials`` — the two were
+        near-identical readers differing only in the store label, the config
+        key and the predicate below (audit §3.2).
+        """
+        return read_cli_user_json(
+            "epic",
+            self.cli_path,
+            str(Path(get_cfg(
                 self._config,
                 "stores.epic.user_file",
                 "~/.config/legendary/user.json",
-            )).expanduser())
-        if not Path(user_file).is_file():
-            return False
-        # legendary rewrites user.json at 0644 on every token refresh, so
-        # tighten here (the path that runs on each status refresh) rather
-        # than once at sign-in. Cheap: a stat, and a chmod only on drift.
-        harden_cli_credential_file(user_file, "epic", self._bus)
-        try:
-            with Path(user_file).open(encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, json.JSONDecodeError) as e:
-            logger.debug("[EpicStore] user.json invalid: %s", e)
-            emit_external_auth_check_failed(
-                self._bus,
-                "epic",
-                "parse_error",
-                f"{type(e).__name__}",
-            )
-            return False
-        if not isinstance(data, dict):
-            emit_external_auth_check_failed(
-                self._bus,
-                "epic",
-                "malformed_payload",
-                "not a JSON object",
-            )
-            return False
-        return "access_token" in data
+            )).expanduser()),
+            self._bus,
+            validate=lambda data: "access_token" in data,
+        )
 
     async def get_game_achievements(
         self, game_id: str, force: bool = False,

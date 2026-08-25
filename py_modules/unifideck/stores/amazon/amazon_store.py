@@ -25,7 +25,6 @@ appropriate sub-component.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -41,9 +40,8 @@ from unifideck.core.types import (
     Result,
     StoreInfo,
 )
-from unifideck.security import emit_external_auth_check_failed
 from unifideck.services.shortcut import ShortcutService
-from unifideck.stores.shared.cli_credentials import harden_cli_credential_file
+from unifideck.stores.shared.cli_credentials import read_cli_user_json
 from unifideck.stores.shared.store_base import StoreBase
 from unifideck.utils.config_helpers import get_cfg
 
@@ -162,44 +160,30 @@ class AmazonStore(StoreBase):
         return ok
 
     def _check_nile_authenticated(self) -> bool:
-        """Check NILE authenticated."""
-        if not self.cli_path:
-            emit_external_auth_check_failed(
-                self._bus,
-                "amazon",
-                "cli_not_found",
-                "nile binary missing from search paths",
-            )
-            return False
-        user_file = str(Path(get_cfg(
+        """Check NILE authenticated.
+
+        Shares its reader with Epic (``stores/shared/cli_credentials``),
+        including the 0600 hardening that also covers
+        ``quarantine_corrupt_user_file``'s ``.corrupt-*`` copies — a rename
+        preserves the original mode, and those copies still hold live
+        credentials.
+
+        One behaviour gained by sharing: the object check. This copy called
+        ``data.get`` on whatever ``json.load`` returned, so a ``user.json``
+        holding a JSON *array* raised ``AttributeError`` out of the
+        store-status path. Epic's copy had the guard; now both do.
+        """
+        return read_cli_user_json(
+            "amazon",
+            self.cli_path,
+            str(Path(get_cfg(
                 self._config,
                 "stores.amazon.user_file",
                 "~/.config/nile/user.json",
-            )).expanduser())
-        if not Path(user_file).is_file():
-            return False
-        # nile rewrites user.json at 0644 on every token refresh, and
-        # ``quarantine_corrupt_user_file`` leaves ``.corrupt-*`` copies at
-        # that same mode. Tighten both here, on the path that runs at every
-        # status refresh, so a rotation cannot leave them world-readable.
-        harden_cli_credential_file(user_file, "amazon", self._bus)
-        try:
-            with Path(user_file).open(encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, json.JSONDecodeError) as e:
-            logger.debug(
-                "[AmazonStore] user.json invalid: %s",
-                e,
-            )
-            emit_external_auth_check_failed(
-                self._bus,
-                "amazon",
-                "parse_error",
-                f"{type(e).__name__}",
-            )
-            return False
-        extensions = data.get("extensions", {})
-        return "customer_info" in extensions
+            )).expanduser()),
+            self._bus,
+            validate=lambda data: "customer_info" in data.get("extensions", {}),
+        )
 
     async def prepare_web_session(self) -> Result:
         """Give the browser a signed-in amazon.com before the shop opens.

@@ -41,26 +41,29 @@ from unifideck.core.safe_delete import canonical_prefix, safe_rmtree
 from unifideck.core.types import Events, InstallResult, Result
 from unifideck.event_bus.event_bus import EventBus
 from unifideck.stores.shared.cli_install_helpers import (
+    DEFAULT_STALL_TIMEOUT_S,
+    InstallStalledError,
     TailRingBuffer,
     drain_install_output,
-    parse_progress_line,
+    join_tail,
+    parse_percent_re,
+    parse_transfer_progress,
+    terminate_process_tree,
     wait_with_timeout,
 )
 
 from . import amazon_fuel
 from .amazon_library import AmazonLibraryReader
-from .amazon_progress import parse_progress_line as parse_nile_progress
 
 logger = logging.getLogger(__name__)
 # Nile's ProgressBar emits lines like:
 #   = Progress: 42.50 123456789/987654321, Running for: 00:01:30, ETA: ...
-# The old regex (`\[\s*(\d+)\s*%\s*\]`) expected `[ 42% ]` which nile
-# never produces, so zero progress was ever captured.
-# New primary regex matches nile's actual format; the fallback covers
-# any tool that emits `[ NN% ]` brackets (e.g. future CLI updates).
-_PROGRESS_RE = re.compile(r"Progress:\s*([\d.]+)")
+# which is byte-for-byte the shape gogdl emits, so ``parse_transfer_progress``
+# handles both (audit §3.2 — this used to be two near-verbatim copies).
+# The bracket regex is a fallback for any tool that emits `[ NN% ]`.
 _PROGRESS_RE_BRACKET = re.compile(r"\[\s*([\d.]+)\s*%\s*\]")
 ProgressCallback = Callable[[Any], Awaitable[None]]
+
 
 
 @dataclass
@@ -270,6 +273,7 @@ class AmazonInstaller:
             logger.exception("[AmazonInstall] cannot spawn %s", cmd[0])
             return _RunOutcome(rc=-2, spawn_error=str(e))
         tail_buf = TailRingBuffer()
+        stalled: InstallStalledError | None = None
         drain_exc: BaseException | None = None
         try:
             await self._drain_install_output(
@@ -278,11 +282,25 @@ class AmazonInstaller:
                 progress_cb,
                 tail_buf,
             )
+        except InstallStalledError as e:
+            stalled = e
         except BaseException as e:
             drain_exc = e
-        rc = await self._wait_with_timeout(proc)
+        if stalled is not None or drain_exc is not None:
+            # Kill the tree BEFORE waiting, which is the whole fix here.
+            # Cancelling this task only unwinds our coroutine; nile keeps
+            # running and keeps writing into the game directory after the
+            # row already reads "Cancelled". Worse, the wait below used to
+            # come first, so a cancel blocked for the full install timeout
+            # (an hour) — and ``DownloadService.cancel`` awaits this task,
+            # so the cancel RPC itself hung with it. Epic has always had
+            # these two steps in this order.
+            await terminate_process_tree(proc, "[amazon_install]")
         if drain_exc is not None:
             raise drain_exc
+        if stalled is not None:
+            return _RunOutcome(rc=-1, tail=join_tail(str(stalled), tail_buf))
+        rc = await self._wait_with_timeout(proc)
         return _RunOutcome(rc=rc, tail=tail_buf.tail())
 
     def _build_install_cmd(self, base: str, game_id: str, verb: str = "install") -> list[str]:
@@ -318,6 +336,7 @@ class AmazonInstaller:
             game_id,
             progress_cb,
             functools.partial(self._handle_install_line, tail_buf=tail_buf),
+            stall_s=DEFAULT_STALL_TIMEOUT_S,
         )
 
     async def _wait_with_timeout(self, proc: Any) -> int:
@@ -342,10 +361,10 @@ class AmazonInstaller:
         ``tail_buf`` so a failing install can surface the real reason
         instead of a bare exit code.
         """
-        updated = parse_nile_progress(line, self._current_progress)
+        updated = parse_transfer_progress(line, self._current_progress)
         if not updated:
             # Fallback to check bracket format
-            pct = parse_progress_line(line, _PROGRESS_RE_BRACKET)
+            pct = parse_percent_re(line, _PROGRESS_RE_BRACKET)
             if pct is not None:
                 self._current_progress["progress_percent"] = pct
                 updated = True
