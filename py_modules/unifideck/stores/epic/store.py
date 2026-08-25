@@ -80,7 +80,6 @@ class EpicStore(StoreBase):
         display_name="Epic Games",
         auth_method="oauth",
         icon_asset="epic.png",
-        uses_wine=False,
         supports_install=True,
     )
 

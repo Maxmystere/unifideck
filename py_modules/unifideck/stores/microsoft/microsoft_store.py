@@ -38,7 +38,6 @@ class MicrosoftStore(StoreBase):
         display_name="Microsoft",
         auth_method="oauth",
         icon_asset="microsoft.png",
-        uses_wine=False,
         supports_install=False,
     )
 

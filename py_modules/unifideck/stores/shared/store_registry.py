@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from unifideck.core.types import Events, Result, StoreError
+from unifideck.launcher.wrapper_stores import is_wrapper_store
 
 if TYPE_CHECKING:
     from unifideck.config import ConfigManager
@@ -294,12 +295,23 @@ class StoreRegistry:
         """Check whether s."""
         return store_id in self._stores
     def get_store_infos(self) -> list[dict[str, Any]]:
-        """Get store infos."""
+        """Static descriptor plus the two derived keys, per store.
+
+        ``available`` and ``client_runs_in_prefix`` are injected here
+        rather than declared on ``StoreInfo``: the first is live probe
+        state, the second is owned by ``WRAPPER_STORES``. It was once a
+        per-store ``uses_wine`` field — a second hand-maintained copy of
+        the wrapper-store set that nothing read (audit §3.1). Derive it
+        in one place so the two can never disagree.
+        """
         infos = []
         for store in self._stores.values():
             info = asdict(store.store_info)
             info["available"] = getattr(
                 store, "_cached_available", False,
+            )
+            info["client_runs_in_prefix"] = is_wrapper_store(
+                store.store_info.name,
             )
             infos.append(info)
         return infos

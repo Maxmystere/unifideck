@@ -67,7 +67,6 @@ class BattlenetStore(WrapperSessionHooks, StoreBase):
         display_name="Battle.net",
         auth_method="shortcut",
         icon_asset="battlenet.png",
-        uses_wine=True,
         supports_install=True,
         supports_cloud_saves=False,
     )

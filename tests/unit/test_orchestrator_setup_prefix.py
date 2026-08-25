@@ -116,8 +116,12 @@ async def test_dispatch_does_not_run_compat(monkeypatch):
     monkeypatch.setattr(compat_pkg, "apply_prefix_compat", compat_spy)
     monkeypatch.setattr(proton_pkg, "repair_incomplete_umu_runtime", MagicMock())
 
+    # Patch the routing table, not the module-level name: ``dispatch`` reads
+    # ``_STORE_LAUNCHERS``, which binds the handlers at import. Patching
+    # ``proton_pkg.epic_launch`` would leave the real handler in the map and
+    # silently test nothing.
     epic_spy = AsyncMock(return_value=0)
-    monkeypatch.setattr(proton_pkg, "epic_launch", epic_spy)
+    monkeypatch.setitem(proton_pkg._STORE_LAUNCHERS, "epic", epic_spy)
 
     plan = SimpleNamespace(context=SimpleNamespace(store="epic"))
     rc = await proton_pkg.dispatch(plan)

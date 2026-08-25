@@ -16,10 +16,18 @@ machine-enforcing rather than re-discovering by hand every release:
    single code source of truth; it must match the store subdirectories
    on disk.
 
-3. The wrapper/CLI distinction is maintained in two hand-written tables:
-   each store's ``StoreInfo(uses_wine=...)`` and the ``WRAPPER_STORES``
-   frozenset in ``launcher/wrapper_stores.py``. Nothing links them, so a
-   new store can set one without the other.
+3. A store's ``StoreInfo.name`` must match its directory, since the registry
+   auto-discovers by directory and every other check keys on that name.
+
+   This check used to have a second arm, comparing each store's
+   ``StoreInfo(uses_wine=...)`` against ``WRAPPER_STORES``. Audit §3.1 asked
+   for that link; re-deriving it found ``uses_wine`` had no reader anywhere,
+   so the gate was enforcing agreement on a value that could not change
+   behaviour. The field is gone and ``get_store_infos`` derives
+   ``client_runs_in_prefix`` from ``WRAPPER_STORES``, which makes the arm
+   unfailable — a re-added literal now raises ``TypeError`` at construction.
+   Check 9 replaces it with the wrapper-store link that was actually
+   unguarded.
 
 4. RPC methods accumulate with no frontend caller. The 2026-08 audit found
    29 of 102 — 28% of the surface — including a whole "DiagnosticsPanel"
@@ -69,6 +77,14 @@ machine-enforcing rather than re-discovering by hand every release:
    ``compatibility`` (the ProtonDB path) and ``support_bundle`` (Capture
    Logs) both invisible. Check 8 asserts membership rather than trusting a
    hand-maintained table, since those drift exactly the way a count does.
+
+9. Adding a wrapper store means adding a row in several hand-written
+   dispatch maps, and a missing row fails silently rather than loudly. The
+   Python-side maps are pinned by tests (``wrapper_prefix_probe._SPECS``,
+   ``tests/unit/test_wrapper_store_dispatch_coverage.py``); the frontend's
+   ``CLIENT_STOREFRONTS`` in ``services/store/StorefrontLauncher.ts`` is not
+   reachable from pytest, so it is checked here. A wrapper store missing
+   from it makes the cart button do nothing at all — no error, no toast.
 
 Checks 5 to 7 share one scanner, ``scan_prose``. Their regexes are narrow on
 purpose and each carries the false positive that shaped it: a gate that fires
@@ -293,22 +309,38 @@ def find_store_file(stores_path: Path, name: str) -> Path | None:
     return None
 
 
-def parse_store_info(store_file: Path) -> tuple[str | None, bool]:
-    """Return ``(name, uses_wine)`` from a store's ``StoreInfo(...)`` block.
-
-    ``uses_wine`` defaults to ``False`` (the dataclass default) when the
-    descriptor omits it, matching ``core/types/domain.py``.
-    """
+def parse_store_info(store_file: Path) -> str | None:
+    """Return the ``name=`` declared in a store's ``StoreInfo(...)`` block."""
     text = store_file.read_text()
     match = re.search(r"store_info\s*=\s*StoreInfo\((.*?)\n\s*\)", text, flags=re.DOTALL)
     if not match:
-        return None, False
-    block = match.group(1)
-    name_match = re.search(r'name\s*=\s*"([^"]+)"', block)
-    name = name_match.group(1) if name_match else None
-    wine_match = re.search(r"uses_wine\s*=\s*(True|False)", block)
-    uses_wine = wine_match.group(1) == "True" if wine_match else False
-    return name, uses_wine
+        return None
+    name_match = re.search(r'name\s*=\s*"([^"]+)"', match.group(1))
+    return name_match.group(1) if name_match else None
+
+
+def parse_client_storefronts(storefront_launcher_path: Path) -> set[str]:
+    """Return the store ids keyed in ``CLIENT_STOREFRONTS``.
+
+    The frontend's map of "stores whose shop is a tab inside their own
+    Windows client" — i.e. the wrapper stores, restated in TypeScript where
+    no pytest can reach it.
+    """
+    text = storefront_launcher_path.read_text()
+    # ``.*?=\s*\{`` rather than ``[^=]*=``: the declaration's type annotation
+    # is ``Partial<Record<StoreId, () => Promise<...>>>``, so a no-equals scan
+    # stops inside the arrow. ``=\s*\{`` cannot match ``=>`` (no ``{`` after
+    # it), so the first hit is the real assignment.
+    match = re.search(
+        r"const CLIENT_STOREFRONTS\b.*?=\s*\{(.*?)\n\};", text, flags=re.DOTALL
+    )
+    if not match:
+        raise SystemExit(
+            f"{storefront_launcher_path}: could not locate CLIENT_STOREFRONTS"
+        )
+    # Keys sit at exactly two spaces of indent; the arrow bodies below them are
+    # indented four, so this cannot pick up a call argument by mistake.
+    return set(re.findall(r"^ {2}(\w+):", match.group(1), flags=re.M))
 
 
 NO_CALLER_RE = re.compile(r"#\s*no-frontend-caller:\s*\S")
@@ -619,30 +651,27 @@ def main() -> int:
     else:
         print(f"OK: {len(canonical_stores)} stores agree (cache registry == disk)")
 
-    # Check 3: uses_wine == WRAPPER_STORES membership, per store.
-    wrapper_set = parse_wrapper_stores(wrapper_stores)
+    # Check 3: StoreInfo.name == its directory name, per store.
+    name_failures = 0
     for name in sorted(discovered):
         store_file = find_store_file(stores_path, name)
         if store_file is None:
-            hard_failures += 1
+            name_failures += 1
             _fail(f"store '{name}': no store module found")
             continue
-        declared_name, uses_wine = parse_store_info(store_file)
+        declared_name = parse_store_info(store_file)
         if declared_name is not None and declared_name != name:
-            hard_failures += 1
+            name_failures += 1
             _fail(
                 f"store '{name}': StoreInfo.name = '{declared_name}' "
                 f"(should match directory)"
             )
-        expected_wrapper = name in wrapper_set
-        if uses_wine != expected_wrapper:
-            hard_failures += 1
-            _fail(
-                f"store '{name}': uses_wine={uses_wine} but "
-                f"WRAPPER_STORES membership is {expected_wrapper}"
-            )
-    if hard_failures == 0:
-        print("OK: uses_wine agrees with WRAPPER_STORES for every store")
+    hard_failures += name_failures
+    if name_failures == 0:
+        # Counted separately rather than off the running total: gating this
+        # line on ``hard_failures == 0`` meant a check-1 or check-2 failure
+        # silently suppressed check 3's own result.
+        print(f"OK: StoreInfo.name matches its directory for all {len(discovered)} stores")
 
     # Check 4 (hard): dead RPC.
     methods = collect_rpc_methods(mixins_dir)
@@ -735,6 +764,28 @@ def main() -> int:
         )
     else:
         print("OK: every services/, core/ and event_bus/ module is documented")
+
+    # Check 9 (hard): the frontend's wrapper-store map covers WRAPPER_STORES.
+    wrapper_set = parse_wrapper_stores(wrapper_stores)
+    storefronts = parse_client_storefronts(
+        SRC / "services" / "store" / "StorefrontLauncher.ts"
+    )
+    if storefronts != wrapper_set:
+        hard_failures += 1
+        _fail(
+            "wrapper storefront drift: CLIENT_STOREFRONTS = "
+            f"{sorted(storefronts)} but WRAPPER_STORES = {sorted(wrapper_set)}"
+        )
+        print(
+            "\n  A wrapper store missing from CLIENT_STOREFRONTS makes its cart\n"
+            "  button do nothing — hasStorefront() returns false and the press\n"
+            "  is dropped with no error and no toast. A non-wrapper store\n"
+            "  present there opens a Windows client that store does not have."
+        )
+    else:
+        print(
+            f"OK: CLIENT_STOREFRONTS covers all {len(wrapper_set)} wrapper stores"
+        )
 
     if hard_failures:
         print(f"\n{hard_failures} architecture invariant(s) violated")

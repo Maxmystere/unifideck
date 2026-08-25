@@ -67,7 +67,6 @@ class AmazonStore(StoreBase):
         display_name="Amazon Games",
         auth_method="oauth",
         icon_asset="amazon.png",
-        uses_wine=False,
         supports_install=True,
     )
     CLI_TOOL = CLITool(

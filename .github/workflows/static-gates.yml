@@ -46,8 +46,9 @@ concurrency:
 jobs:
   # ── Architecture invariants ────────────────────────────────
   # main.py mixin set vs rpc/mixins/__init__.py __all__; _STORE_CACHES vs
-  # store directories on disk; each store's uses_wine vs WRAPPER_STORES; RPC
-  # methods with no frontend caller; and a mixin count written into prose.
+  # store directories on disk; each store's StoreInfo.name vs its directory;
+  # RPC methods with no frontend caller; a mixin count written into prose;
+  # and the frontend's CLIENT_STOREFRONTS vs WRAPPER_STORES.
   # Every check is hard. See the unifideck-drift-guard skill.
   architecture:
     name: architecture invariants

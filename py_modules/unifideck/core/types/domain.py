@@ -71,6 +71,19 @@ class StoreInfo:
     frontend can render the per-store badges + capability
     chips without RPC round-trips per store.
 
+    **Two payload keys are deliberately NOT fields here.**
+    ``get_store_infos`` injects ``available`` (live probe
+    state) and ``client_runs_in_prefix`` (derived from
+    ``launcher.wrapper_stores.WRAPPER_STORES``) into the dict
+    it builds. ``client_runs_in_prefix`` used to be a
+    hand-written ``uses_wine`` field on every store, a second
+    copy of a fact ``WRAPPER_STORES`` already owned — see
+    audit §3.1. Deriving it is only possible outside this
+    module: ``core.types`` may not import ``launcher`` (the
+    ``types-is-leaf`` import-linter contract). Leaving it off
+    the dataclass is what makes re-adding the copy fail loudly
+    at construction instead of being silently overwritten.
+
     Attributes:
         name: internal id (``"epic"``).
         display_name: localised name shown to the user
@@ -78,8 +91,6 @@ class StoreInfo:
         auth_method: identifier used by the auth UI (e.g.
             ``"oauth"``, ``"cdp"``).
         icon_asset: asset path or URL of the store logo.
-        uses_wine: True for Windows-only stores running
-            under Proton/Wine.
         supports_install: True if the store can install games
             locally (False for streaming-only services).
         supports_cloud_saves: True if the store has its own
@@ -91,7 +102,6 @@ class StoreInfo:
     display_name: str
     auth_method: str
     icon_asset: str
-    uses_wine: bool = False
     supports_install: bool = True
     supports_cloud_saves: bool = False
 

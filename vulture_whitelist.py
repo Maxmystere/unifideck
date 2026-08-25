@@ -119,11 +119,18 @@ GameStatsResult  # noqa: F821
 DailyTotal  # noqa: F821
 
 # ── Dataclass field names (StoreInfo & friends) ──────────────────
-# StoreInfo fields are read through attribute access by every store;
-# vulture flags the field declaration as unused.
+# Declared on a dataclass and reached through attribute access or
+# ``asdict``; vulture flags the field declaration as unused.
+#
+# Do not read this comment as proof any individual name has a live
+# reader. ``uses_wine`` sat here for a release on that assumption and
+# had none anywhere — backend, launcher, frontend or tests (audit
+# §3.1). It is now derived in ``StoreRegistry.get_store_infos`` from
+# ``WRAPPER_STORES``. Audit register item 26 records that the four
+# names below are in the same position: they reach the frontend
+# through ``asdict`` and nothing there reads them.
 auth_method  # noqa: F821
 icon_asset  # noqa: F821
-uses_wine  # noqa: F821
 supports_install  # noqa: F821
 supports_cloud_saves  # noqa: F821
 min_version  # noqa: F821

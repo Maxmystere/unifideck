@@ -83,8 +83,9 @@ jobs:
 
       # Static architecture-invariant gate: main.py mixin set vs
       # rpc/mixins/__init__.py __all__, store list (cache_registry vs disk),
-      # uses_wine vs WRAPPER_STORES, dead RPC methods, and hardcoded mixin
-      # counts in prose. Every check is hard: exits 1 on any mismatch. See
+      # StoreInfo.name vs its directory, dead RPC methods, hardcoded mixin
+      # counts in prose, and the frontend's CLIENT_STOREFRONTS vs
+      # WRAPPER_STORES. Every check is hard: exits 1 on any mismatch. See
       # the unifideck-drift-guard skill.
       - name: Validate architecture invariants
         run: python3 scripts/validate_architecture.py

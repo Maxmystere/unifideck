@@ -62,7 +62,6 @@ class UbisoftStore(StoreBase):
         display_name="Ubisoft",
         auth_method="shortcut",
         icon_asset="ubisoft.png",
-        uses_wine=True,
         supports_install=True,
     )
 

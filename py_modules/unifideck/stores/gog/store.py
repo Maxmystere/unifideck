@@ -71,7 +71,6 @@ class GOGStore(StoreBase):
         display_name="GOG",
         auth_method="oauth",
         icon_asset="gog.png",
-        uses_wine=False,
         supports_install=True,
     )
 

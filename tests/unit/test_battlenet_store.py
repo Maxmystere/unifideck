@@ -21,6 +21,7 @@ import pytest
 from _wine_session import token_of, write_registry
 
 from unifideck.launcher import wrapper_session as ws
+from unifideck.launcher.wrapper_stores import is_wrapper_store
 from unifideck.stores.battlenet import BattlenetStore
 from unifideck.stores.battlenet import paths as bpaths
 from unifideck.stores.battlenet.library import build_library
@@ -120,10 +121,14 @@ def test_satisfies_the_storebase_contract() -> None:
 def test_store_info_declares_a_wine_wrapper_store() -> None:
     info = BattlenetStore.store_info
     assert info.name == "battlenet"
-    assert info.uses_wine is True
     assert info.supports_install is True
     # No cloud-save strategy exists: Blizzard progress is server-side.
     assert info.supports_cloud_saves is False
+    # Wrapper-ness is NOT declared here. It is owned by WRAPPER_STORES and
+    # derived into the payload by get_store_infos (audit §3.1), so asserting
+    # it off the descriptor would restore the second copy this removed.
+    assert not hasattr(info, "uses_wine")
+    assert is_wrapper_store(info.name)
 
 
 def test_module_layout_is_auto_discoverable() -> None:

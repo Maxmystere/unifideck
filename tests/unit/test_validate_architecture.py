@@ -41,7 +41,11 @@ What is pinned:
    passes, subset statements are untouched, and the same figure fails once
    the store count moves under it;
 7. check 8 names a subpackage absent from the layer map, skips ``__init__``
-   and ``__pycache__``, and stays silent when the doc itself is missing.
+   and ``__pycache__``, and stays silent when the doc itself is missing;
+8. check 9 reads the real ``CLIENT_STOREFRONTS`` declaration shape — whose
+   generic parameter contains ``=>`` and broke a first cut — catches a
+   dropped wrapper store, and raises rather than reporting an empty set when
+   the map is renamed away.
 
 The clean-tree case runs the script as a subprocess against the real repo.
 The failure cases build a throwaway mirror of the repo — symlinks for every
@@ -151,12 +155,13 @@ def test_every_check_reports(script_path: Path) -> None:
     for expected in (
         "mixins composed == __all__",
         "stores agree (cache registry == disk)",
-        "uses_wine agrees with WRAPPER_STORES",
+        "StoreInfo.name matches its directory",
         "have a frontend caller",
         "no mixin count restated in prose",
         "no layer count restated in prose",
         "every prose store count agrees",
         "module is documented",
+        "CLIENT_STOREFRONTS covers all",
     ):
         assert expected in res.stdout, f"no output line for: {expected}"
 
@@ -675,3 +680,93 @@ def test_check8_is_silent_when_the_doc_is_missing(tmp_path: Path, mod) -> None:
     _fake_tree(tmp_path, services=("artwork",))
     assert mod.find_undocumented_subpackages(
         tmp_path, tmp_path / "docs" / "nope.md") == []
+
+
+# ========================================================= #
+# 9. Check 9 — the frontend wrapper-storefront map
+# ========================================================= #
+# Planted into a standalone .ts file rather than the mirror: ``_mirror``
+# symlinks ``src/`` whole, so the real StorefrontLauncher.ts is deliberately
+# the one under test everywhere else. ``parse_client_storefronts`` takes its
+# path, so a fixture file exercises the parser directly.
+
+_REAL_SHAPE = """\
+const BROWSER_STOREFRONTS: Partial<
+  Record<StoreId, () => Promise<ShortcutLaunchResult>>
+> = {
+  epic: launchEpicStorefrontViaShortcut,
+  gog: launchGogStorefrontViaShortcut,
+};
+
+const CLIENT_STOREFRONTS: Partial<
+  Record<StoreId, () => Promise<ShortcutLaunchResult>>
+> = {
+  ubisoft: () =>
+    launchWrapperAuthViaShortcut(UBISOFT_SHORTCUT_CONFIG, "storefront"),
+  battlenet: () =>
+    launchWrapperAuthViaShortcut(BATTLENET_SHORTCUT_CONFIG, "storefront"),
+};
+"""
+
+
+def _ts(tmp_path: Path, body: str) -> Path:
+    p = tmp_path / "StorefrontLauncher.ts"
+    p.write_text(body, encoding="utf-8")
+    return p
+
+
+def test_check9_reads_the_real_declaration_shape(tmp_path: Path, mod) -> None:
+    """The generic type parameter contains ``=>``, which broke a first cut.
+
+    A ``[^=]*=`` scan stops inside ``() => Promise<...>`` and never reaches
+    the assignment, so the parser reported the map as missing on a file that
+    had it. Pinned because that failure mode is invisible in a green run.
+    """
+    assert mod.parse_client_storefronts(
+        _ts(tmp_path, _REAL_SHAPE)) == {"ubisoft", "battlenet"}
+
+
+def test_check9_does_not_pick_up_the_browser_map(tmp_path: Path, mod) -> None:
+    """``BROWSER_STOREFRONTS`` is declared first and has the same shape."""
+    keys = mod.parse_client_storefronts(_ts(tmp_path, _REAL_SHAPE))
+    assert "epic" not in keys and "gog" not in keys
+
+
+def test_check9_catches_a_dropped_wrapper_store(tmp_path: Path, mod) -> None:
+    """The defect: a wrapper store whose cart button silently does nothing."""
+    dropped = _REAL_SHAPE.replace(
+        '  battlenet: () =>\n'
+        '    launchWrapperAuthViaShortcut(BATTLENET_SHORTCUT_CONFIG, "storefront"),\n',
+        "",
+    )
+    assert mod.parse_client_storefronts(_ts(tmp_path, dropped)) == {"ubisoft"}
+
+
+def test_check9_ignores_call_arguments_inside_an_arrow_body(
+    tmp_path: Path, mod,
+) -> None:
+    """Values are indented four spaces; only two-space keys are read.
+
+    Without the indent anchor an object literal passed as an argument would
+    contribute phantom store ids.
+    """
+    noisy = _REAL_SHAPE.replace(
+        '    launchWrapperAuthViaShortcut(UBISOFT_SHORTCUT_CONFIG, "storefront"),',
+        '    launchWrapperAuthViaShortcut(UBISOFT_SHORTCUT_CONFIG, {\n'
+        '      mode: "storefront",\n'
+        '    }),',
+    )
+    assert mod.parse_client_storefronts(_ts(tmp_path, noisy)) == {
+        "ubisoft", "battlenet"}
+
+
+def test_check9_refuses_rather_than_passes_when_the_map_is_gone(
+    tmp_path: Path, mod,
+) -> None:
+    """A renamed or deleted map must fail loudly, not report an empty set.
+
+    An empty set would compare unequal to WRAPPER_STORES and still fail, but
+    with a message blaming the store list instead of the missing declaration.
+    """
+    with pytest.raises(SystemExit):
+        mod.parse_client_storefronts(_ts(tmp_path, "const OTHER = {};\n"))
