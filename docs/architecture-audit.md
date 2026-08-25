@@ -381,7 +381,57 @@ wrappers  : []
 game_args : ['mangohud', 'gamemoderun']   ← appended to the GAME's argv
 ```
 
-That is a launch-breaking regression on exactly the feature the wiring was meant to deliver. Deciding what a bare token in the argv tail *means* is a design call with at least four answers (treat as args, treat as wrappers, require an explicit `%command%`, or recognise known wrapper binaries), and it is not a wiring decision. Left empty, which is what every release so far shipped. `tests/unit/test_launch_options_wiring.py` pins both halves, so re-wiring it is a deliberate act against a red test, and the worked example above is a test of its own.
+That is a launch-breaking regression on exactly the feature the wiring was meant to deliver. Left empty, which is what every release so far shipped. `tests/unit/test_launch_options_wiring.py` pins both halves, so re-wiring it is a deliberate act against a red test, and the worked example above is a test of its own.
+
+#### What Steam actually passes — measured, 2026-08-25
+
+The first write-up of this section said the deciding fact "was not established". It is now, on this Steam Deck, with a logging script as a non-Steam shortcut's `Exe`, driven through `SteamClient.Apps.SetShortcutLaunchOptions` + `RunGame` over CDP. Probe shortcut added and removed per run; `shortcuts.vdf` back to its original 1264 entries.
+
+| `LaunchOptions` | argv the Exe receives | env set by Steam |
+|---|---|---|
+| `probe-a probe-b` | `[probe-a, probe-b]` | none |
+| `PROBE_ENV_A=1 %command%` | `[]` (argc=0) | `PROBE_ENV_A=1` |
+| `PROBE_ENV_A=9 %command% tail1` | `[tail1]` | `PROBE_ENV_A=9` |
+| `epic:Salt PROBE_ENV_B=2` | `[epic:Salt, PROBE_ENV_B=2]` | **none — not set** |
+| `env %command% epic:Salt` | `[epic:Salt]`, under `env` | none (the wrapper ran) |
+| `%command% after1 after2` | **never launched** (2 of 2 attempts) | — |
+| `ubisoft:upc-auth UNIFIDECK_UBISOFT_ACTION=auth mangohud gamemoderun` | `[ubisoft:upc-auth, UNIFIDECK_UBISOFT_ACTION=auth, mangohud, gamemoderun]` | none |
+
+Four things follow, and they settle the design question rather than restating it:
+
+1. **`%command%` is honoured for non-Steam shortcuts.** Assignments before it are exported by Steam and stripped from argv; tokens after it arrive as argv.
+2. **A wrapper word before `%command%` is executed by Steam itself.** `env %command% epic:Salt` ran the probe *under* `env` and still delivered `argv[1] = epic:Salt`. So `mangohud %command% epic:Salt` already works today and needs no plugin code. **`ParsedOptions.wrappers` is therefore not "deferred" but unreachable through this path**: wrapping is a pre-exec act, and by the time our launcher has a `argv` there is nothing left to wrap. `RuntimeState.wrappers` is read by six argv builders that can only ever prepend an empty list. That is phantom vocabulary in the §2.8 sense, and it should be deleted rather than wired — see item 23b.
+3. **An assignment *after* the game key is NOT exported by Steam** (`PROBE_ENV_B` arrived as argv and was unset in the environment). Nothing but the launcher can apply it, and before this pass nothing did. So the env half that shipped is a genuinely new capability, not a re-plumbing of something Steam already did.
+4. **The `game_args` hazard reproduced exactly**, on the frontend's own temp-shortcut shape (last row). `mangohud` and `gamemoderun` really do arrive in the tail, so populating `game_args` from it really would have passed them to the game. Worth noting they are *useless* there per finding 2, which makes `extractUserParams` preserving them into the tail its own small bug.
+
+One user-facing trap found in passing: **`LaunchOptions` that begin with `%command%` did not launch at all**, twice, while the same string with any token in front of it launched fine. Not chased further, and not caused by this change.
+
+#### Validated by launching a real game, 2026-08-26
+
+Run against `gog:1207658924` (The Witcher: Enhanced Edition, the one installed title on this Deck), driven through `RunGame`, with the evidence read out of `/proc/<pid>/environ` of the **game process itself** rather than from a log line.
+
+| Scenario | `LaunchOptions` | Result |
+|---|---|---|
+| Baseline (the regression guard) | `gog:1207658924` | Launched to `launcher.exe`, correct per-game prefix, none of the probe variables present |
+| User env override | `gog:1207658924 MY_PROBE_VAR=hello WINEDLLOVERRIDES=…` | Both present **on the game process**. `WINEDLLOVERRIDES` arrived with the user's entry first and Proton's appended after it |
+| LSFG | `gog:1207658924 LSFG=1` | `ENABLE_LSFG=1` plus all three exports from the real `~/lsfg` (`LSFG_PROCESS=decky-lsfg-vk`, `ENABLE_GAMESCOPE_WSI=0`, `DXVK_HDR=0`) present on the game process |
+| LSFG, alternate flag | `gog:1207658924 ENABLE_LSFG=1` | Same overlay, without the bare `LSFG` token. Correct |
+| Steam's own env form | `MY_STEAM_VAR=viasteam %command% gog:1207658924` | Game launched, variable **absent from the game** |
+| Quoted value (after the `shlex.join` fix, re-run on the deployed build) | `gog:1207658924 MY_QUOTED="alpha beta" LSFG=1` | `MY_QUOTED=alpha beta` intact on the game — it was `alpha` before the fix — with the LSFG overlay alongside |
+
+**That last row is a finding, and it inverts what the docs said.** `docs/launch-options.md` presented `VAR=value %command%` as the mechanism that "works today". It does not, for a Unifideck game that runs under a forced Proton. Steam really does export it — it is present on the outer `steam-runtime-launch-client` process — but the launch then goes through `container_escape`, and `_forwarded_env` (`container_escape.py:143-158`) forwards a variable only when it is in `_ALWAYS_FORWARD` or its value **differs from `os.environ`**. That rule exists to stop container values (notably `PATH`) leaking back, and it is right to have. Its side effect is that a variable Steam exported is byte-identical to the inherited environment and gets dropped with it.
+
+Confirmed in isolation rather than inferred:
+
+```
+Steam-set var (equals os.environ)      -> forwarded: False
+launch-options var (explicit mutation) -> forwarded: True
+ENABLE_LSFG   (explicit mutation)      -> forwarded: True
+```
+
+So the route wired in this pass is not a second way to do the same thing, it is the **only** reliable one, and the doc now says so with the measurement attached. The `%command%` form still works for wrapper *programs*, which Steam applies before the escape ever happens.
+
+Not fixed here: making Steam-exported variables survive the escape would need a way to tell a user's variable from container junk, and `_forwarded_env` deliberately has none. Recorded as item 25.
 
 `docs/launch-options.md` now documents the env and LSFG routes under "What works today", and lists wrapper words and game arguments under "Not supported" with the reason, rather than promising them as "planned". The stale "DEAD CODE" note in the `launcher.md` skill is corrected.
 
@@ -497,5 +547,12 @@ Ordered by risk-to-value. Tick the box when a fix lands and the user has validat
 - [ ] 21. **Strip the 233 `OP-XX` markers** (149 distinct ids across 162 files). Comment-only, so one mechanical commit; kept out of the Part 2 pass so it could not drown the review. Split from item 17.
 - [ ] 22. **Re-verify the six stale skill `Last verified:` stamps** (`unifideck-ci-gates`, `unifideck-dev-loop` + `debugging-playbook`, `unifideck-bug-triage`, `unifideck-release` + `unifidb-pipeline`). Real work per file: read it against the current tree, fix what drifted, *then* bump. Do not bump alone.
 - [x] 23. **Wire up the launch-options parser** (§2.9). **Env half + LSFG + the tokenizer merge + the reserved return slot: DONE.** `dispatcher.py` was split at the LOC cap into `launcher/argv_options.py`. *(awaiting user device validation — V4 through V9, V12 in the plan; V4, the no-options baseline, is the one that matters)*
-- [ ] 23a. **Decide what a bare token in the argv tail means**, then wire `state.wrappers` / `state.game_args` (§2.9). Stopped mid-wiring because the parser's `%command%` split does not hold for the post-expansion argv tail it actually receives: the fallback appended `mangohud gamemoderun` to the game's own command line. Four candidate answers in §2.9. Whoever takes it should start from `test_bare_argv_tokens_would_become_game_args`, which is the measurement, and settle first what Steam actually leaves in argv for a non-Steam shortcut whose `LaunchOptions` contains `%command%` — that fact was not established and it decides the design.
+- [ ] 23a. **Wire `state.game_args` only, once the frontend stops leaking wrapper words into the tail** (§2.9). The deciding fact is now measured, not open: tokens after the game key do arrive as argv, so game arguments are deliverable, but the frontend's `extractUserParams` preserves the user's `mangohud`/`gamemoderun` into that same tail, and those would be passed to the game. Fix `extractUserParams` first (they are useless in the tail anyway — Steam already applied them, see §2.9 finding 2), then populate `game_args`. `test_bare_argv_tokens_would_become_game_args` is the guard.
+- [ ] 23b. **Delete `ParsedOptions.wrappers` and `RuntimeState.wrappers`** (§2.9 finding 2, measured). Wrapping is a pre-exec act that Steam performs itself: `env %command% epic:Salt` ran the launcher under `env` and still delivered `argv[1] = epic:Salt`. Our launcher cannot wrap anything by the time it has an argv, so the field is unreachable, not merely unpopulated — six argv builders prepend a list that can only ever be empty. Same phantom-vocabulary class as §2.8. Touches the launch hot path for no functional gain, so it wants its own change and device validation, not a fold-in.
+- [x] 24a. **`_update_existing_shortcut` wiped a user's launch options** *(found answering "how do we make LSFG support permanent", which the §2.9 wiring had just made a real question)*. It overwrote the whole `LaunchOptions` field with the canonical `"<store>:<id>"`, discarding the user's LSFG flag and per-game env variables. `_reclaim_orphan`, eleven lines below in the same file, already preserved them — the two paths disagreed, which is how it survived: whichever one a reader opened, the other was the counterexample. Fixed both to preserve user params while stripping our own `UNIFIDECK_*` flags (a stranded action flag must still be cleaned up, or a crash mid-launch permanently turns a game tile into a sign-in tile), behind a shared `rewrite_for_sync` helper. Added a protected-shortcut guard while in the area: the appid fallback that selects the entry matches on appid + `is_ours` and never consulted the protected set, and an auth forwarder is ours. 33 tests, mutation-tested against 9 planted reversions, all caught — one of which found a real bug I had introduced (the guard called `get_full_id` before string coercion).
+
+   **Severity corrected after running a real Force Sync on device.** I first recorded this as "a Force Sync deletes your LSFG setting". The device says otherwise: a real force sync over this library reported `reconcile: 1238 games → added=1 kept=0 removed=0 reclaimed=1237`. **`kept=0` means `_update_existing_shortcut` never ran at all.** `_try_reclaim_orphan` succeeds for any game that is in the registry with a matching appid, which is every game in a settled library, so `_reclaim_orphan` is the live rewrite path — and it already preserved user params. The wipe was real code on a path that a steady-state library does not take; it is reached for a game that is not yet registered. So the user-facing loss I claimed was overstated, and the honest value of this fix is: the wipe path is closed for when it *is* taken, both paths now strip stranded flags, and protected shortcuts cannot be rewritten. The diff of `shortcuts.vdf` across that sync: 0 shortcuts changed options, 0 lost user params, 1 genuinely new game added.
+
+   **Lesson, and it is the §1.1.1 lesson again from the other direction:** a docstring saying "only called during force sync" tells you when a function *may* run, not whether it *does*. I read that line, reproduced the wipe by calling the function directly, and wrote up a user-facing severity from it — without checking that production reaches it. The reconcile tally was one log line away the whole time.
+- [ ] 25. **Steam-exported env vars are dropped by the container escape** *(measured, §2.9)*. `_forwarded_env` forwards only variables whose value differs from `os.environ`, so a variable Steam exported via `VAR=value %command%` is indistinguishable from inherited container state and goes with it. Correct as a rule, wrong for this case. Either find a way to mark user-supplied variables before the escape, or accept it and keep the docs pointing at the after-the-game-id form (which is what they now do). Low priority: the working route is documented and verified.
 - [ ] 24. **Vulture cannot see an unimported module.** `min_confidence = 80` reports unused imports and variables, not unused functions or whole unimported modules, which is how §2.9's 198 dead lines sat behind a *hard* gate for a release. A check that every first-party module under `py_modules/unifideck` is imported by something would close it. Expect a batch of hits needing individual triage, so give it its own change.

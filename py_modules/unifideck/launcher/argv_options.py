@@ -21,6 +21,7 @@ other the game's.
 from __future__ import annotations
 
 import os
+import shlex
 
 from .types.errors import GameNotFoundError
 from .types.options import apply_lsfg_env, parse_launch_options, tokenize_options
@@ -32,6 +33,17 @@ def parse_argv(argv: list[str]) -> tuple[str, str]:
     ``argv[1]`` is the ``store:game_id`` key Unifideck writes into every
     shortcut's ``LaunchOptions``; ``argv[2:]`` is whatever the user added
     after it.
+
+    The tail is re-joined with ``shlex.join``, not with a plain space, so
+    the round trip through :func:`tokenize_options` is lossless. Steam
+    consumes the quotes when it splits ``LaunchOptions`` into argv, so
+    ``MY_VAR="alpha beta"`` arrives as the single element
+    ``MY_VAR=alpha beta``; joining that on spaces destroys the boundary and
+    the reparse then truncates the value at the space. Measured on a real
+    game launch: the game received ``MY_QUOTED=alpha``. ``shlex.join``
+    re-quotes any element that needs it, so every consumer downstream --
+    all of which split with ``shlex`` -- sees the elements Steam actually
+    passed.
     """
     if len(argv) < 2:
         raise GameNotFoundError(
@@ -45,7 +57,7 @@ def parse_argv(argv: list[str]) -> tuple[str, str]:
             "expected 'store:game_id'",
             context={"game_key": game_key},
         )
-    raw_options = " ".join(argv[2:])
+    raw_options = shlex.join(argv[2:])
     return game_key, raw_options
 
 

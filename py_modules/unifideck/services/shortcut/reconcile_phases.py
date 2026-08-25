@@ -409,11 +409,47 @@ class _ReconcilePhasesMixin:
         playtime tracking survive the rewrite. The ``icon`` field is
         set from ``game.icon_url`` when available (the artwork phase
         populates it from on-disk grid files).
+
+        ``LaunchOptions`` keeps the user's own params. This used to be a
+        plain overwrite to ``"<store>:<id>"``, which silently deleted
+        anything they had configured -- and since 0.7.5 that includes the
+        supported way to enable LSFG and to set per-game environment
+        variables (``docs/launch-options.md``). A setting that a Force Sync
+        erases is not a setting, and Force Sync is exactly what a user is
+        told to run when something looks wrong. ``_reclaim_orphan`` eleven
+        lines below already did this correctly; this now matches it.
+
+        Our own ``UNIFIDECK_*`` flags are stripped rather than preserved --
+        see :func:`~.launch_options.strip_unifideck_env_tokens` for why
+        that half is not optional.
         """
+        from .launch_options import get_full_id, rewrite_for_sync
+        from .protected import is_protected
+
+        current_options = entry.get("LaunchOptions", "")
+
+        # Defence in depth. This is only ever called for a library game, but
+        # the appid fallback that can select the entry matches on appid +
+        # ``is_ours`` and never consults the protected set -- and an auth
+        # forwarder is ours. Rewriting one turns a sign-in tile into a game
+        # tile, which is unrecoverable without a re-auth. The previous plain
+        # overwrite was just as destructive here, so this is not a new
+        # hazard, but it is a cheap one to close while in the area.
+        existing_id = get_full_id(current_options)
+        if existing_id is not None and is_protected(existing_id):
+            logger.warning(
+                "[Reconcile] refusing to rewrite protected shortcut %s "
+                "as game %s:%s",
+                existing_id, game.store, game.store_game_id,
+            )
+            return
+
         exe_quoted = f'"{launcher}"' if launcher else '""'
         entry["AppName"] = game.title
         entry["Exe"] = exe_quoted
-        entry["LaunchOptions"] = f"{game.store}:{game.store_game_id}"
+        entry["LaunchOptions"] = rewrite_for_sync(
+            current_options, f"{game.store}:{game.store_game_id}",
+        )
         if game.icon_url:
             entry["icon"] = game.icon_url
         tags_dict = entry.get("tags", {})
@@ -425,16 +461,18 @@ class _ReconcilePhasesMixin:
     def _reclaim_orphan(
         self: Any, entry: dict[str, Any], game: Game, app_id: int,
     ) -> None:
-        """Rewrite ``entry`` in place — restores ownership while keeping AppID."""
-        from .launch_options import preserve_user_params
+        """Rewrite ``entry`` in place — restores ownership while keeping AppID.
+
+        Keeps the user's launch params and drops our own ``UNIFIDECK_*``
+        flags, matching ``_update_existing_shortcut``. An orphan is a
+        shortcut we lost track of, so it is *more* likely than most to be
+        carrying a stranded action flag, not less.
+        """
+        from .launch_options import rewrite_for_sync
 
         launcher = getattr(self, "_launcher_path", "") or ""
-        current_options = entry.get("LaunchOptions", "")
         target = f"{game.store}:{game.store_game_id}"
-        preserved = preserve_user_params(
-            current_options if isinstance(current_options, str) else "",
-            target,
-        )
+        preserved = rewrite_for_sync(entry.get("LaunchOptions", ""), target)
         entry["appid"] = app_id
         entry["AppName"] = game.title
         if launcher:

@@ -17,8 +17,12 @@ What is pinned:
 4. ``promote_env_tokens`` survives a quoted value containing a space, which
    its old ``raw_options.split()`` truncated;
 5. ``state.wrappers`` / ``state.game_args`` stay EMPTY. Wiring them would
-   append the user's wrapper words to the game's own argv -- see the test at
-   the bottom, which is the measurement that stopped it.
+   append the user's wrapper words to the game's own argv;
+6. the parser's behaviour against the argv tails Steam was *observed* to
+   deliver (measured on a Deck, 2026-08-25; table in audit §2.9). Steam
+   performs wrapping itself and does not export an assignment written after
+   the game key, which is why the env half needed wiring and ``wrappers``
+   cannot be reached from here at all.
 """
 from __future__ import annotations
 
@@ -26,7 +30,11 @@ import os
 
 import pytest
 
-from unifideck.launcher.argv_options import env_overrides_from, promote_env_tokens
+from unifideck.launcher.argv_options import (
+    env_overrides_from,
+    parse_argv,
+    promote_env_tokens,
+)
 from unifideck.launcher.types.context import LaunchContext, RuntimeState
 from unifideck.launcher.types.options import parse_launch_options, tokenize_options
 from unifideck.services.launcher.service import LauncherService
@@ -218,3 +226,107 @@ def test_runtime_state_no_longer_reads_started_at(tmp_path) -> None:
     ctx = _ctx("", tmp_path)
     assert LauncherService._build_runtime_state(ctx).started_at == 0.0
     assert isinstance(LauncherService._build_runtime_state(ctx), RuntimeState)
+
+
+# ========================================================= #
+# 6. The argv shapes Steam actually delivers
+# ========================================================= #
+# Measured on a Steam Deck, 2026-08-25, with a logging script as a non-Steam
+# shortcut's Exe driven through SteamClient.Apps.SetShortcutLaunchOptions +
+# RunGame. Full table in docs/architecture-audit.md §2.9. These are the real
+# argv tails, so the parser is pinned against observation rather than against
+# what the parser's own author assumed Steam would send.
+@pytest.mark.parametrize(
+    ("launch_options", "argv_tail", "expected_env", "expected_game_args"),
+    [
+        # Steam exports assignments before %command% and strips them from argv,
+        # so nothing reaches the parser at all.
+        ("PROBE_ENV_A=1 %command%", "", {}, []),
+        # A token after %command% arrives as argv.
+        ("PROBE_ENV_A=9 %command% tail1", "tail1", {}, ["tail1"]),
+        # An assignment AFTER the game key is NOT exported by Steam. It arrives
+        # as argv, and the launcher is the only thing that can apply it. This
+        # row is the whole justification for wiring the env half.
+        ("epic:Salt PROBE_ENV_B=2", "PROBE_ENV_B=2", {"PROBE_ENV_B": "2"}, []),
+        # The frontend's own temp-shortcut shape. Steam delivers the wrapper
+        # words in the tail, where they are inert -- and where feeding
+        # game_args from them would pass them to the game.
+        (
+            "ubisoft:upc-auth UNIFIDECK_UBISOFT_ACTION=auth mangohud gamemoderun",
+            "UNIFIDECK_UBISOFT_ACTION=auth mangohud gamemoderun",
+            {"UNIFIDECK_UBISOFT_ACTION": "auth"},
+            ["mangohud", "gamemoderun"],
+        ),
+    ],
+)
+def test_parser_against_measured_argv_tails(
+    launch_options: str,
+    argv_tail: str,
+    expected_env: dict[str, str],
+    expected_game_args: list[str],
+) -> None:
+    """What the parser makes of each real argv tail.
+
+    ``launch_options`` is documentation: it is what the user typed. ``argv_tail``
+    is what Steam actually handed the launcher, which is the parser's input.
+    """
+    parsed = parse_launch_options(argv_tail)
+    assert parsed.env_overrides == expected_env
+    assert parsed.game_args == expected_game_args
+    # Never populated from an argv tail: Steam performs wrapping itself, before
+    # the launcher exists. See audit §2.9 finding 2 and register item 23b.
+    assert parsed.wrappers == []
+
+
+# ========================================================= #
+# 7. argv element boundaries survive the join
+# ========================================================= #
+# Found by launching a real game with `MY_QUOTED="alpha beta"` and reading the
+# game's own environment: it received `MY_QUOTED=alpha`. Steam consumes the
+# quotes when it splits LaunchOptions into argv, so the value arrives as one
+# element `MY_QUOTED=alpha beta`; `parse_argv` then joined the tail on spaces,
+# destroying the boundary, and the reparse split it back apart. `shlex.join`
+# makes that round trip lossless.
+@pytest.mark.parametrize(("tail", "expected_env"), [
+    # The measured failure.
+    (["MY_QUOTED=alpha beta", "TAIL=z"], {"MY_QUOTED": "alpha beta", "TAIL": "z"}),
+    # A path with a space, the realistic version of the same thing.
+    (
+        ["WINEDLLOVERRIDES=a=b,c=d", "MY_DIR=/run/media/My Card/x"],
+        {"WINEDLLOVERRIDES": "a=b,c=d", "MY_DIR": "/run/media/My Card/x"},
+    ),
+    # Single element, no spaces: must be untouched. No ``ENABLE_LSFG`` here --
+    # with no ~/lsfg script on disk the overlay is correctly empty, so this
+    # also pins that lsfg-vk not being installed enables nothing.
+    (["LSFG=1"], {"LSFG": "1"}),
+    # Nothing at all: the common case.
+    ([], {}),
+])
+def test_argv_element_boundaries_survive(
+    tail: list[str], expected_env: dict[str, str], monkeypatch, tmp_path,
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))  # no ~/lsfg script in play
+    _, raw = parse_argv(["launcher", "gog:1207658924", *tail])
+    got = env_overrides_from(raw)
+    for key, value in expected_env.items():
+        assert got.get(key) == value, f"{key}: {got.get(key)!r} != {value!r}"
+
+
+def test_raw_options_round_trips_through_the_tokenizer(monkeypatch, tmp_path) -> None:
+    """The invariant behind the fix: join then split returns the input.
+
+    Every consumer of ``raw_options`` splits it with ``shlex``, so this
+    property is what makes the joined string a faithful stand-in for the argv
+    tail rather than a lossy rendering of it.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for tail in (
+        ["A=1"],
+        ["A=x y"],
+        ['A=has "inner" quotes'],
+        ["~/lsfg"],
+        ["A=1", "B=two words", "C=3"],
+        [],
+    ):
+        _, raw = parse_argv(["launcher", "gog:1", *tail])
+        assert tokenize_options(raw) == tail, f"round trip lost {tail!r}"

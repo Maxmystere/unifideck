@@ -25,6 +25,12 @@ STORE_ID_PATTERN = re.compile(
     r"([a-zA-Z0-9][a-zA-Z0-9._-]*)",
 )
 
+# Our own action flags, e.g. ``UNIFIDECK_UBISOFT_ACTION=auth``. The quoted
+# alternative comes first so a value containing spaces is consumed whole.
+_UNIFIDECK_ENV_TOKEN_RE = re.compile(
+    r"\bUNIFIDECK_[A-Z0-9_]+=(?:\"[^\"]*\"|\S+)",
+)
+
 
 def extract_store_id(launch_options: str) -> tuple[str, str] | None:
     """Return ``(store, game_id)`` extracted from ``launch_options``.
@@ -54,17 +60,48 @@ def get_store_prefix(launch_options: str) -> str | None:
     return match.group(1) if match else None
 
 
-def get_full_id(launch_options: str) -> str | None:
+def get_full_id(launch_options: object) -> str | None:
     """Return the canonical ``"<store>:<game_id>"`` key, or ``None``.
 
     Used as a map key (e.g. into ``shortcuts_registry.json``) — the
     canonical form discards any user-appended params so equality
     holds across runs even if the user adds MANGOHUD=1 later.
+
+    Takes ``object`` because callers read the value straight out of a parsed
+    VDF, where a corrupt row can hold a non-string. Anything that is not a
+    string has no id in it, so it answers ``None`` rather than raising into
+    a sync that is walking the whole library.
     """
-    if not launch_options:
+    if not launch_options or not isinstance(launch_options, str):
         return None
     match = STORE_ID_PATTERN.search(launch_options)
     return f"{match.group(1)}:{match.group(2)}" if match else None
+
+
+def strip_unifideck_env_tokens(launch_options: str) -> str:
+    """Remove our own ``UNIFIDECK_*=value`` tokens, keeping everything else.
+
+    Used before :func:`preserve_user_params` on a rewrite, so a user's own
+    params survive while our action flags do not. Both halves matter:
+
+    * the flags are how the launcher decides a shortcut is an auth or install
+      action rather than a game launch. The frontend writes them into a
+      shortcut's options for one run and restores the originals afterwards, so
+      a crash mid-launch can strand one on a *game* shortcut. Force Sync
+      overwriting the whole field is what has always cleaned that up, and
+      preserving it wholesale would turn a recoverable state into a permanent
+      one -- a tile that opens a sign-in window and never launches the game.
+    * everything else in the field belongs to the user (``LSFG=1``,
+      ``MANGOHUD=1``, a wrapper before ``%command%``) and is theirs to keep.
+
+    The pattern mirrors ``extractUserParams`` in
+    ``src/lib/steam-bridge/wrapper-shortcut-launch.ts``, which strips the same
+    tokens for the same reason on the frontend, quoted values included.
+    """
+    if not launch_options:
+        return ""
+    cleaned = _UNIFIDECK_ENV_TOKEN_RE.sub("", launch_options)
+    return re.sub(r"\s{2,}", " ", cleaned).strip()
 
 
 def preserve_user_params(
@@ -89,6 +126,30 @@ def preserve_user_params(
     )
 
 
+def rewrite_for_sync(current_launch_options: object, new_store_id: str) -> str:
+    """The canonical ``LaunchOptions`` for a shortcut rewrite.
+
+    One rule in one place: point at ``new_store_id``, keep whatever the user
+    put around it, drop our own ``UNIFIDECK_*`` flags. Both rewrite paths in
+    ``reconcile_phases`` call this. They used to disagree -- one preserved the
+    field and one overwrote it wholesale -- which is exactly how the
+    overwrite survived: whichever path a reader opened, the other was the
+    counterexample.
+
+    Accepts ``object`` because it reads a value straight out of a parsed VDF,
+    where a corrupt row can hold anything. A non-string is treated as absent,
+    so a force sync over a whole library cannot be aborted by one bad entry.
+    """
+    text = (
+        current_launch_options
+        if isinstance(current_launch_options, str)
+        else ""
+    )
+    return preserve_user_params(
+        strip_unifideck_env_tokens(text), new_store_id,
+    )
+
+
 __all__ = [
     "STORE_ID_PATTERN",
     "extract_store_id",
@@ -96,4 +157,6 @@ __all__ = [
     "get_store_prefix",
     "is_unifideck_shortcut",
     "preserve_user_params",
+    "rewrite_for_sync",
+    "strip_unifideck_env_tokens",
 ]
