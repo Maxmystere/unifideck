@@ -222,8 +222,10 @@ class _EventHandlersMixin:
         """
         if kwargs.get("phase") != "metadata" or kwargs.get("active") is not False:
             return
+        # Same dead fallback as CompatibilityService carried; no emitter has
+        # ever sent a flat ``games``. Audit register item 41.
         sync_kwargs = kwargs.get("sync_kwargs") or {}
-        games = sync_kwargs.get("games") or kwargs.get("games", [])
+        games = sync_kwargs.get("games") or []
         bus = getattr(self, "_bus", None)
         grid_dir = getattr(self, "_grid_dir", None)
         if not bool(sync_kwargs.get("fetch_artwork", True)):

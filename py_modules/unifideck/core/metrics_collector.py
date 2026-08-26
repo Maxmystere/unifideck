@@ -98,6 +98,12 @@ class MetricsCollector:
             (Events.DOWNLOAD_QUEUED, "download_queued"),
             (Events.DOWNLOAD_COMPLETE, "download_completed"),
             (Events.DOWNLOAD_FAILED, "download_failed"),
+            # NOTE: no ``DOWNLOAD_CANCELLED`` row. That event already has a
+            # ``@subscribe`` handler (``_on_download_cancelled``), and adding
+            # a row here would register a *second* subscription for it —
+            # ``test_every_handler_is_wired_exactly_once`` catches that. The
+            # ``download_cancelled`` counter is incremented inside that
+            # handler instead. Audit register item 4f.
         ]
         for event, name in counter_events:
             self._bus.on(event, lambda n=name, **kw: self._inc_counter(n))
@@ -339,9 +345,18 @@ class MetricsCollector:
         makes ``_on_download_start``'s ``setdefault`` safe —
         see its docstring.
 
+        Also increments ``download_cancelled``. The counter lives here
+        rather than in ``counter_events`` because this event already has a
+        subscription — a table row would make it two, which
+        ``test_every_handler_is_wired_exactly_once`` rejects. Cancel-vs-fail
+        is the distinction triage wants from a support bundle, and a user who
+        cancels installs was previously invisible in ``plugin_metrics``.
+        Audit register item 4f.
+
         Args:
             **kwargs: the raw event payload.
         """
+        self._inc_counter("download_cancelled")
         self._pending_timers.pop(self._download_key(kwargs), None)
 
     @staticmethod

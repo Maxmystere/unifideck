@@ -69,7 +69,6 @@ class BattlenetStore(WrapperSessionHooks, StoreBase):
         auth_method="shortcut",
         icon_asset="battlenet.png",
         supports_install=True,
-        supports_cloud_saves=False,
     )
 
     def __init__(

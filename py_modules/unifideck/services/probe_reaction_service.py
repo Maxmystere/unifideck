@@ -119,7 +119,13 @@ class ProbeReactionService:
         extraction out so the loop body is a flat "if affected,
         quarantine each".
         """
-        if not self._watchdog or not hasattr(self._watchdog, "force_quarantine"):
+        # ``quarantine_preemptive`` is the real method name on
+        # ``HandlerWatchdog``. This read ``force_quarantine`` — a method that
+        # exists nowhere in the tree — and the ``hasattr`` guard swallowed the
+        # mismatch silently, so nothing was ever quarantined even when the
+        # handler ran. Audit register item 4h; same wrong-name class as the
+        # ``rc``/``exit_code`` split in ``launch_history`` (correction C-2).
+        if not self._watchdog or not hasattr(self._watchdog, "quarantine_preemptive"):
             return
 
         for probe in probes:
@@ -132,7 +138,7 @@ class ProbeReactionService:
                     "[ProbeReaction] Preemptively quarantining %s due to %s failure",
                     handler_name, probe_id,
                 )
-                self._watchdog.force_quarantine(
+                self._watchdog.quarantine_preemptive(
                     handler_name, reason=f"{probe_id} probe failed",
                 )
 

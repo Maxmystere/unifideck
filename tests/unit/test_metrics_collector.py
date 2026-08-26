@@ -80,6 +80,30 @@ async def test_each_counter_event_counts_once_per_emit() -> None:
     assert counters["sync_failures"] == 1
 
 
+async def test_a_cancelled_download_is_counted() -> None:
+    """Audit register item 4f — cancel was invisible in ``plugin_metrics``.
+
+    ``counter_events`` covered queued/completed/failed only, so a user who
+    cancels installs left no trace, and cancel-vs-fail is exactly the
+    distinction triage wants from a support bundle.
+
+    The counter is incremented inside ``_on_download_cancelled`` rather than
+    added to ``counter_events``, because that event already has a
+    ``@subscribe`` handler and a table row would wire it twice — see
+    ``test_every_handler_is_wired_exactly_once``, which is why this is the
+    right shape and not the obvious one.
+    """
+    bus, metrics = _collector()
+    item = {"id": "row-1", "store": "gog", "game_id": "g1"}
+
+    await bus.emit(Events.DOWNLOAD_CANCELLED, item=item)
+
+    counters = metrics.get_plugin_metrics()["counters"]
+    assert counters["download_cancelled"] == 1
+    # And the pending-timer cleanup it shares the handler with still runs.
+    assert metrics._pending_timers == {}
+
+
 # ── V2/V3: the pair timers and the sync gauges ────────────────────
 async def test_auth_pair_records_a_duration() -> None:
     bus, metrics = _collector()

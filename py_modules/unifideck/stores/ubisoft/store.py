@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from unifideck.core.types import AuthResult, Events, Game, InstallResult, Result, StoreInfo
 from unifideck.event_bus.event_bus_devex import auto_wire, subscribe
+from unifideck.stores.shared.installed_path import install_path_from_record
 from unifideck.stores.shared.store_base import StoreBase
 from unifideck.stores.shared.wrapper_session_hooks import await_client_exit
 
@@ -377,8 +378,7 @@ class UbisoftStore(StoreBase):
         info = await asyncio.to_thread(
             self._library.get_installed_game_info, game_id,
         )
-        path = info.get("install_path") if isinstance(info, dict) else None
-        return path if isinstance(path, str) and path else None
+        return install_path_from_record(info)
 
     def get_prefix_path(self, game_id: str) -> str | None:
         """The game's Wine prefix — for this store, the whole install footprint.

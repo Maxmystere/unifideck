@@ -230,3 +230,104 @@ def test_an_emitter_outside_its_owning_subsystem_is_reported(
         {owned: {"stores/epic/install.py", "services/download/worker.py"}},
     )
     assert violations == 1  # the store file only
+
+
+# ========================================================= #
+# Subscribe-side arm (audit correction C-2)                 #
+# ========================================================= #
+def test_the_live_tree_has_no_subscriber_reading_an_undeclared_key(
+    script_module,
+) -> None:
+    """The regression this arm exists for.
+
+    ``validate_event_schemas`` was emit-side only, so a handler reading a
+    key no emitter sends was invisible. Three events shipped that defect:
+    ``GAME_INSTALLED`` (``app_id`` vs ``game_id``), ``TOAST_NOTIFICATION``
+    (``params`` vs ``i18n_params``), and ``GAME_STOPPED`` (``rc`` vs
+    ``exit_code``) — the last was still live when this check was written,
+    and it meant the circuit breaker could never reset on a good launch.
+    """
+    target = script_module.ROOT / "py_modules" / "unifideck"
+    subscribers = script_module.walk_subscribers(target)
+
+    assert subscribers, "no @subscribe handlers found — the walker is broken"
+    assert script_module.check_subscriber_reads(subscribers) == 0
+
+
+def test_a_subscriber_reading_a_phantom_key_is_reported(script_module) -> None:
+    """The check must bite. Drives the real GAME_STOPPED contract."""
+    declared = script_module.CANONICAL_SCHEMA["GAME_STOPPED"]
+    assert "exit_code" in declared and "rc" not in declared
+
+    errors = script_module.check_subscriber_reads(
+        [("GAME_STOPPED", "services/x.py", "_on_game_stopped", {"store", "rc"})],
+    )
+    assert errors == 1
+
+
+def test_a_subscriber_reading_only_declared_keys_passes(script_module) -> None:
+    errors = script_module.check_subscriber_reads(
+        [(
+            "GAME_STOPPED",
+            "services/x.py",
+            "_on_game_stopped",
+            {"store", "game_id", "exit_code", "elapsed_seconds"},
+        )],
+    )
+    assert errors == 0
+
+
+def test_an_event_with_no_declared_schema_is_skipped(script_module) -> None:
+    """Nothing to compare against; :func:`compare` already reports it."""
+    assert "NOT_A_REAL_EVENT" not in script_module.CANONICAL_SCHEMA
+    errors = script_module.check_subscriber_reads(
+        [("NOT_A_REAL_EVENT", "services/x.py", "_h", {"anything"})],
+    )
+    assert errors == 0
+
+
+def test_every_tolerated_read_still_corresponds_to_a_real_handler(
+    script_module,
+) -> None:
+    """A stale exemption silently widens the gate.
+
+    Same failure mode as a ``# unwired:`` marker left on a deleted event:
+    the row exempts nothing and hides the next real mismatch. Keyed
+    ``<module>::<handler>`` precisely so a rename shows up here.
+    """
+    target = script_module.ROOT / "py_modules" / "unifideck"
+    if not script_module.TOLERATED_SUBSCRIBER_READS:
+        return  # empty is the goal; nothing to go stale
+    live = {
+        f"{rel}::{handler}"
+        for _event, rel, handler, _keys in script_module.walk_subscribers(target)
+    }
+    for key in script_module.TOLERATED_SUBSCRIBER_READS:
+        assert key in live, (
+            f"TOLERATED_SUBSCRIBER_READS names {key!r}, which is not a live "
+            f"@subscribe handler — delete the row or fix the path"
+        )
+
+
+def test_a_tolerated_read_does_not_mask_a_second_undeclared_key(
+    script_module,
+) -> None:
+    """Tolerating one fallback must not wave through a real defect beside it."""
+    # Drives the mechanism with a synthetic entry so the test keeps working
+    # once the real table is empty — which it now is, because both founding
+    # entries were deleted rather than carried (audit register item 41).
+    monkeypatched = {"services/x.py::_h": {"tolerated_key"}}
+    script_module.TOLERATED_SUBSCRIBER_READS.update(monkeypatched)
+    key = "services/x.py::_h"
+    rel, handler = key.split("::", 1)
+    tolerated = script_module.TOLERATED_SUBSCRIBER_READS[key]
+
+    errors = script_module.check_subscriber_reads(
+        [(
+            "POST_SYNC_PHASE_CHANGED",
+            rel,
+            handler,
+            {*tolerated, "a_genuinely_wrong_key"},
+        )],
+    )
+    assert errors == 1

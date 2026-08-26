@@ -5,6 +5,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from unifideck.core.store_capabilities import capability_flags
 from unifideck.core.types import Events, Result, StoreError
 from unifideck.launcher.wrapper_stores import is_wrapper_store
 
@@ -295,24 +296,35 @@ class StoreRegistry:
         """Check whether s."""
         return store_id in self._stores
     def get_store_infos(self) -> list[dict[str, Any]]:
-        """Static descriptor plus the two derived keys, per store.
+        """Static descriptor plus the derived keys, per store.
 
-        ``available`` and ``client_runs_in_prefix`` are injected here
-        rather than declared on ``StoreInfo``: the first is live probe
-        state, the second is owned by ``WRAPPER_STORES``. It was once a
-        per-store ``uses_wine`` field — a second hand-maintained copy of
-        the wrapper-store set that nothing read (audit §3.1). Derive it
-        in one place so the two can never disagree.
+        Everything derived is injected here rather than declared on
+        ``StoreInfo``, for the reason audit §3.1 established when it removed
+        ``uses_wine``: a per-store literal is a second copy that drifts, and
+        the gate checking it becomes the only thing keeping it alive.
+
+        * ``available`` — live probe state.
+        * ``client_runs_in_prefix`` — owned by ``WRAPPER_STORES``.
+        * the capability flags — owned by ``core.store_capabilities``, which
+          is also what the RPC mixins and services branch on. This is what
+          lets the frontend stop hand-maintaining its own per-store lists;
+          the audit found sixteen of them with one machine-checked pair
+          between them.
+
+        ``supports_cloud_saves`` used to be a declared field and is now
+        derived. Only Battle.net ever set it, as ``False``, so GOG and Epic
+        both advertised no cloud saves — wiring a UI to the old field would
+        have hidden the feature on the only two stores that have it.
         """
         infos = []
         for store in self._stores.values():
+            name = store.store_info.name
             info = asdict(store.store_info)
             info["available"] = getattr(
                 store, "_cached_available", False,
             )
-            info["client_runs_in_prefix"] = is_wrapper_store(
-                store.store_info.name,
-            )
+            info["client_runs_in_prefix"] = is_wrapper_store(name)
+            info.update(capability_flags(name))
             infos.append(info)
         return infos
 

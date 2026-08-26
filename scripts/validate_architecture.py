@@ -496,6 +496,17 @@ SHARED_HELPERS: dict[str, str] = {
     "rsync_clone": "stores/shared/prefix_clone.py",
     "write_marker": "stores/shared/prefix_clone.py",
     "read_cli_user_json": "stores/shared/cli_credentials.py",
+    # GOG's and Ubisoft's ``get_installed_path`` bodies were byte-identical;
+    # Amazon's was the same shape on a different key. Audit register item 48.
+    "install_path_from_record": "stores/shared/installed_path.py",
+    # Not a store helper, but the same drift class and the same remedy: this
+    # arithmetic existed three times under three different names — here, as
+    # ``compatibility/library._appid_key_candidates``, and inlined in
+    # ``core/sync_queries_mixin.get_game_info``. Audit register item 20.
+    "appid_candidates": "core/compat_bridge.py",
+    # The generator's sibling. Twelve conversion sites were folded onto this
+    # in the §1.4 pass; pinning it stops a thirteenth being written inline.
+    "to_unsigned": "core/compat_bridge.py",
 }
 
 DIVERGENCE_RE = re.compile(r"#\s*intentional-divergence:\s*\S")
@@ -577,6 +588,160 @@ def report_shared_helpers() -> int:
         "  '# intentional-divergence: <reason>'."
     )
     return len(strays)
+
+
+#: Marker excusing a module from check 12. Use it for a genuine entry point
+#: — something a process, a script or Decky itself imports by name rather
+#: than another module importing it.
+ENTRY_POINT_RE = re.compile(r"#\s*entry-point:\s*\S")
+
+#: The other check-12 opt-out: the module IS dead and we know it, but the
+#: deletion is owned by an open register item. Separate from
+#: ``# entry-point:`` on purpose — conflating "reached by a process" with
+#: "dead, tracked elsewhere" is how an allowlist stops meaning anything.
+#: The count prints on every clean run so the set cannot grow quietly.
+UNIMPORTED_RE = re.compile(r"#\s*unimported:\s*\S")
+
+#: Roots scanned for importers, in addition to ``py_modules/unifideck``
+#: itself. A module imported only by a test is still dead production code,
+#: so ``tests/`` is deliberately NOT in this list.
+_IMPORTER_ROOTS = ("main.py", "bin", "cli", "scripts", "vulture_whitelist.py")
+
+
+def _module_name(path: Path) -> str:
+    """Dotted first-party module name for a file under ``py_modules/``."""
+    rel = path.relative_to(PY.parent).with_suffix("")
+    return ".".join(rel.parts)
+
+
+def _imported_names(path: Path) -> set[str]:
+    """Every module name *path* imports, absolute and relative resolved.
+
+    Relative imports are resolved against the importing module's package,
+    which is the part a naive scan gets wrong: ``from ..cloud import x``
+    inside ``launcher/proton/`` must resolve to
+    ``unifideck.launcher.cloud.x``, not to ``cloud.x``. A first cut of this
+    check that skipped that reported ``launcher/cloud/cloud_failure.py`` and
+    a dozen others as orphans while some were genuinely imported.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return set()
+    pkg_parts = _module_name(path).split(".")[:-1]
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                base = pkg_parts[: len(pkg_parts) - (node.level - 1)]
+                target = [*base, node.module] if node.module else base
+                mod = ".".join(target)
+            else:
+                mod = node.module or ""
+            if not mod:
+                continue
+            names.add(mod)
+            # ``from pkg import submodule`` imports a module, not a symbol.
+            for alias in node.names:
+                names.add(f"{mod}.{alias.name}")
+    return names
+
+
+def find_unimported_modules() -> list[tuple[str, Path]]:
+    """First-party modules nothing imports and nothing runs.
+
+    Vulture is a hard gate but runs at ``min_confidence = 80``, which
+    reports unused imports and variables — **not** unused functions and not
+    whole unimported modules. That blind spot let two shadow packages
+    (``launcher/fixes/``, ``launcher/language_setup/``) sit next to the real
+    ``launcher/proton/*`` with identical module names, every file an empty
+    ``# TODO: implement`` stub, for the entire life of the project. An
+    import of the stub resolved, did nothing, and raised nothing.
+
+    Audit register item 24. Opt out with ``# entry-point: <reason>``.
+    """
+    modules: dict[str, Path] = {}
+    for path in PY.rglob("*.py"):
+        if "__pycache__" in path.parts or path.name == "__init__.py":
+            continue
+        modules[_module_name(path)] = path
+
+    imported: set[str] = set()
+    for path in PY.rglob("*.py"):
+        if "__pycache__" not in path.parts:
+            imported |= _imported_names(path)
+    for root in _IMPORTER_ROOTS:
+        target = REPO_ROOT / root
+        if target.is_file():
+            imported |= _imported_names_text(target.read_text(errors="ignore"))
+        elif target.is_dir():
+            for path in target.rglob("*"):
+                if path.is_file() and path.suffix in (".py", ".sh", ".toml"):
+                    imported |= _imported_names_text(
+                        path.read_text(errors="ignore"),
+                    )
+
+    orphans: list[tuple[str, Path]] = []
+    for name, path in sorted(modules.items()):
+        if name in imported:
+            continue
+        source = path.read_text(encoding="utf-8", errors="ignore")
+        if (
+            ENTRY_POINT_RE.search(source)
+            or UNIMPORTED_RE.search(source)
+            or '__name__ == "__main__"' in source
+        ):
+            continue
+        orphans.append((name, path))
+    return orphans
+
+
+def _imported_names_text(text: str) -> set[str]:
+    """Dotted ``unifideck.*`` names mentioned anywhere in *text*.
+
+    Deliberately textual, not AST: an entry point can reach a module by
+    ``python -m unifideck.x`` in a shell script or by an importlib string,
+    and neither is an import statement.
+    """
+    return set(re.findall(r"\bunifideck(?:\.[A-Za-z_][A-Za-z0-9_]*)+", text))
+
+
+def report_unimported_modules() -> int:
+    """Print check 12's verdict; return the number of hard failures."""
+    orphans = find_unimported_modules()
+    if not orphans:
+        entry, known_dead = 0, 0
+        for p in PY.rglob("*.py"):
+            if "__pycache__" in p.parts:
+                continue
+            text = p.read_text(errors="ignore")
+            entry += bool(ENTRY_POINT_RE.search(text))
+            known_dead += bool(UNIMPORTED_RE.search(text))
+        parts = []
+        if entry:
+            parts.append(f"{entry} entry point(s)")
+        if known_dead:
+            parts.append(f"{known_dead} known-dead, tracked")
+        suffix = f" ({', '.join(parts)} exempt)" if parts else ""
+        print(f"OK: every first-party module is imported{suffix}")
+        return 0
+    for name, path in orphans:
+        _fail(
+            f"'{name}' is imported by nothing "
+            f"({path.relative_to(REPO_ROOT)}, "
+            f"{len(path.read_text(errors='ignore').splitlines())} lines)"
+        )
+    print(
+        "\n  Vulture cannot see this class: at min_confidence 80 it reports\n"
+        "  neither unused functions nor unimported modules, which is how two\n"
+        "  shadow packages of empty stubs survived beside the real ones.\n"
+        "  Delete the module, wire it up, or — if a process or script reaches\n"
+        "  it by name — mark it '# entry-point: <reason>'."
+    )
+    return len(orphans)
 
 
 def collect_rpc_methods(mixins_path: Path) -> set[str]:
@@ -1022,6 +1187,12 @@ def main() -> int:
 
     # Check 11 (hard): a promoted shared helper is defined exactly once.
     hard_failures += report_shared_helpers()
+
+    # Check 12 (hard): every first-party module is imported by something.
+    # Closes the vulture blind spot (min_confidence 80 reports neither
+    # unused functions nor unimported modules) that let two shadow packages
+    # of empty stubs live beside the real ones. Audit register item 24.
+    hard_failures += report_unimported_modules()
 
     if hard_failures:
         print(f"\n{hard_failures} architecture invariant(s) violated")

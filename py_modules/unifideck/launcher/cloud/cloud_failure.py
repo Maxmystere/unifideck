@@ -1,3 +1,27 @@
+"""Cloud-sync failure classification and user-facing toast actions.
+
+**Nothing imports this module.** Every function here — ``classify_cloud_error``,
+``get_failure_behavior``, ``handle_cloud_sync_failure``, ``_resolve_toast_action``
+and the four ``_classify_*`` helpers — has zero callers, so a cloud-save sync
+failure at launch is silent today.
+
+That matters beyond the dead code, because two decisions were taken on the
+assumption this ran. Audit §1.2 recorded that ``cloud.failure_behavior.<store>``
+is "read live at launch" and, on that basis, **deleted** the two RPCs that would
+have let a user turn the toast off — there was never a toast to turn off. And
+register item 4b describes this module's ``_TOAST_ACTIONS`` as the canonical
+producer of the toast-action payload the frontend drops on the floor; in fact
+neither half exists, which makes 4b cheaper rather than harder.
+
+Kept rather than deleted because whether cloud-sync failures should surface to
+the user at all is a product call, and this is the written-and-translated
+material to surface them with. Tracked as audit register item 37; the decision
+is recorded in ``docs/audit-register.md``.
+
+# unimported: audit register item 37 — dead pending the product decision on
+# whether cloud-sync failures surface at all. See §1.2 and item 4b, both of
+# which were decided on the false premise that this module runs.
+"""
 from __future__ import annotations
 
 import logging

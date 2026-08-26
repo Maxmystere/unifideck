@@ -1,6 +1,19 @@
 # Architecture Audit — Drift, Divergence, and Redundancy
 
-> **Audited:** 2026-08-24 · **Against:** v0.7.5 working tree (package 0.7.4) · **Status:** living register — tick items off as they are resolved; do not archive until the register is empty.
+> **Audited:** 2026-08-24 · **Against:** v0.7.5 working tree (package 0.7.4)
+>
+> **Status: HISTORICAL NARRATIVE — do not edit, do not track work here.**
+> This file is the evidence and reasoning behind each finding, kept because the
+> *why* is what stops a fix being re-filed as drift. Live tracking moved out on
+> 2026-08-26:
+>
+> - **`docs/audit-register.md`** — the tracker: every item, its state, its id.
+> - **`docs/device-validation.md`** — the on-device steps each fix depends on.
+>
+> Five findings in this file were re-derived against the tree on 2026-08-26 and
+> **turned out to be wrong or incomplete in ways that change decisions.** They
+> are recorded in "Corrections" at the foot of this document. Read that section
+> before acting on §1.2, §2.8, §2.9 or register item 4b.
 
 This is the detailed record of a three-lens adversarial review: (1) a general correctness/dead-code pass, (2) intended-design vs current-state drift, and (3) store-logic drift and redundancy. It is the source material for the remediation register at the end. The companion guard is the `unifideck-drift-guard` skill plus `scripts/validate_architecture.py`, which machine-enforce the drift classes found here.
 
@@ -667,7 +680,17 @@ Both halves are pinned in `test_sync_failed_store_keeps_shortcuts.py`, asserted 
 
 ---
 
-## Part 4 — Remediation register
+## Part 4 — Remediation register *(FROZEN 2026-08-26 — see `docs/audit-register.md`)*
+
+> **Do not tick boxes here.** This section is frozen as the historical record of
+> how each item was resolved; the reasoning in the resolved rows is worth
+> keeping and is not repeated in the tracker. Live state lives in
+> `docs/audit-register.md`.
+>
+> Three things below are known-broken as identifiers and were fixed in the
+> tracker, not here: item `26` appears **three** times and `27` **twice**
+> (different findings each), and `24`/`24a` are unrelated topics. The tracker's
+> "ID rules" table maps the old numbers to permanent ones — cite those.
 
 Ordered by risk-to-value. Tick the box when a fix lands and the user has validated it.
 
@@ -749,3 +772,129 @@ Ordered by risk-to-value. Tick the box when a fix lands and the user has validat
 - [ ] 31. **`_ACHIEVEMENT_STORES` has an unlinked frontend twin** *(§3.5 bullet 4)*. `rpc/mixins/achievements.py:27` and `GameInfoCompatRow.tsx:195` hold the same store list in two languages with no link. Inert today (they agree), and the failure is benign in one direction — a store added to the backend only shows no button; added to the frontend only shows a button that raises `achievements_unsupported`. Same shape as §3.1's `uses_wine`, and the same remedy applies: send the capability in a payload the frontend already reads, or add a `validate_architecture.py` check. Do it with item 26 (`StoreInfo` is a mostly write-only descriptor) — that is where the capability field would live.
 - [ ] 32. **Ubisoft's update path has no trigger, and GOG's DLC surface has no route** *(§3.5 bullets 3 and 4, both now marked `# unwired:`)*. Ubisoft: `check_for_updates` returns `[]`, so `update_game` → `update_op.update()` is unreachable from the UI; its own docstring says the window it opens would not render in Gaming Mode, so this is two changes, not one (source of truth for available versions, plus the watcher-based window `install_game` already uses). GOG: `get_game_dlcs` / `install_dlc` / `get_game_store_url` have zero callers, and **no store has a DLC surface** — `shared/dlc.store_supports_dlc("epic")` is a constant `True` and GOG never receives the flags. Decide each as one unit: build the missing half, or delete the manager, the methods and `shared/dlc.py` together. Left in place because both are working logic against live APIs, but half-present is how the DiagnosticsPanel cluster survived a release.
 - [ ] 33. **No pre-install size and no space guard for the wrapper stores** *(§3.5 bullets 2 and 3, recorded not fixed)*. Ubisoft and Battle.net both return `None` from `get_game_size` before install, and that is **correct and unfixable locally** — neither the parsed UPC `GameConfig` nor Battle.net's `CatalogEntry` carries a size. Two consequences worth knowing rather than acting on blindly: App-Details shows `SPACE REQUIRED —`, and because `_resolve_required_bytes` exempts manual-download stores, the only free-space check on these installs is `validate_path`'s static 1 GB floor. So a user can start a 90 GB vendor-client install onto a target with 2 GB free and get whatever the vendor client does about it. If this is worth closing, the honest fix is a size hint in the storage picker rather than a fabricated `get_game_size`.
+
+---
+
+## Corrections — re-derived 2026-08-26
+
+Every section of this audit is itself a claim to be validated; §1.3 says so in
+as many words. These were found by re-deriving against the tree rather than
+reading the register, and each one changes a decision recorded above.
+
+### C-1. `launcher/cloud/cloud_failure.py` is dead, and this audit cites it as live twice
+
+Verified: **zero importers**. Nothing in `py_modules/`, `bin/`, `main.py` or
+`tests/` imports the module; the only textual reference in the tree is a comment
+at `core/types/events.py:137`. All nine of its functions are therefore
+unreachable.
+
+Two places above rest on it:
+
+- **Register item 4b** says "backend emitters build the canonical
+  `action = {i18n_label_key, target_url, fallback_url?}`
+  (`launcher/cloud/cloud_failure.py:_TOAST_ACTIONS`)". Those emitters never run.
+  4b is not "the frontend drops an action the backend sends" — **neither half
+  exists**. That makes 4b *cheaper*, not harder: there is no live producer to
+  stay compatible with, so the action shape can be defined once on the
+  `{verb, args}` side both renderers already expect.
+- **§1.2 decided a behaviour was acceptable on this module's authority.** It
+  states that `cloud.failure_behavior.<store>` is "read live at launch
+  (`cloud_failure.py:133-141,161`) and defaults to `"toast"`, so a store whose
+  cloud sync fails toasted on every launch of that game with no way to turn it
+  off", and on that basis **deleted the two RPCs rather than wiring them**. The
+  premise is false. The toast never fires; a cloud-save sync failure at launch is
+  **silent today**. There was never a behaviour to accept, so the decision needs
+  restating as a product question, not defending as recorded.
+
+This is §1.1.1's own lesson — *"an emit site means nothing until you check the
+enclosing function has callers"* — committed inside the register that names it.
+It is the fourth occurrence of that class in this document.
+
+### C-2. P0: the circuit breaker can never reset on a successful launch
+
+`services/launch_history/service.py:129-130` reads `kwargs.get("rc")` and
+`kwargs.get("elapsed")`. No emitter sends either name:
+
+| Emit site | Sends |
+|---|---|
+| `services/launcher/orchestrator.py:143` | `store`, `game_id` |
+| `services/launcher/orchestrator.py:200` | `store`, `game_id` |
+| `services/launcher/service.py:440` | `store`, `game_id` |
+| `rpc/mixins/launch.py:105` | `store`, `game_id`, `app_id`, `exit_code` |
+
+`CANONICAL_SCHEMA` declares `exit_code` / `elapsed_seconds`. So `rc` is always
+`None`, `_on_game_stopped` returns at its `if rc is None` guard on every stop,
+**`record_success` has no reachable call site anywhere in the tree**, and
+`FAILURE_KIND_FAST_BOOT` is never recorded. The breaker accumulates only
+`launcher_error` failures (`services/launcher/error_toasts.py:79`) and can be
+cleared only by the 600s window or by `clear_launch_failures`, which has no
+frontend caller.
+
+Consequence for register item 4a: a badge built today would show failures that
+can never clear. **Fix this first.** Tracked as item 46.
+
+Nothing could have caught it — `validate_event_schemas.py` is emit-side only.
+A subscribe-side arm finds exactly three mismatches across 41 subscribers: this
+one, and the two dead fallbacks in C-5.
+
+### C-3. Item 21's count is right; its method is wrong
+
+Excluding `docs/archive/`, the recorded 233 / 149 / 162 is accurate (measured
+234 / 149 / 164). The whole-tree figure of 387 includes an archive file that must
+**not** be swept. A correct regex gives **156** distinct ids — `OP-[0-9]+[a-z]?`
+misses the `OP-08l-bis`, `OP-08c1`, `OP-14c-bis` forms.
+
+But "comment-only, so a single mechanical commit" is misleading and a line-delete
+sweep would corrupt docstrings: roughly **160 are banner lines inside module
+docstrings**, not `#` comments, and roughly **69 are mid-sentence prose inside
+docstrings** (`stores/gog/store.py:10-17`, `services/artwork/fetcher.py:262`,
+`rpc/wrapper.py:135`), which need the parenthetical removed rather than the line.
+Zero occurrences sit in executable code.
+
+### C-4. Item 22's premise fails for its most important file
+
+`unifideck-ci-gates/SKILL.md` is stamped `2026-07-02 / v0.7.0`, yet its body
+already documents `scripts/validate_event_wiring.py` and the
+`CLIENT_STOREFRONTS ↔ WRAPPER_STORES` check — created 2026-08-25 and 2026-08-26.
+The content tracks the tree; only the bump was skipped. Item 18's reasoning
+("an accurate old stamp is a freshness signal, and bumping without re-reading
+forges it") does not apply here: this stamp is wrong in the *safe* direction,
+which is still wrong, and it will send the next reader to re-verify a file that
+needs nothing.
+
+Genuinely stale in both content and stamp: **only**
+`unifideck-release/unifidb-pipeline.md`.
+
+Two files item 22 does not list have **no `Last verified:` line at all** —
+`unifideck-drift-guard/SKILL.md` and `unifideck-bug-triage/triage-playbook.md` —
+while `docs/engineering-roadmap.md` item 8 claims the stamps exist on all skills.
+The class here is not "six stamps are old"; it is that **nothing enforces that a
+stamp exists or moves**.
+
+### C-5. Two dead defensive fallbacks, and a shadow-package trap
+
+- `services/compatibility/service.py:133-134` and
+  `services/artwork/event_handlers.py:226` read flat `games` / `is_force` off
+  `POST_SYNC_PHASE_CHANGED` "for emitters that haven't been migrated yet". No
+  such emitter exists. Harmless — the `sync_kwargs` primary path is correct — but
+  it is phantom-compat vocabulary of the §2.8 class. Tracked as item 41.
+- **`launcher/fixes/` and `launcher/language_setup/` shadowed the real
+  `launcher/proton/fixes/` and `launcher/proton/language_setup/`** with 5-of-5
+  and 5-of-7 identical module names, all empty
+  (`# TODO: implement — see operational plan PDF`), untouched since the initial
+  commit. `from unifideck.launcher.fixes.game_fixes import …` resolved, imported
+  nothing and raised nothing — the silent mis-resolve of §1.4's
+  `resolve_proton_path`, at package scale. Deleted 2026-08-26 (item 34). Vulture
+  could not see them: at `min_confidence = 80` it reports neither unused
+  functions nor whole unimported modules, which is register item 24.
+
+### Not a defect — recorded so it is not re-filed
+
+`SUPPORTED_STORES = {gog, amazon, epic}`
+(`src/lib/steam-bridge/app-context-menu-patch.ts:32`) versus
+`_DIRECT_LAUNCH_STORES = frozenset({"gog", "amazon"})`
+(`rpc/mixins/executable.py:44`) reads as a TS/Python disagreement of the §3.1
+class. It is not. They encode different concepts: the Python set is "stores whose
+override is written into and read back from the `games.map` row", and Epic's
+override goes through `legendary --override-exe` from the config key instead —
+as the comment at `executable.py:41-43` says. Both lists are correct.

@@ -18,13 +18,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from unifideck.core.store_capabilities import ACHIEVEMENT_STORES
 from unifideck.rpc import RpcError
 from unifideck.stores.epic.achievements import EpicAchievementsError
 from unifideck.stores.gog.achievements import GOGAchievementsError
 
-# Stores with a ``get_game_achievements`` implementation (display). Unlocking
-# is each store's own concern (GOG = Comet; Epic = EOS overlay).
-_ACHIEVEMENT_STORES = ("gog", "epic")
+# Single source of truth, shared with the ``get_store_infos`` payload the
+# frontend reads. This used to be a local tuple whose exact twin lived in
+# ``GameInfoCompatRow.tsx`` with nothing linking them (audit register 31):
+# a store added here alone shows no button, and one added there alone shows a
+# button that raises ``achievements_unsupported``.
+_ACHIEVEMENT_STORES = tuple(sorted(ACHIEVEMENT_STORES))
 
 
 class AchievementsRPCMixin:

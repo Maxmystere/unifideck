@@ -27,6 +27,7 @@ import { useGamePlaytime } from "../../hooks/useGamePlaytime";
 import { useGameMetadata } from "../../hooks/useGameMetadata";
 import { getThemeableClasses } from "../../lib/steam-bridge";
 import { PLAY_FOCUS_CSS } from "./play.css";
+import { useStoreCapability } from "../../hooks/useStoreCapability";
 
 /**
  * Class-name builders that make our buttons visible to CSS Loader
@@ -293,7 +294,6 @@ export function formatPlaytime(
 }
 
 /** Stores with cloud-save sync — mirrors `useCloudSaveStatus`. */
-const CLOUD_SAVE_STORES = new Set(["gog", "epic"]);
 
 /**
  * `cloud_saves` tri-state → i18n key, indexed by `String(value)`.
@@ -377,7 +377,10 @@ export const MetaInline: FC<MetaInlineProps> = ({
   // (syncing / in sync / no support / unresolved), so a static
   // "Supported/Unknown" beside it is redundant at best and contradictory at
   // worst — an enabled button next to the word "Unknown" reads like a bug.
-  const showCloudSaves = !installed && !!store && CLOUD_SAVE_STORES.has(store);
+  // Second copy of the same set, removed — its own comment said it mirrored
+  // useCloudSaveStatus. Both now read the backend-derived capability.
+  const supportsCloudSaves = useStoreCapability(store, "supports_cloud_saves");
+  const showCloudSaves = !installed && !!store && supportsCloudSaves;
   // Size is fetched out-of-band (see useGameSize) so a slow store
   // lookup never blocks this row from rendering. Keyed on `installed`
   // so the on-disk size replaces the pre-install download size once

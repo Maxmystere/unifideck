@@ -47,6 +47,7 @@ from unifideck.stores.shared.browser_auth_rebuild import (
     BrowserAuthRebuildMixin,
 )
 from unifideck.stores.shared.install_status import merge_install_status
+from unifideck.stores.shared.installed_path import install_path_from_record
 from unifideck.stores.shared.store_base import StoreBase
 from unifideck.utils.locale import get_unifideck_locale
 
@@ -396,8 +397,7 @@ class GOGStore(BrowserAuthRebuildMixin, StoreBase):
         info = await asyncio.to_thread(
             self._library.get_installed_game_info, game_id,
         )
-        path = info.get("install_path") if isinstance(info, dict) else None
-        return path if isinstance(path, str) and path else None
+        return install_path_from_record(info)
 
     async def get_game_achievements(
         self, game_id: str, force: bool = False,

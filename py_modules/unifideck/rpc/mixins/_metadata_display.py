@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from unifideck.core.compat_bridge import appid_candidates
 from unifideck.core.store_urls import store_search_url
 
 logger = logging.getLogger(__name__)
@@ -120,22 +121,12 @@ def read_cache_store(cache: Any, namespace: str) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def appid_candidates(app_id: int) -> list[str]:
-    """Return the signed + unsigned 32-bit string forms of an AppID.
-
-    Sync stores ``Game.app_id`` as signed (matches Steam's on-disk
-    representation), but Steam's frontend hands plugins the
-    unsigned form via ``overview.appid``. Caches keyed off
-    ``str(game.app_id)`` are therefore reachable only via the
-    signed string. This helper returns both so callers don't have
-    to know which side wrote the cache.
-    """
-    forms: list[str] = [str(app_id)]
-    if app_id > 0x7FFFFFFF:
-        forms.append(str(app_id - 0x100000000))
-    elif app_id < 0:
-        forms.append(str(app_id + 0x100000000))
-    return forms
+# ``appid_candidates`` was defined here. It is now
+# ``core.compat_bridge.appid_candidates`` — the same six lines existed
+# three times under three different names (here, as
+# ``compatibility/library._appid_key_candidates``, and inlined in
+# ``core/sync_queries_mixin.get_game_info``), which is why check 11's
+# name-exact matching never saw them. Audit register item 20.
 
 
 def read_steam_real_appid(cache: Any, shortcut_app_id: int) -> int:

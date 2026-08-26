@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """scripts/check_orphan_keys.py — Validate translation-key coverage.
 
-Two independent checks, either of which can fail the run:
+Three independent checks, any of which can fail the run:
 
 1. Orphan check — literal keys used in the codebase (``t("key")`` /
    ``i18nKey="key"``) that are NOT declared in a locale file.
@@ -12,7 +12,33 @@ Two independent checks, either of which can fail the run:
    indirectly via a helper (e.g. ``t(statusLabelKey(...))``) rather than as a
    string literal.
 
-Exits non-zero if either check finds a problem.
+3. Unreferenced check — keys DECLARED in every locale that nothing anywhere
+   reaches. This is the reverse direction of check 1, and it was missing.
+
+   Checks 1 and 2 both run code → locale. Nothing ran locale → code, and that
+   is the single most repeated defect in the 2026-08 architecture audit: a
+   feature's strings get written and translated into all 16 locales while its
+   delivery is never built, so the gate stays green and the user sees nothing.
+   It happened to ``TOAST_NOTIFICATION`` (§1.1.2 — "the i18n strings existed
+   and were translated in all 16 locales the whole time; only the delivery
+   channel was dead"), to the three ``SYNC_SKIPPED`` explanations that would
+   have told Game Pass users why their library vanished, to four
+   ``errors.download.*`` codes, to ``toasts.storeError``, and to
+   ``microsoft.subscriptionDetected``. Every one would have shown up here.
+
+   A key counts as referenced if its full dotted form appears anywhere in
+   ``src/``, ``py_modules/unifideck/`` or ``bin/`` — the backend sends
+   ``i18n_key`` strings, so Python is part of the haystack — or if its last
+   segment appears, which tolerates runtime composition such as
+   ``t(`errors.download.${code}`)``. That is the generous test on purpose:
+   a false positive here costs a real translated string.
+
+   The already-dead keys are grandfathered in ``i18n_unused_baseline.json``,
+   which may only ever SHRINK — the same rule the volumetry allowlists use.
+   A newly-dead key fails immediately; a baseline key that becomes reachable
+   prints a reminder to drop it from the baseline.
+
+Exits non-zero if any check finds a problem.
 """
 from __future__ import annotations
 
@@ -25,6 +51,66 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_ROOT = REPO_ROOT / "src"
 LOCALES_DIR = SRC_ROOT / "i18n" / "locales"
 SOURCE_LOCALE = "en-US"
+
+#: Grandfathered unreferenced keys (check 3). Shrink-only.
+UNUSED_BASELINE = Path(__file__).resolve().parent / "i18n_unused_baseline.json"
+
+#: Where a key can be reached from. Python is in here because the backend
+#: emits ``i18n_key`` strings that the frontend renders — a key can be live
+#: and never appear in a single ``.tsx`` file.
+REFERENCE_ROOTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("src", (".ts", ".tsx")),
+    ("py_modules/unifideck", (".py",)),
+    ("bin", ()),
+)
+
+
+def _reference_haystack() -> str:
+    """Every file a translation key could be named in, concatenated."""
+    chunks: list[str] = []
+    for rel, suffixes in REFERENCE_ROOTS:
+        root = REPO_ROOT / rel
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            if "i18n/locales" in path.as_posix() or "__pycache__" in path.parts:
+                continue
+            if suffixes and path.suffix not in suffixes:
+                continue
+            try:
+                chunks.append(path.read_text(encoding="utf-8", errors="ignore"))
+            except OSError:
+                continue
+    return "\n".join(chunks)
+
+
+def find_unreferenced_keys(source_keys: set[str]) -> list[str]:
+    """Declared keys that nothing anywhere reaches.
+
+    Generous by design: a key survives if its full dotted form OR its last
+    segment appears in the haystack, so runtime-composed keys such as
+    ``t(`errors.download.${code}`)`` are not reported.
+    """
+    haystack = _reference_haystack()
+    unreferenced = []
+    for key in sorted(source_keys):
+        leaf = key.rsplit(".", 1)[-1]
+        if key in haystack or leaf in haystack:
+            continue
+        unreferenced.append(key)
+    return unreferenced
+
+
+def _load_unused_baseline() -> set[str]:
+    if not UNUSED_BASELINE.is_file():
+        return set()
+    try:
+        data = json.loads(UNUSED_BASELINE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    return set(data.get("keys", []))
 
 # Regexes to capture literal string keys in translation calls.
 # 1. t("key") or t('key') or t(`key`)
@@ -127,12 +213,34 @@ def main() -> int:
         if missing:
             locale_incomplete[locale_name] = missing
 
-    if not locale_orphans and not locale_incomplete:
+    # --- Check 3: declared keys nothing reaches (locale -> code) ---
+    baseline = _load_unused_baseline()
+    unreferenced = find_unreferenced_keys(source_keys)
+    newly_dead = sorted(set(unreferenced) - baseline)
+    revived = sorted(baseline - set(unreferenced) - (baseline - source_keys))
+    stale_baseline = sorted(baseline - source_keys)
+
+    if not locale_orphans and not locale_incomplete and not newly_dead:
         print(
             f"[check_orphan_keys] OK — {len(used_keys_map)} used keys and "
             f"{len(source_keys)} {SOURCE_LOCALE} keys verified across "
             f"{len(locale_files)} languages. No orphans, no missing translations."
         )
+        if baseline:
+            print(
+                f"[check_orphan_keys] {len(baseline)} key(s) grandfathered as "
+                f"unreferenced ({UNUSED_BASELINE.name}); this list may only shrink."
+            )
+        for key in revived:
+            print(
+                f"[check_orphan_keys] cleanup: '{key}' is referenced again — "
+                f"remove it from {UNUSED_BASELINE.name}."
+            )
+        for key in stale_baseline:
+            print(
+                f"[check_orphan_keys] cleanup: '{key}' is no longer declared — "
+                f"remove it from {UNUSED_BASELINE.name}."
+            )
         return 0
 
     if locale_orphans:
@@ -159,6 +267,29 @@ def main() -> int:
             print(f"\n[{locale_name}] Missing {len(missing)} keys:", file=sys.stderr)
             for key in missing:
                 print(f"  {key}", file=sys.stderr)
+
+    if newly_dead:
+        print(
+            f"\n[check_orphan_keys] FAIL — {len(newly_dead)} translation key(s) "
+            f"are declared in all {len(locale_files)} locales but nothing "
+            f"anywhere reaches them:",
+            file=sys.stderr,
+        )
+        for key in newly_dead:
+            print(f"  {key}", file=sys.stderr)
+        print(
+            "\n  A string written and translated 16 times with no delivery path "
+            "is\n"
+            "  the most repeated defect in the 2026-08 audit — the user sees "
+            "nothing\n"
+            "  while every gate stays green. Either wire it up (a backend "
+            "i18n_key\n"
+            "  counts), or delete the key from all locales. If it is genuinely\n"
+            f"  reached in a way this scan cannot see, add it to "
+            f"{UNUSED_BASELINE.name}\n"
+            "  with a reason — but that list is meant to shrink, not grow.",
+            file=sys.stderr,
+        )
 
     return 1
 

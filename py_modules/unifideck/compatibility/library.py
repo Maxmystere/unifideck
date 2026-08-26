@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
+from unifideck.core.compat_bridge import appid_candidates
 from unifideck.utils.config_helpers import get_cfg
 
 if TYPE_CHECKING:
@@ -333,7 +334,7 @@ class CompatLibrary:
             data = getattr(stores.get("steam_real_appid"), "_data", None)
             if not isinstance(data, dict):
                 return None
-            for key in self._appid_key_candidates(shortcut_app_id):
+            for key in appid_candidates(shortcut_app_id):
                 value = data.get(key)
                 if isinstance(value, int):
                     return value
@@ -346,15 +347,6 @@ class CompatLibrary:
         value = self.cached_steam_mapping(shortcut_app_id)
         return value if isinstance(value, int) and value > 0 else None
 
-    @staticmethod
-    def _appid_key_candidates(app_id: int) -> list[str]:
-        """Return both signed and unsigned 32-bit string forms of an AppID."""
-        forms: list[str] = [str(app_id)]
-        if app_id > 0x7FFFFFFF:
-            forms.append(str(app_id - 0x100000000))
-        elif app_id < 0:
-            forms.append(str(app_id + 0x100000000))
-        return forms
     async def bulk_fetch(
     self, titles: list[str], delay_ms: int = 50,
     ) -> dict[str, CompatRating]:

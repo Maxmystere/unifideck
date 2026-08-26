@@ -88,6 +88,7 @@ Infrastructure primitives. No store or service knowledge.
 | `stale_installs.py`             | Detects install records with no files left |
 | `compat_bridge.py`              | Reads Steam's compat-tool selection       |
 | `compat_tool_bridge.py`         | Resolves a compat-tool id to a Proton path |
+| `store_capabilities.py`         | Per-store capability sets — the single source of truth behind the `get_store_infos` flags |
 | `io/async_file_ops.py`          | Async file read/write/remove              |
 | `io/safe_file_op.py`            | Atomic write with rollback                |
 | `binaries/binary_resolver.py`   | Resolves `bin/` tool paths                |

@@ -1033,3 +1033,150 @@ def test_check11_every_tracked_owner_exists(mod) -> None:
         assert path.is_file(), f"{name}: owning module {owner} is missing"
         pattern = f"def {name}("
         assert pattern in path.read_text(), f"{name} is not defined in {owner}"
+
+
+# ========================================================= #
+# 12. Every first-party module is imported by something
+# ========================================================= #
+@pytest.fixture
+def import_tree(monkeypatch, tmp_path: Path, mod):
+    """A minimal package: one importer, one imported module.
+
+    ``_module_name`` names a file relative to ``PY.parent``, so the package
+    directory must literally be called ``unifideck`` for the dotted names to
+    come out as ``unifideck.*``.
+    """
+    pkg = tmp_path / "unifideck"
+    _plant(pkg, "__init__.py", "")
+    # The package __init__ re-exports the leaf importer, which is how a real
+    # package makes its entry modules reachable. Without it ``consumer`` is
+    # itself an orphan — correctly, since _IMPORTER_ROOTS is empty here.
+    _plant(pkg, "live/__init__.py", "from .consumer import use\n")
+    _plant(
+        pkg, "live/consumer.py",
+        "from unifideck.live.helper import thing\n\n"
+        "def use():\n    return thing()\n",
+    )
+    _plant(pkg, "live/helper.py", "def thing():\n    return 1\n")
+    monkeypatch.setattr(mod, "PY", pkg)
+    monkeypatch.setattr(mod, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(mod, "_IMPORTER_ROOTS", ())
+    return pkg
+
+
+def _orphan_names(mod) -> list[str]:
+    return [name for name, _path in mod.find_unimported_modules()]
+
+
+def test_check12_passes_when_every_module_is_imported(import_tree, mod) -> None:
+    assert _orphan_names(mod) == []
+
+
+def test_check12_catches_a_module_nothing_imports(import_tree: Path, mod) -> None:
+    """The shape that shipped: an empty stub beside a real implementation.
+
+    ``launcher/fixes/`` and ``launcher/language_setup/`` shadowed the real
+    ``launcher/proton/*`` with identical module names, every file a
+    ``# TODO: implement`` stub, from the initial commit onwards. Importing
+    the stub resolved, did nothing, and raised nothing.
+    """
+    _plant(import_tree, "live/orphan.py", "def never_called():\n    return 0\n")
+    assert _orphan_names(mod) == ["unifideck.live.orphan"]
+
+
+def test_check12_resolves_relative_imports_against_the_package(
+    import_tree: Path, mod,
+) -> None:
+    """The half a naive scan gets wrong, and the reason to test it.
+
+    ``from ..cloud import x`` inside ``live/nested/`` must resolve to
+    ``unifideck.live.cloud.x``. A first cut that skipped this reported a
+    dozen live modules as orphans, which would have made the gate useless.
+    """
+    _plant(import_tree, "live/cloud/__init__.py", "")
+    _plant(import_tree, "live/cloud/target.py", "VALUE = 1\n")
+    _plant(import_tree, "live/nested/__init__.py", "")
+    _plant(
+        import_tree, "live/nested/importer.py",
+        "from ..cloud.target import VALUE\n\nX = VALUE\n",
+    )
+    _plant(
+        import_tree, "live/consumer.py",
+        "from unifideck.live.helper import thing\n"
+        "from unifideck.live.nested.importer import X\n\n"
+        "def use():\n    return thing(), X\n",
+    )
+    assert _orphan_names(mod) == []
+
+
+def test_check12_honours_the_entry_point_marker(import_tree: Path, mod) -> None:
+    _plant(
+        import_tree, "live/cli_main.py",
+        "# entry-point: run by bin/unifideck-launcher\ndef main():\n    return 0\n",
+    )
+    assert _orphan_names(mod) == []
+
+
+def test_check12_honours_the_unimported_marker(import_tree: Path, mod) -> None:
+    """Distinct from ``# entry-point:`` on purpose.
+
+    "Reached by a process" and "dead, tracked by an open item" are different
+    claims; conflating them is how an allowlist stops meaning anything.
+    """
+    _plant(
+        import_tree, "live/known_dead.py",
+        '"""Doc.\n\n# unimported: audit register item 37 — pending a product call.\n"""\n',
+    )
+    assert _orphan_names(mod) == []
+
+
+def test_check12_honours_a_main_guard(import_tree: Path, mod) -> None:
+    _plant(
+        import_tree, "live/script.py",
+        'def main():\n    return 0\n\n\nif __name__ == "__main__":\n    main()\n',
+    )
+    assert _orphan_names(mod) == []
+
+
+def test_check12_ignores_package_inits(import_tree: Path, mod) -> None:
+    """An ``__init__.py`` is reached by importing its package, not by name."""
+    _plant(import_tree, "live/lonely/__init__.py", "")
+    assert _orphan_names(mod) == []
+
+
+def test_check12_counts_a_from_package_import_of_a_submodule(
+    import_tree: Path, mod,
+) -> None:
+    """``from pkg import submodule`` imports a module, not a symbol."""
+    _plant(import_tree, "live/sub/__init__.py", "")
+    _plant(import_tree, "live/sub/leaf.py", "Y = 2\n")
+    _plant(
+        import_tree, "live/consumer.py",
+        "from unifideck.live.helper import thing\n"
+        "from unifideck.live.sub import leaf\n\n"
+        "def use():\n    return thing(), leaf.Y\n",
+    )
+    assert _orphan_names(mod) == []
+
+
+def test_check12_does_not_treat_a_test_importer_as_production_use(
+    import_tree: Path, mod, tmp_path: Path,
+) -> None:
+    """A module imported only by a test is still dead production code.
+
+    ``tests/`` is deliberately absent from ``_IMPORTER_ROOTS``. The SGDB
+    ``match`` shim was exactly this: no production importer, one test
+    pinning it, and a docstring claiming the package imported it.
+    """
+    _plant(import_tree, "live/tested_only.py", "def f():\n    return 1\n")
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir(parents=True, exist_ok=True)
+    (tests_dir / "test_it.py").write_text(
+        "from unifideck.live.tested_only import f\n", encoding="utf-8",
+    )
+    assert _orphan_names(mod) == ["unifideck.live.tested_only"]
+
+
+def test_check12_is_clean_on_the_real_tree(mod) -> None:
+    """The gate must pass against the live repo, or it gets switched off."""
+    assert mod.find_unimported_modules() == []

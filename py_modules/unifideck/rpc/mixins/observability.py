@@ -46,19 +46,15 @@ class ObservabilityRPCMixin:
     _config_validation_result: Any = None
     _config_degraded: bool = False
 
-    def set_bus_collaborators(
-        self,
-        *,
-        dispatcher: Any,
-        watchdog: Any,
-        latency: Any,
-        replay: Any,
-    ) -> None:
-        """Inject optional EventBus pipeline collaborators."""
-        self.dispatcher = dispatcher
-        self.watchdog = watchdog
-        self.latency = latency
-        self.replay = replay
+    # There is deliberately no ``set_bus_collaborators`` setter. One existed
+    # with zero callers: ``bootstrap/pipeline_factory.py`` assigns
+    # ``plugin.dispatcher`` / ``.watchdog`` / ``.latency`` / ``.replay``
+    # directly, so the setter was a second way to do the same thing that
+    # nothing used. It was invisible to both dead-code gates — ``vulture``
+    # at ``min_confidence = 80`` does not report unused methods, and check 4
+    # collects only public ``async def`` (a sync method is not RPC surface,
+    # correctly). Audit register item 38. The annotations above are what
+    # mypy needs; assignment stays with the factory that owns the objects.
 
     def _bus_health(self) -> dict[str, Any]:
         """Aggregate EventBus + collaborator health for the support bundle.

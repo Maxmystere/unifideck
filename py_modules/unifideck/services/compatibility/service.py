@@ -129,9 +129,15 @@ class CompatibilityService:
             return
         if kwargs.get("active") is not False:
             return
+        # ``sync_kwargs`` is the only shape any emitter has ever sent. The
+        # flat ``kwargs.get("games")`` / ``kwargs.get("is_force")`` fallback
+        # that used to sit here was for "older emitters that haven't been
+        # migrated yet" — there were none, in the whole history of the file.
+        # Audit register item 41; found by the new subscribe-side arm of
+        # validate_event_schemas.py.
         sync_kwargs = kwargs.get("sync_kwargs") or {}
-        games = sync_kwargs.get("games") or kwargs.get("games", [])
-        is_force = bool(sync_kwargs.get("is_force") or kwargs.get("is_force"))
+        games = sync_kwargs.get("games") or []
+        is_force = bool(sync_kwargs.get("is_force"))
         prior = self._enrichment_task
         if prior is not None and not prior.done():
             prior.cancel()

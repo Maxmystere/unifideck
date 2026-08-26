@@ -99,3 +99,26 @@ jobs:
 
       - name: Validate event wiring
         run: python3 scripts/validate_event_wiring.py
+
+  # Translation-key coverage, in BOTH directions. Checks 1 and 2 (used but
+  # undeclared, declared but untranslated) already ran inside the big
+  # build-plugin job; check 3 is the reverse direction — a key translated
+  # into all 16 locales that nothing anywhere reaches — and it belongs here
+  # for the same reason as the three above: a failure buried in a job that
+  # also runs pnpm install and rollup is a failure nobody reads. The reverse
+  # direction is the audit's most repeated defect (§1.1.2, SYNC_SKIPPED, four
+  # errors.download.* codes), and it needs py_modules/ in the haystack
+  # because the backend sends i18n_key strings.
+  i18n-keys:
+    name: translation keys
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate translation-key coverage
+        run: python3 scripts/check_orphan_keys.py

@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from unifideck.core.compat_bridge import appid_candidates
 from unifideck.rpc.mixins._metadata_display import (
-    appid_candidates,
     deck_compat_enum,
     read_cache_store,
     read_compat_entry,

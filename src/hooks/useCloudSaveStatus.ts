@@ -17,6 +17,7 @@ import { rpcRoutes } from "../api/rpc-routes";
 import { useRPCQuery, type QueryState } from "../api/useRPC";
 import { useEventBus } from "../api/event-bus-client";
 import { Events } from "../types/events";
+import { useStoreCapability } from "./useStoreCapability";
 
 export interface SaveSnapshot {
   timestamp: number;
@@ -45,8 +46,6 @@ export interface CloudSaveStatus {
   browse_start: string;
 }
 
-const CLOUD_SAVE_STORES = new Set(["gog", "epic"]);
-
 export interface CloudSaveStatusResult extends QueryState<CloudSaveStatus> {
   /** False for stores without cloud-save sync — caller hides the button. */
   enabled: boolean;
@@ -56,7 +55,11 @@ export function useCloudSaveStatus(
   store: string | undefined,
   gameId: string | undefined,
 ): CloudSaveStatusResult {
-  const enabled = !!store && !!gameId && CLOUD_SAVE_STORES.has(store);
+  // Was a local `new Set(["gog", "epic"])`, duplicated verbatim in
+  // PlayMeta.tsx. The backend derives this from the cloud-save strategies it
+  // actually registers (audit register items 26/31).
+  const supportsCloudSaves = useStoreCapability(store, "supports_cloud_saves");
+  const enabled = !!store && !!gameId && supportsCloudSaves;
   const query = useRPCQuery<[string, string], CloudSaveStatus>(
     rpcRoutes.getCloudSaveStatus,
     [store ?? "", gameId ?? ""],

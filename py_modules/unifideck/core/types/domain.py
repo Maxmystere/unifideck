@@ -93,9 +93,12 @@ class StoreInfo:
         icon_asset: asset path or URL of the store logo.
         supports_install: True if the store can install games
             locally (False for streaming-only services).
-        supports_cloud_saves: True if the store has its own
-            cloud-save system that ``CloudSaveService``
-            integrates with.
+
+    Capability flags (achievements, cloud saves, language picker, browser
+    storefront) are **not** fields here. They are injected into the
+    ``get_store_infos`` payload from ``core.store_capabilities``, so a store
+    cannot declare an answer that disagrees with the code implementing it.
+    See the note below ``supports_install``.
     """
 
     name: str
@@ -103,7 +106,20 @@ class StoreInfo:
     auth_method: str
     icon_asset: str
     supports_install: bool = True
-    supports_cloud_saves: bool = False
+
+    # There is deliberately no ``supports_cloud_saves`` field. It was one,
+    # and only Battle.net ever declared it — as ``False`` — so GOG and Epic,
+    # the only two stores that HAVE cloud saves, both took the default and
+    # advertised that they did not. Nothing read it, which is the only reason
+    # it never broke anything; wiring a UI to it would have hidden the
+    # feature on exactly the stores that support it.
+    #
+    # It is now derived in ``get_store_infos`` from
+    # ``core.store_capabilities.CLOUD_SAVE_STORES``, which is also what
+    # ``CloudSaveService`` registers its strategies from. Leaving the field
+    # off means a re-added literal raises ``TypeError`` at construction —
+    # the §3.1 ``uses_wine`` precedent: make the duplicate impossible rather
+    # than check it.
 
 
 @dataclass

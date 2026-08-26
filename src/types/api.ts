@@ -149,14 +149,44 @@ export interface DownloadResult extends Result {
   queued: boolean;
 }
 
-/** Per-store status block returned by `check_store_status`. */
+/**
+ * One entry of the `get_store_infos` payload.
+ *
+ * This interface used to declare `icon` and `auth_status`, **neither of
+ * which the backend has ever sent** — `StoreInfo` carries `icon_asset`, and
+ * auth state comes from the separate `check_store_status` route keyed by
+ * `store_id`. Four fields that *were* sent went undeclared. A type that
+ * matches an unread payload is still a lie, so this now mirrors the wire
+ * shape exactly (audit register item 26).
+ *
+ * The `supports_*` / `has_*` flags are derived server-side from
+ * `core/store_capabilities.py` and are the reason the frontend no longer
+ * hand-maintains its own per-store lists — the audit found sixteen of those
+ * with a single machine-checked pair between them. Read a capability off
+ * here (see `useStoreCapability`) rather than writing a new `Set([...])`.
+ */
 export interface StoreInfo {
   name: StoreId;
   display_name: string;
-  icon: string;
+  auth_method: string;
+  icon_asset: string;
+  supports_install: boolean;
   available: boolean;
-  auth_status: StoreStatus;
+  client_runs_in_prefix: boolean;
+  supports_achievements: boolean;
+  supports_cloud_saves: boolean;
+  has_language_picker: boolean;
+  has_browser_storefront: boolean;
 }
+
+/** Capability keys carried by {@link StoreInfo}. */
+export type StoreCapability =
+  | "supports_install"
+  | "supports_achievements"
+  | "supports_cloud_saves"
+  | "has_language_picker"
+  | "has_browser_storefront"
+  | "client_runs_in_prefix";
 
 /**
  * Discriminator for which store a Game/Auth/Download

@@ -25,6 +25,7 @@ import { SteamBridge } from "../../lib/steam-bridge";
 import { UninstallConfirmModal } from "../modals/UninstallConfirmModal";
 import { GameInfoDetailsModal } from "./GameInfoDetailsModal";
 import { GameAchievementsModal } from "./GameAchievementsModal";
+import { useStoreCapability } from "../../hooks/useStoreCapability";
 import type { GameMetadata } from "../../types/api";
 
 interface Props {
@@ -77,6 +78,15 @@ export const GameInfoCompatRow: FC<Props> = ({
   const downloads = useDownloads();
   const actions = useGameActions(bridge);
   const toast = useToast();
+  // Was `game?.store === "gog" || game?.store === "epic"` inline — the exact
+  // twin of `_ACHIEVEMENT_STORES` in rpc/mixins/achievements.py with nothing
+  // linking them (audit register item 31). Adding a store to one side only
+  // was silent in both directions: no button, or a button that raises
+  // `achievements_unsupported`.
+  const supportsAchievements = useStoreCapability(
+    game?.store,
+    "supports_achievements",
+  );
 
   const activeDownload = useMemo(() => {
     if (!game || !downloads.queue) return null;
@@ -191,7 +201,7 @@ export const GameInfoCompatRow: FC<Props> = ({
             {t("gameInfoPanel.buttons.synopsis")}
           </DialogButton>
         )}
-        {(game?.store === "gog" || game?.store === "epic") && (
+        {supportsAchievements && (
           <DialogButton
             className="unifideck-nav-button"
             style={buttonStyle}

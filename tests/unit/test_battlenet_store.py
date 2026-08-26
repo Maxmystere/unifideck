@@ -33,6 +33,7 @@ from unifideck.stores.battlenet.ownership import (
 from unifideck.stores.battlenet.prefix import MARKER_FILENAME
 from unifideck.stores.shared import prefix_clone as pc
 from unifideck.stores.shared.store_base import StoreBase
+from unifideck.core.store_capabilities import capability_flags
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "battlenet"
 LAUNCHER = "/plugin/bin/unifideck-launcher"
@@ -123,7 +124,12 @@ def test_store_info_declares_a_wine_wrapper_store() -> None:
     assert info.name == "battlenet"
     assert info.supports_install is True
     # No cloud-save strategy exists: Blizzard progress is server-side.
-    assert info.supports_cloud_saves is False
+    # Asserted against the derived capability rather than a StoreInfo field.
+    # It WAS a field, and Battle.net was the only store that ever set it —
+    # so GOG and Epic, the two stores that do have cloud saves, both took the
+    # `False` default and advertised that they had none. The field is gone;
+    # a re-added literal now raises TypeError (audit register item 26).
+    assert capability_flags("battlenet")["supports_cloud_saves"] is False
     # Wrapper-ness is NOT declared here. It is owned by WRAPPER_STORES and
     # derived into the payload by get_store_infos (audit §3.1), so asserting
     # it off the descriptor would restore the second copy this removed.

@@ -51,6 +51,7 @@ loudly instead of silently never matching.
 """
 from __future__ import annotations
 
+import ast
 import sys
 from pathlib import Path
 
@@ -205,6 +206,137 @@ def walk_sources(root: Path) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     return merged, emitters
 
 
+#: Subscriber payload reads that are deliberately tolerated rather than
+#: honoured — a key read only as an ``or`` fallback beside a
+#: schema-declared primary. These are dead branches, not defects: the
+#: primary path is correct and no emitter has ever sent the fallback name.
+#: Keyed ``"<module>::<handler>"`` so a rename surfaces here rather than
+#: silently widening the exemption.
+#:
+#: Do NOT add a row to silence a real mismatch. The whole point of this
+#: check is that ``rc``/``exit_code`` (audit correction C-2) sat unnoticed
+#: for a release because nothing compared the two sides.
+#: Empty, and that is the goal. Its two founding entries — the flat
+#: ``games`` / ``is_force`` reads on ``POST_SYNC_PHASE_CHANGED`` — were
+#: deleted once this check surfaced them (audit register item 41) rather than
+#: carried. Prefer that: an exemption is a place for a defect to hide.
+TOLERATED_SUBSCRIBER_READS: dict[str, set[str]] = {}
+
+
+def walk_subscribers(root: Path) -> list[tuple[str, str, str, set[str]]]:
+    """Collect every ``@subscribe``-decorated handler's payload reads.
+
+    Returns ``(event, relative_path, handler_name, keys)`` per handler,
+    where *keys* are the literal names passed to ``kwargs.get(...)``.
+
+    This is the half :func:`compare` cannot see. ``validate_event_schemas``
+    was emit-side only, so a handler reading a key no emitter sends was
+    invisible — and that is the tree's most expensive recurring defect:
+    ``GAME_INSTALLED`` shipped it (``app_id`` vs ``game_id``),
+    ``TOAST_NOTIFICATION`` shipped it (``params`` vs ``i18n_params``), and
+    ``GAME_STOPPED`` was still shipping it (``rc`` vs ``exit_code``) when
+    this check was written. §1.1.1 of the audit states the rule in words —
+    "read the subscriber's ``kwargs.get(...)`` keys against the emit site's
+    kwargs" — and nothing enforced it.
+    """
+    found: list[tuple[str, str, str, set[str]]] = []
+    for path in sorted(root.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        rel = path.relative_to(root).as_posix()
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            event = _subscribed_event(node)
+            if event is None:
+                continue
+            found.append((event, rel, node.name, _kwargs_get_keys(node)))
+    return found
+
+
+def _subscribed_event(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+    """The ``Events.X`` member name in a ``@subscribe(...)`` decorator."""
+    for dec in node.decorator_list:
+        if not isinstance(dec, ast.Call):
+            continue
+        target = dec.func
+        name = getattr(target, "id", getattr(target, "attr", None))
+        if name != "subscribe":
+            continue
+        for arg in dec.args:
+            if isinstance(arg, ast.Attribute):
+                return arg.attr
+    return None
+
+
+def _kwargs_get_keys(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """Literal keys read via ``kwargs.get("...")`` inside *node*."""
+    keys: set[str] = set()
+    for sub in ast.walk(node):
+        if (
+            isinstance(sub, ast.Call)
+            and isinstance(sub.func, ast.Attribute)
+            and sub.func.attr == "get"
+            and isinstance(sub.func.value, ast.Name)
+            and sub.func.value.id == "kwargs"
+            and sub.args
+            and isinstance(sub.args[0], ast.Constant)
+            and isinstance(sub.args[0].value, str)
+        ):
+            keys.add(sub.args[0].value)
+    return keys
+
+
+def check_subscriber_reads(
+    subscribers: list[tuple[str, str, str, set[str]]],
+) -> int:
+    """Fail on a handler reading a key its event's schema does not declare.
+
+    Only events with a ``CANONICAL_SCHEMA`` row are checked — an event with
+    no declared contract has nothing to compare against, and
+    :func:`compare` already reports it.
+    """
+    errors = 0
+    tolerated = 0
+    for event, rel, handler, keys in subscribers:
+        declared = CANONICAL_SCHEMA.get(event)
+        if not declared:
+            continue
+        unknown = keys - declared
+        if not unknown:
+            continue
+        allowed = TOLERATED_SUBSCRIBER_READS.get(f"{rel}::{handler}", set())
+        real = unknown - allowed
+        tolerated += len(unknown & allowed)
+        if not real:
+            continue
+        errors += 1
+        print(
+            f"  ✗  {event}: {rel}::{handler}() reads "
+            f"{sorted(real)}, which no emitter sends"
+        )
+        print(f"       declared payload: {sorted(declared)}")
+        print(
+            "       Either the handler's key names are wrong, or the "
+            "emitter never\n"
+            "       sent what it promised. A silent no-op either way — "
+            "see audit\n"
+            "       §1.1.1. If it is a dead 'or' fallback beside a correct "
+            "primary,\n"
+            "       add it to TOLERATED_SUBSCRIBER_READS with a reason."
+        )
+    if tolerated:
+        print(
+            f"→ {tolerated} tolerated subscriber read(s) "
+            f"(dead fallbacks, see TOLERATED_SUBSCRIBER_READS)"
+        )
+    return errors
+
+
 def check_emitter_owners(emitters: dict[str, set[str]]) -> int:
     """Print emitters outside an event's owning subsystem.
 
@@ -290,6 +422,13 @@ def main() -> int:
     )
     errors = compare(actual, CANONICAL_SCHEMA)
     errors += check_emitter_owners(emitters)
+
+    subscribers = walk_subscribers(target)
+    print(
+        f"→ checking {len(subscribers)} @subscribe handler(s) against the "
+        f"declared payloads"
+    )
+    errors += check_subscriber_reads(subscribers)
     if errors == 0:
         print("\n✓ event schemas valid")
         return 0

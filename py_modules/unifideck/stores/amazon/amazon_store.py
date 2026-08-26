@@ -46,6 +46,7 @@ from unifideck.stores.shared.browser_auth_rebuild import (
 )
 from unifideck.stores.shared.cli_credentials import read_cli_user_json
 from unifideck.stores.shared.install_status import merge_install_status
+from unifideck.stores.shared.installed_path import install_path_from_record
 from unifideck.stores.shared.store_base import StoreBase
 from unifideck.utils.config_helpers import get_cfg
 
@@ -341,8 +342,9 @@ class AmazonStore(BrowserAuthRebuildMixin, StoreBase):
         """
         installed = await self._library.read_installed_ids()
         info = installed.get(game_id) if isinstance(installed, dict) else None
-        path = info.get("path") if isinstance(info, dict) else None
-        return path if isinstance(path, str) and path else None
+        # nile calls the field ``path``; GOG and Ubisoft call it
+        # ``install_path``. That literal is the only per-store difference.
+        return install_path_from_record(info, key="path")
 
     async def get_official_url(self, game_id: str) -> str | None:
         """Get official URL."""
