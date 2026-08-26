@@ -69,15 +69,6 @@
     "validationErrors.homeRoot": "Não é possível usar a raiz do diretório do usuário",
     "freeSpaceLabel": "{{label}} ({{freeSpace}} GB livres)"
   },
-  "gameGrid": {
-    "loading": "Carregando jogos...",
-    "noGamesFound": "Nenhum jogo encontrado",
-    "noGamesHint": "Tente sincronizar suas bibliotecas nas configurações do Unifideck",
-    "showingGames": "Exibindo {{count}} jogos",
-    "installed": "Instalado",
-    "notInstalled": "Não instalado",
-    "playtime": "{{hours}}h {{minutes}}m jogados"
-  },
   "downloadsTab": {
     "currentDownload": "DOWNLOAD ATUAL",
     "queuedDownloads": "NA FILA ({{count}})",
@@ -154,8 +145,6 @@
     "connected": "Conectado",
     "checking": "Verificando...",
     "authenticate": "Entrar",
-    "legendaryNotInstalled": "⚠️ Instalando Epic Games CLI...",
-    "nileNotInstalled": "⚠️ Amazon Games CLI não encontrado",
     "error": "Erro - Verifique os logs",
     "storefrontOpening": "Abrindo a loja da {{store}}...",
     "storefrontFailed": "Não foi possível abrir a loja da {{store}}"

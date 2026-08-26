@@ -101,7 +101,6 @@ class _RunState:
         "total_bytes": 0,
         "speed_bps": 0.0,
         "eta_seconds": 0,
-        "phase_message": "Starting download…",
     })
     tail_buf: TailRingBuffer = field(default_factory=TailRingBuffer)
     in_tail: bool = False
@@ -331,7 +330,7 @@ class _GogdlProgressMonitor(_GogdlRepairMixin):
         if progress_cb is not None:
             try:
                 await progress_cb(
-                    {**state.progress, "phase_message": "Extracting…"},
+                    dict(state.progress),
                 )
             except Exception as e:
                 logger.debug("[GOGInstaller] extracting phase_cb: %s", e)
@@ -353,10 +352,11 @@ class _GogdlProgressMonitor(_GogdlRepairMixin):
             state.tail_buf.append(line_str)
             if not line_str.startswith("[gogdl]"):
                 logger.info("[gogdl] %s", line_str)
+        # ``parse_transfer_progress`` mutates ``state.progress`` in place;
+        # the ``if updated and "Progress:" in line_str`` branch that used to
+        # follow existed solely to format a ``phase_message`` string the UI
+        # never displayed (audit register item 45), so it went with it.
         updated = parse_transfer_progress(line_str, state.progress)
-        if updated and "Progress:" in line_str:
-            pct = float(state.progress.get("progress_percent") or 0)
-            state.progress["phase_message"] = f"Downloading… {pct:.1f}%"
         await self._maybe_enter_tail(state, progress_cb)
         if progress_cb is None or not updated:
             return

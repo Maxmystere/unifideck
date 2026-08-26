@@ -221,9 +221,7 @@
     "settings_path": "~/.local/share/unifideck/proton_settings.json",
     "shortcuts_registry_path": "~/.local/share/unifideck/shortcuts_registry.json"
   },
-  "binary_resolver": {
-    "version_check_timeout_seconds": 10
-  },
+  "binary_resolver": {},
   "i18n": {
     "locales": [
       {

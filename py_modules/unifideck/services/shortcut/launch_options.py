@@ -145,9 +145,44 @@ def rewrite_for_sync(current_launch_options: object, new_store_id: str) -> str:
         if isinstance(current_launch_options, str)
         else ""
     )
-    return preserve_user_params(
-        strip_unifideck_env_tokens(text), new_store_id,
+    return _drop_leading_command_token(
+        preserve_user_params(
+            strip_unifideck_env_tokens(text), new_store_id,
+        ),
     )
+
+
+def _drop_leading_command_token(launch_options: str) -> str:
+    """Remove a ``%command%`` that nothing precedes.
+
+    Measured on this Deck (audit §2.9): a shortcut whose ``LaunchOptions``
+    **begin** with ``%command%`` does not launch at all — two attempts out of
+    two — while the same string with any token in front of it launches fine.
+    Steam appears to resolve the placeholder to an empty program.
+
+    ``%command%`` is only meaningful as a separator: tokens before it are
+    wrapper words and assignments Steam applies pre-exec, tokens after it are
+    argv. With nothing in front, it separates nothing, so dropping it is
+    lossless — ``mangohud %command% gog:123`` is untouched, only the bare
+    leading form is repaired.
+
+    This is a rewrite path, not a parser, so it is the one place that can
+    heal an already-broken shortcut. Audit register item 36 — and note that
+    item 24a's fix is what made this necessary: replacing
+    ``_update_existing_shortcut``'s wholesale overwrite with preservation
+    removed the only thing that had ever cleaned these up by accident.
+    """
+    stripped = launch_options.lstrip()
+    if not stripped.startswith(_COMMAND_PLACEHOLDER):
+        return launch_options
+    return stripped[len(_COMMAND_PLACEHOLDER):].strip()
+
+
+#: Steam's placeholder for the game's own command line. Named
+#: "placeholder" rather than "token" so ruff's S105 (hardcoded
+#: password) does not fire on the literal — it matches any name
+#: containing TOKEN.
+_COMMAND_PLACEHOLDER = "%command%"
 
 
 __all__ = [

@@ -140,8 +140,6 @@ class StoreBase(ABC):
             tool = CLITool(
                 name=tool.name,
                 search_paths=absolutised,
-                version_flag=tool.version_flag,
-                min_version=tool.min_version,
             )
         return binary_resolver.resolve(tool)
     def _find_exe(

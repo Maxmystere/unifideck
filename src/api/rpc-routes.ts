@@ -64,7 +64,6 @@ export const rpcRoutes = {
   // Steam Store spoofing (StoreRPCMixin)
   getRealSteamAppidMappings: "get_real_steam_appid_mappings",
   getSteamMetadataCache: "get_steam_metadata_cache",
-  injectGameToAppinfo: "inject_game_to_appinfo",
   // Library cleanup (SyncRPCMixin)
   performFullCleanup: "perform_full_cleanup",
   // UI helpers (UIRPCMixin)

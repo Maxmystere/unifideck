@@ -69,15 +69,6 @@
     "validationErrors.homeRoot": "Impossible d'utiliser la racine du dossier personnel",
     "freeSpaceLabel": "{{label}} ({{freeSpace}} Go libres)"
   },
-  "gameGrid": {
-    "loading": "Chargement des jeux...",
-    "noGamesFound": "Aucun jeu trouvé",
-    "noGamesHint": "Essayez de synchroniser vos bibliothèques depuis les paramètres Unifideck",
-    "showingGames": "Affichage de {{count}} jeux",
-    "installed": "Installé",
-    "notInstalled": "Non installé",
-    "playtime": "{{hours}} h {{minutes}} m jouées"
-  },
   "downloadsTab": {
     "currentDownload": "TÉLÉCHARGEMENT EN COURS",
     "queuedDownloads": "EN FILE D'ATTENTE ({{count}})",
@@ -154,8 +145,6 @@
     "connected": "Connecté",
     "checking": "Vérification...",
     "authenticate": "Se connecter",
-    "legendaryNotInstalled": "⚠️ Installation de l'outil Epic Games...",
-    "nileNotInstalled": "⚠️ Outil Amazon Games introuvable",
     "error": "Erreur. Vérifier les journaux",
     "storefrontOpening": "Ouverture de la boutique {{store}}...",
     "storefrontFailed": "Impossible d'ouvrir la boutique {{store}}"

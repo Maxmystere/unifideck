@@ -175,7 +175,6 @@ class _GogdlRepairMixin:
             "speed_bps": 0.0,
             "eta_seconds": 0,
             "phase": "verifying",
-            "phase_message": "Verifying…",
         }
         await drain_install_output(
             proc,
@@ -199,9 +198,7 @@ class _GogdlRepairMixin:
         if progress_cb is None or "Progress:" not in line_str:
             return
         parse_transfer_progress(line_str, progress)
-        pct = float(progress.get("progress_percent") or 0)
         progress["phase"] = "verifying"
-        progress["phase_message"] = f"Verifying… {pct:.1f}%"
         try:
             await progress_cb(dict(progress))
         except Exception as e:

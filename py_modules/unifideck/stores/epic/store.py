@@ -88,7 +88,6 @@ class EpicStore(BrowserAuthRebuildMixin, StoreBase):
     CLI_TOOL = CLITool(
         name="legendary",
         search_paths=["bin/legendary"],
-        version_flag="--version",
     )
 
     def __init__(

@@ -69,15 +69,6 @@
     "validationErrors.homeRoot": "不能使用家目錄或根目錄",
     "freeSpaceLabel": "{{label}}（剩餘 {{freeSpace}} GB）"
   },
-  "gameGrid": {
-    "loading": "載入遊戲中…",
-    "noGamesFound": "找不到遊戲",
-    "noGamesHint": "請從 Unifideck 設定中同步您的遊戲庫",
-    "showingGames": "顯示 {{count}} 款遊戲",
-    "installed": "已安裝",
-    "notInstalled": "未安裝",
-    "playtime": "已玩 {{hours}} 小時 {{minutes}} 分鐘"
-  },
   "downloadsTab": {
     "currentDownload": "目前下載中",
     "queuedDownloads": "佇列中（{{count}}）",
@@ -154,8 +145,6 @@
     "connected": "已連結",
     "checking": "正在檢查中…",
     "authenticate": "登入",
-    "legendaryNotInstalled": "⚠️ 正在安裝 Epic Games 用戶端…",
-    "nileNotInstalled": "⚠️ 找不到 Amazon Games 用戶端",
     "error": "錯誤。請檢查紀錄檔",
     "storefrontOpening": "正在開啟 {{store}} 商店...",
     "storefrontFailed": "無法開啟 {{store}} 商店"

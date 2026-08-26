@@ -69,15 +69,6 @@
     "validationErrors.homeRoot": "ホームのルートディレクトリは指定できません",
     "freeSpaceLabel": "{{label}} (空き容量 {{freeSpace}} GB)"
   },
-  "gameGrid": {
-    "loading": "ゲームを読み込み中...",
-    "noGamesFound": "ゲームが見つかりません",
-    "noGamesHint": "Unifideckの設定からライブラリの同期を試してください",
-    "showingGames": "{{count}} 個のゲームを表示中",
-    "installed": "インストール済み",
-    "notInstalled": "未インストール",
-    "playtime": "プレイ時間: {{hours}} 時間 {{minutes}} 分"
-  },
   "downloadsTab": {
     "currentDownload": "現在のダウンロード",
     "queuedDownloads": "待機中 ({{count}})",
@@ -154,8 +145,6 @@
     "connected": "連携済み",
     "checking": "確認中...",
     "authenticate": "ログインする",
-    "legendaryNotInstalled": "⚠️ Epic Games ツールをインストール中...",
-    "nileNotInstalled": "⚠️ Amazon Games ツールが見つかりません",
     "error": "エラー。ログを確認してください",
     "storefrontOpening": "{{store}} ストアを開いています...",
     "storefrontFailed": "{{store}} ストアを開けませんでした"

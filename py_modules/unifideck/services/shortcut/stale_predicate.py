@@ -18,7 +18,7 @@ deliberately and the order is load-bearing:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NewType
 
 from .games_map import UNIFIDECK_TAG
 from .orphan_scan import _is_launcher_exe
@@ -48,10 +48,28 @@ def is_managed_sweepable(entry: dict[str, Any], full_id: Any) -> bool:
     return is_managed_by_options or is_managed_by_tag
 
 
+#: The stores a sweep is allowed to delete shortcuts for.
+#:
+#: A ``NewType`` rather than a bare ``set[str]`` so the wrong call cannot be
+#: written. §3.5 finding B was not a missing guard — the guard existed and
+#: was documented ("how staging avoided nuking the user's Epic shortcuts
+#: after they logged out of Epic") — it was a **caller that widened it** to
+#: every registered store. A store then contributes zero games in four ways
+#: without owning zero games (it raised, it timed out, it was never fetched,
+#: or it returned an empty list), and each deleted every shortcut it owned.
+#:
+#: Only :func:`services.shortcut.events._sweepable_stores` constructs this,
+#: so mypy rejects ``reconcile(games, valid_stores=set(registry.store_ids()))``
+#: — the exact line that caused the incident. Audit register item 30; per
+#: §2.1, prefer making the wrong call impossible over testing that it is not
+#: made.
+SweepableStores = NewType("SweepableStores", frozenset[str])
+
+
 def is_stale_managed_shortcut(
     entry: Any,
     valid_app_ids: set[int],
-    valid_stores: set[str] | None = None,
+    valid_stores: SweepableStores | None = None,
     launcher_path: str = "",
 ) -> bool:
     """True if ``entry`` is a Unifideck-managed shortcut no longer needed.

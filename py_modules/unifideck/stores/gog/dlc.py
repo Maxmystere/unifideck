@@ -378,7 +378,6 @@ class GOGDlcManager:
             await progress_cb(
                 {
                     "progress_percent": percent,
-                    "phase_message": (f"Installing DLC… {percent:.1f}%"),
                     "dlc_id": dlc_id,
                 }
             )

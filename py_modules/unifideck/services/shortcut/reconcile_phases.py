@@ -24,7 +24,7 @@ from .reconcile_helpers import (
     dedup_shortcuts,
     log_restart_banner,
 )
-from .stale_predicate import is_stale_managed_shortcut
+from .stale_predicate import SweepableStores, is_stale_managed_shortcut
 
 if TYPE_CHECKING:
     from unifideck.core.types import Game
@@ -43,7 +43,7 @@ class _ReconcilePhasesMixin:
 
     async def reconcile(
         self: Any, games: list[Game], *, force: bool = False,
-        valid_stores: set[str] | None = None,
+        valid_stores: SweepableStores | None = None,
     ) -> dict[str, int]:
         """Bulk-sync all shortcuts from a list of Games.
 
@@ -89,17 +89,21 @@ class _ReconcilePhasesMixin:
 
     def _apply_reconcile_phases(
         self: Any, games: list[Game], registry: dict[str, Any], *, force: bool,
-        valid_stores: set[str] | None = None,
+        valid_stores: SweepableStores | None = None,
     ) -> dict[str, int]:
         """Prune, sync, drop-stale, then dedup; return the counts dict."""
         launcher = getattr(self, "_launcher_path", "") or ""
         valid_keys = {f"{g.store}:{g.store_game_id}" for g in games}
         valid_app_ids = self._compute_valid_app_ids(games, launcher)
-        # Default to stores-with-games; a caller (the post-sync
-        # reconcile) can widen this to every registered store so stale
-        # shortcuts for a logged-out / empty store also get swept.
+        # Default to stores-with-games. This comment used to end "a caller
+        # (the post-sync reconcile) can widen this to every registered store
+        # so stale shortcuts for a logged-out / empty store also get swept" —
+        # which is precisely the widening that made a sync delete every
+        # shortcut of any store that failed to answer (§3.5 finding B). The
+        # narrow default is the safe one and the parameter is now a
+        # ``SweepableStores``, which only ``_sweepable_stores`` can build.
         if valid_stores is None:
-            valid_stores = {g.store for g in games}
+            valid_stores = SweepableStores(frozenset(g.store for g in games))
         removed = self._reconcile_phase_prune_map(valid_keys)
         self._shortcuts = self._ensure_shortcuts_root(self._shortcuts)
         shortcuts_dict = self._shortcuts["shortcuts"]
@@ -405,7 +409,7 @@ class _ReconcilePhasesMixin:
         self: Any,
         shortcuts_dict: dict[str, Any],
         valid_app_ids: set[int],
-        valid_stores: set[str] | None = None,
+        valid_stores: SweepableStores | None = None,
         launcher_path: str = "",
     ) -> int:
         """Phase 3: delete Unifideck-managed shortcuts no longer needed."""

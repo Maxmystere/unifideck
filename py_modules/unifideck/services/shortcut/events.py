@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 from unifideck.core.types import Events, Game
 from unifideck.event_bus.event_bus_devex import subscribe
 
+from .stale_predicate import SweepableStores
+
 logger = logging.getLogger(__name__)
 
 
@@ -122,7 +124,7 @@ async def _update_icons_from_grid(svc: Any) -> int:
     return updated
 
 
-def _sweepable_stores(payload: dict[str, Any]) -> set[str]:
+def _sweepable_stores(payload: dict[str, Any]) -> SweepableStores:
     """The stores whose stale shortcuts this sync is allowed to delete.
 
     **A store's shortcuts may only be swept when we hold a current,
@@ -159,9 +161,11 @@ def _sweepable_stores(payload: dict[str, Any]) -> set[str]:
     fetched = payload.get("stores_synced") or []
     errors = payload.get("errors") or {}
     if not isinstance(fetched, (list, tuple, set)):
-        return set()
+        return SweepableStores(frozenset())
     failed = set(errors) if isinstance(errors, dict) else set()
-    return {s for s in fetched if isinstance(s, str) and s not in failed}
+    return SweepableStores(
+        frozenset(s for s in fetched if isinstance(s, str) and s not in failed),
+    )
 
 
 if TYPE_CHECKING:
@@ -207,7 +211,7 @@ class EventsMixin:
         ) -> int | None: ...
         async def reconcile(
             self, games: Sequence[Game], *, force: bool = ...,
-            valid_stores: set[str] | None = ...,
+            valid_stores: SweepableStores | None = ...,
         ) -> dict[str, int]: ...
 
     @subscribe(Events.DOWNLOAD_COMPLETE)

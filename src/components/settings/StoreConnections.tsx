@@ -9,7 +9,7 @@
  * plane is unchanged.
  */
 import { FC } from "react";
-import { PanelSection, PanelSectionRow, Field, Focusable } from "@decky/ui";
+import { PanelSection, Focusable } from "@decky/ui";
 import { useTranslation } from "react-i18next";
 import { useStores } from "../../contexts/StoreContext";
 import { useStoreAuth } from "../../hooks/useStoreAuth";
@@ -20,32 +20,26 @@ import { StoreStorefrontButton } from "./StoreStorefrontButton";
 import { STORE_ROW_CSS } from "./storeConnections.css";
 import type { StoreId } from "../../types/api";
 
-interface RowConfig {
-  notInstalledStatus?: string;
-  notInstalledMessage?: string;
-}
-
-const ROW_CONFIG: Partial<Record<StoreId, RowConfig>> = {
-  epic: {
-    notInstalledStatus: "legendary_not_installed",
-    notInstalledMessage: "storeConnections.legendaryNotInstalled",
-  },
-  amazon: {
-    notInstalledStatus: "nile_not_installed",
-    notInstalledMessage: "storeConnections.nileNotInstalled",
-  },
-};
+// ROW_CONFIG lived here: a per-store map of "if the status is
+// `legendary_not_installed`, show `storeConnections.legendaryNotInstalled`".
+// It could never fire. `StoreStatus` is a closed union of
+// "connected" | "disconnected" | "expired" | "error", so the comparison was
+// against a value the type cannot hold, and no backend has ever emitted
+// either string. It also covered only 2 of the 3 CLI stores — GOG gained a
+// CLITool in the §3.2 pass and never got a row.
+//
+// Telling the user *which* bundled CLI is missing is worth having: a lost
+// exec bit is a real failure mode (`scripts/ensure_executable_bits.py`), and
+// since §3.5 a missing gogdl makes GOG unavailable. Rebuilding it needs a
+// real reason on the status payload, for all three stores — audit register
+// item 50. A mechanism that cannot work is worse than none, so this one goes.
 
 const StoreRow: FC<{ storeId: StoreId; displayName: string }> = ({
   storeId,
   displayName,
 }) => {
-  const { t } = useTranslation();
   const { status, busy, connect, disconnect } = useStoreAuth(storeId);
   const isConnected = status === "connected";
-  const config = ROW_CONFIG[storeId];
-  const showNotInstalled =
-    config?.notInstalledStatus && status === config.notInstalledStatus;
 
   return (
     <div>
@@ -86,11 +80,6 @@ const StoreRow: FC<{ storeId: StoreId; displayName: string }> = ({
           />
         </div>
       </div>
-      {showNotInstalled && config?.notInstalledMessage && (
-        <PanelSectionRow>
-          <Field description={t(config.notInstalledMessage)} />
-        </PanelSectionRow>
-      )}
     </div>
   );
 };

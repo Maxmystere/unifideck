@@ -69,15 +69,6 @@
     "validationErrors.homeRoot": "Cannot use home directory root",
     "freeSpaceLabel": "{{label}} ({{freeSpace}} GB free)"
   },
-  "gameGrid": {
-    "loading": "Loading games...",
-    "noGamesFound": "No games found",
-    "noGamesHint": "Try syncing your libraries from the Unifideck settings",
-    "showingGames": "Showing {{count}} games",
-    "installed": "Installed",
-    "notInstalled": "Not Installed",
-    "playtime": "{{hours}}h {{minutes}}m played"
-  },
   "downloadsTab": {
     "currentDownload": "CURRENT DOWNLOAD",
     "queuedDownloads": "QUEUED ({{count}})",
@@ -154,8 +145,6 @@
     "connected": "Connected",
     "checking": "Checking...",
     "authenticate": "Sign in",
-    "legendaryNotInstalled": "⚠️ Installing Epic Games CLI...",
-    "nileNotInstalled": "⚠️ Amazon Games CLI not found",
     "error": "Error - Check logs",
     "storefrontOpening": "Opening the {{store}} store...",
     "storefrontFailed": "Could not open the {{store}} store"

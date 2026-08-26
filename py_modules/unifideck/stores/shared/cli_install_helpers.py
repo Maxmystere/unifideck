@@ -339,7 +339,8 @@ def parse_transfer_progress(line: str, progress: dict[str, Any]) -> bool:
     Mutates ``progress`` in place and returns True when the line carried
     a usable update, so the caller knows whether to emit. Recognised keys:
     ``speed_bps``, ``progress_percent``, ``downloaded_bytes``,
-    ``total_bytes``, ``eta_seconds``. Presentation (``phase_message`` and
+    ``total_bytes``, ``eta_seconds``. Presentation (the localized phase
+    label and
     friends) is deliberately left to the caller — that is the only thing
     the two store copies actually disagreed about.
 

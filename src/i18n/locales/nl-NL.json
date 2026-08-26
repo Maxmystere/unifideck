@@ -69,15 +69,6 @@
     "validationErrors.homeRoot": "Kan de root van de gebruikersmap niet gebruiken",
     "freeSpaceLabel": "{{label}} ({{freeSpace}} GB vrij)"
   },
-  "gameGrid": {
-    "loading": "Games laden...",
-    "noGamesFound": "Geen games gevonden",
-    "noGamesHint": "Probeer je bibliotheken te synchroniseren via de Unifideck-instellingen",
-    "showingGames": "Weergave van {{count}} games",
-    "installed": "Geïnstalleerd",
-    "notInstalled": "Niet geïnstalleerd",
-    "playtime": "{{hours}}u {{minutes}}m gespeeld"
-  },
   "downloadsTab": {
     "currentDownload": "HUIDIGE DOWNLOAD",
     "queuedDownloads": "IN WACHTRIJ ({{count}})",
@@ -154,8 +145,6 @@
     "connected": "Verbonden",
     "checking": "Controleren...",
     "authenticate": "Aanmelden",
-    "legendaryNotInstalled": "⚠️ Epic Games CLI installeren...",
-    "nileNotInstalled": "⚠️ Amazon Games CLI niet gevonden",
     "error": "Fout - Controleer logs",
     "storefrontOpening": "{{store}}-winkel wordt geopend...",
     "storefrontFailed": "Kan de {{store}}-winkel niet openen"

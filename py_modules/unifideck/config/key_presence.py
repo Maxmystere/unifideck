@@ -72,7 +72,6 @@ RUNTIME_REQUIRED_KEYS: tuple[str, ...] = (
     "auth.browser_oauth_timeout_seconds",
     "auth.browser_poll_interval_seconds",
     # binary_resolver
-    "binary_resolver.version_check_timeout_seconds",
     # cache_ttl
     "cache_ttl.compat",
     "cache_ttl.metacritic_metadata",

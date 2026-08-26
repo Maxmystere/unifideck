@@ -68,6 +68,13 @@ class DownloadItem:
     end_time: float | None = None
     storage_location: str = "internal"
     download_phase: str = "downloading"
+    #: A wrapper store's own account of why nothing is moving — e.g.
+    #: Battle.net's "queued behind the Agent's self-update", read out of the
+    #: Agent's log rather than guessed. Currently **computed and discarded**:
+    #: no frontend renders it (audit register item 49). Kept because the
+    #: signal is real and measured. GOG's decorative producers of this field,
+    #: which restated the localized phase label in hardcoded English, were
+    #: deleted instead (item 45).
     phase_message: str = ""
     # Operation type, recorded by the enqueue path — NOT inferred.
     # ``install_game`` enqueues ``False``; ``update_game`` enqueues

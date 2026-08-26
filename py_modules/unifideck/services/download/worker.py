@@ -474,14 +474,14 @@ class _WorkerMixin:
           ``dict`` when one output line only carries some of the fields.
         - GOG/Ubisoft pass a ``dict`` with ``percentage``,
           ``downloaded_bytes``, ``total_bytes``, ``speed_bps``,
-          ``eta_seconds``, ``phase``, ``phase_message``.
+          ``eta_seconds``, ``phase``.
 
         Either way the merged item is what gets emitted, as ``item=`` —
         the same shape as every other ``DOWNLOAD_*`` event and byte-for-byte
         what ``get_download_queue`` hands the frontend, so the UI applies it
         by row id instead of guessing that it belongs to the visible row.
         Carrying the whole item also means ``download_phase`` /
-        ``phase_message`` reach the row on the progress tick rather than on
+        ``download_phase`` reaches the row on the progress tick rather than on
         the next queue refetch.
         """
         if isinstance(progress, (int, float)):

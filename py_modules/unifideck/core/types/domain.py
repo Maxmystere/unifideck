@@ -126,26 +126,23 @@ class StoreInfo:
 class CLITool:
     """Descriptor for an external CLI dependency.
 
-    Used by ``bin/binary_resolver`` to locate and verify
-    bundled CLI tools (legendary, nile, umu-run, etc.).
-    The resolver iterates ``search_paths`` until it finds a
-    matching executable, optionally checks the version
-    against ``min_version``.
+    Used by ``core.binaries.binary_resolver`` to locate bundled CLI tools
+    (legendary, gogdl, nile). The resolver iterates ``search_paths`` until it
+    finds an executable file, and verifies it against the SHA-256 pinned in
+    ``package.json``'s ``remote_binary`` manifest.
 
     Attributes:
         name: tool name (``"legendary"``).
         search_paths: ordered list of candidate paths
             (relative to the plugin root or absolute).
-        version_flag: CLI flag that prints the version,
-            default ``"--version"``.
-        min_version: optional semver-style minimum version
-            string; ``None`` skips the version check.
     """
 
     name: str
     search_paths: list[str] = field(default_factory=list)
-    version_flag: str = "--version"
-    min_version: str | None = None
+    # No ``version_flag`` / ``min_version``. Both fed ``check_version``,
+    # which had zero callers and is gone; ``min_version`` was never compared
+    # for any store. SHA-256 pinning in package.json is the real guarantee.
+    # Audit register item 44.
 
 
 @dataclass

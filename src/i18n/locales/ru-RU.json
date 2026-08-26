@@ -69,15 +69,6 @@
     "validationErrors.homeRoot": "Нельзя использовать корневую домашнюю папку",
     "freeSpaceLabel": "{{label}} ({{freeSpace}} ГБ свободно)"
   },
-  "gameGrid": {
-    "loading": "Загрузка игр...",
-    "noGamesFound": "Игры не найдены",
-    "noGamesHint": "Попробуйте синхронизировать библиотеки в настройках Unifideck",
-    "showingGames": "Показано игр: {{count}}",
-    "installed": "Установлено",
-    "notInstalled": "Не установлено",
-    "playtime": "Сыграно: {{hours}} ч. {{minutes}} мин."
-  },
   "downloadsTab": {
     "currentDownload": "ТЕКУЩАЯ ЗАГРУЗКА",
     "queuedDownloads": "В ОЧЕРЕДИ ({{count}})",
@@ -154,8 +145,6 @@
     "connected": "Подключено",
     "checking": "Проверка...",
     "authenticate": "Войти",
-    "legendaryNotInstalled": "⚠️ Установка утилиты Epic Games...",
-    "nileNotInstalled": "⚠️ Утилита Amazon Games не найдена",
     "error": "Ошибка. Проверьте журналы",
     "storefrontOpening": "Открытие магазина {{store}}...",
     "storefrontFailed": "Не удалось открыть магазин {{store}}"

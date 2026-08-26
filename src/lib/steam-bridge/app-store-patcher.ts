@@ -28,7 +28,7 @@ let appDetailsCache: Record<number, AppDetails> = {};
 const patchedOverviews = new Set<number>();
 
 /** Resolves once `loadFromBackend()` has completed (mappings +
- *  metadata cache populated). `injectGameToAppinfo` awaits this
+ *  metadata cache populated). `reinjectMetadataWhenLoaded` awaits this
  *  so that navigation to a game page before the async init has
  *  finished still triggers artwork injection as soon as the data
  *  is ready. */
@@ -324,10 +324,18 @@ export function forceInjectMetadataForShortcut(shortcutAppId: number): boolean {
   return injectMetadataIntoOverview(overview);
 }
 
-/** Fire-and-forget : also persist the spoofed metadata via the
- *  backend `inject_game_to_appinfo` RPC so the spoofing survives a
- *  Steam restart. The current backend handler is a no-op stub. */
-export async function injectGameToAppinfo(
+/** Re-spoof one shortcut's overview once the backend cache has loaded.
+ *
+ *  This used to end by awaiting the backend `inject_game_to_appinfo` RPC,
+ *  "so the spoofing survives a Steam restart". That RPC was a stub that
+ *  logged and returned `{success: true}` — its own docstring admitted the
+ *  success was only there to stop the fire-and-forget call logging a failure
+ *  on every navigation. The persistence it promised was redundant anyway:
+ *  `applyAppStorePatch` awaits `loadFromBackend()` and re-spoofs on every
+ *  plugin load, so surviving a restart is handled by re-patching rather than
+ *  by writing `appinfo.vdf`. RPC, route and round-trip deleted; the local
+ *  half, which does the real work, is all that is left. Audit item 35. */
+export async function reinjectMetadataWhenLoaded(
   shortcutAppId: number,
 ): Promise<void> {
   // Wait for the async backend load to finish so that
@@ -337,11 +345,6 @@ export async function injectGameToAppinfo(
   if (_backendLoadPromise) await _backendLoadPromise;
   if (!steamAppIdMappings[shortcutAppId]) return;
   forceInjectMetadataForShortcut(shortcutAppId);
-  try {
-    await call<[number], unknown>(rpcRoutes.injectGameToAppinfo, shortcutAppId);
-  } catch (e) {
-    console.error("[Unifideck Store Patch] inject_game_to_appinfo failed:", e);
-  }
 }
 
 interface PatchHandle {
@@ -371,7 +374,12 @@ export async function applyAppStorePatch(): Promise<PatchHandle> {
   appStore.GetAppOverviewByAppID = (id: number) => {
     const realId = steamAppIdMappings[id];
     if (!realId) return origGetOverview(id);
-    void injectGameToAppinfo(id);
+    // This getter runs on every overview read across the whole library, not
+    // just on AppDetails open. Only re-spoof an id we have not already
+    // patched — the previous code fired an RPC round-trip here every time.
+    if (!patchedOverviews.has(toUnsignedAppId(id))) {
+      void reinjectMetadataWhenLoaded(id);
+    }
     const owned = origGetOverview(realId);
     if (owned) return owned;
     return storeDataCache[realId] ?? origGetOverview(id);

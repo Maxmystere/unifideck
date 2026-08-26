@@ -183,35 +183,22 @@ class StoreRPCMixin:
             "metadata": {str(k): v for k, v in data.items()},
         }
 
-    async def inject_game_to_appinfo(self, shortcut_app_id: int) -> dict[str, Any]:
-        """Persist a Unifideck shortcut's spoofed metadata to ``appinfo.vdf``.
-
-        Persistence layer for the frontend ``SteamStorePatcher``.
-        The in-memory patching is enough for the current Steam
-        session, but a Steam restart wipes the patched
-        ``GetAppOverviewByAppID`` returns. Writing the metadata
-        into Steam's ``appinfo.vdf`` makes the spoofing survive
-        restarts.
-
-        This is currently a no-op stub — the frontend's
-        in-memory patches handle every visible UI element, and
-        the on-disk persistence layer requires careful
-        ``appinfo.vdf`` parsing that we'd want to vet in a
-        separate change. Returns ``success=True`` so the
-        frontend's fire-and-forget call doesn't log a failure
-        on every navigation.
-
-        Args:
-            shortcut_app_id: Unifideck shortcut AppID (synthetic).
-
-        Returns:
-            ``{"success": True, "deferred": True, ...}``.
-        """
-        logger.debug(
-            "[StoreRPC] inject_game_to_appinfo(%d) — deferred (in-memory only)",
-            shortcut_app_id,
-        )
-        return {"success": True, "deferred": True, "shortcut_app_id": shortcut_app_id}
+    # ``inject_game_to_appinfo`` lived here. It was a stub: it logged and
+    # returned ``{"success": True, "deferred": True}``, and its own docstring
+    # admitted the success value existed only so the frontend's
+    # fire-and-forget call would not log a failure on every navigation.
+    #
+    # It had a live caller, which is why the §1.2 dead-RPC sweep did not see
+    # it — two, in fact: AppDetailsPatch on open, and the patched
+    # ``GetAppOverviewByAppID`` getter, which runs on every overview read
+    # across the whole library. So it cost a round-trip per read, forever, to
+    # do nothing.
+    #
+    # The persistence it promised was redundant rather than missing:
+    # ``applyAppStorePatch`` awaits ``loadFromBackend()`` and re-spoofs from
+    # the backend cache on every plugin load, so surviving a Steam restart is
+    # handled by re-patching, not by writing ``appinfo.vdf``. Audit §2.8
+    # bullet 4, register item 35.
 
     async def get_protondb_cache(self) -> dict[str, Any]:
         """Return every cached ProtonDB / Deck-Verified entry.

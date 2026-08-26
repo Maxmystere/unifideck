@@ -69,15 +69,6 @@
     "validationErrors.homeRoot": "No se puede usar la raíz del directorio personal",
     "freeSpaceLabel": "{{label}} ({{freeSpace}} GB libres)"
   },
-  "gameGrid": {
-    "loading": "Cargando juegos...",
-    "noGamesFound": "No se encontraron juegos",
-    "noGamesHint": "Intenta sincronizar tus bibliotecas desde los ajustes de Unifideck",
-    "showingGames": "Mostrando {{count}} juegos",
-    "installed": "Instalado",
-    "notInstalled": "No instalado",
-    "playtime": "{{hours}} h {{minutes}} m jugados"
-  },
   "downloadsTab": {
     "currentDownload": "DESCARGA ACTUAL",
     "queuedDownloads": "EN COLA ({{count}})",
@@ -154,8 +145,6 @@
     "connected": "Conectado",
     "checking": "Comprobando...",
     "authenticate": "Iniciar sesión",
-    "legendaryNotInstalled": "⚠️ Instalando herramienta de Epic Games...",
-    "nileNotInstalled": "⚠️ Herramienta de Amazon Games no encontrada",
     "error": "Error - Ver registros",
     "storefrontOpening": "Abriendo la tienda de {{store}}...",
     "storefrontFailed": "No se pudo abrir la tienda de {{store}}"

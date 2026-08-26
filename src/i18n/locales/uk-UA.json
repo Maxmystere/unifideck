@@ -69,15 +69,6 @@
     "validationErrors.homeRoot": "Не можна використовувати домашній кореневий каталог",
     "freeSpaceLabel": "{{label}} ({{freeSpace}} ГБ вільно)"
   },
-  "gameGrid": {
-    "loading": "Завантаження ігор...",
-    "noGamesFound": "Ігор не знайдено",
-    "noGamesHint": "Спробуйте синхронізувати бібліотеки в налаштуваннях Unifideck",
-    "showingGames": "Показано ігор: {{count}}",
-    "installed": "Встановлено",
-    "notInstalled": "Не встановлено",
-    "playtime": "Зіграно: {{hours}} год. {{minutes}} хв."
-  },
   "downloadsTab": {
     "currentDownload": "ПОТОЧНЕ ЗАВАНТАЖЕННЯ",
     "queuedDownloads": "У ЧЕРЗІ ({{count}})",
@@ -154,8 +145,6 @@
     "connected": "Підключено",
     "checking": "Перевірка...",
     "authenticate": "Увійти",
-    "legendaryNotInstalled": "⚠️ Встановлення утиліти Epic Games...",
-    "nileNotInstalled": "⚠️ Утиліту Amazon Games не знайдено",
     "error": "Помилка. Перевірте журнали",
     "storefrontOpening": "Відкриття магазину {{store}}...",
     "storefrontFailed": "Не вдалося відкрити магазин {{store}}"

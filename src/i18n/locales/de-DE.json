@@ -69,15 +69,6 @@
     "validationErrors.homeRoot": "Benutzerverzeichnis-Root kann nicht verwendet werden",
     "freeSpaceLabel": "{{label}} ({{freeSpace}} GB frei)"
   },
-  "gameGrid": {
-    "loading": "Spiele werden geladen...",
-    "noGamesFound": "Keine Spiele gefunden",
-    "noGamesHint": "Versuche, deine Bibliotheken in den Unifideck-Einstellungen zu synchronisieren",
-    "showingGames": "Zeige {{count}} Spiele",
-    "installed": "Installiert",
-    "notInstalled": "Nicht installiert",
-    "playtime": "{{hours}} Std. {{minutes}} Min. gespielt"
-  },
   "downloadsTab": {
     "currentDownload": "AKTUELLER DOWNLOAD",
     "queuedDownloads": "WARTESCHLANGE ({{count}})",
@@ -154,8 +145,6 @@
     "connected": "Verbunden",
     "checking": "Überprüfen...",
     "authenticate": "Anmelden",
-    "legendaryNotInstalled": "⚠️ Epic Games CLI wird installiert...",
-    "nileNotInstalled": "⚠️ Amazon Games CLI nicht gefunden",
     "error": "Fehler - Protokolle prüfen",
     "storefrontOpening": "{{store}}-Shop wird geöffnet ...",
     "storefrontFailed": "{{store}}-Shop konnte nicht geöffnet werden"

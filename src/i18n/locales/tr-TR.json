@@ -69,15 +69,6 @@
     "validationErrors.homeRoot": "Ana dizin kökü kullanılamaz",
     "freeSpaceLabel": "{{label}} ({{freeSpace}} GB boş)"
   },
-  "gameGrid": {
-    "loading": "Oyunlar yükleniyor...",
-    "noGamesFound": "Oyun bulunamadı",
-    "noGamesHint": "Kütüphanelerinizi Unifideck ayarlarından senkronize etmeyi deneyin",
-    "showingGames": "{{count}} oyun gösteriliyor",
-    "installed": "Yüklü",
-    "notInstalled": "Yüklü Değil",
-    "playtime": "{{hours}} sa {{minutes}} dk oynandı"
-  },
   "downloadsTab": {
     "currentDownload": "AKTİF İNDİRME",
     "queuedDownloads": "SIRADA ({{count}})",
@@ -154,8 +145,6 @@
     "connected": "Bağlı",
     "checking": "Kontrol ediliyor...",
     "authenticate": "Giriş Yap",
-    "legendaryNotInstalled": "⚠️ Epic Games aracı yükleniyor...",
-    "nileNotInstalled": "⚠️ Amazon Games aracı bulunamadı",
     "error": "Hata. Günlükleri kontrol edin",
     "storefrontOpening": "{{store}} mağazası açılıyor...",
     "storefrontFailed": "{{store}} mağazası açılamadı"

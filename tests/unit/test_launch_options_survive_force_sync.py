@@ -39,6 +39,7 @@ from typing import Any
 import pytest
 
 from unifideck.services.shortcut.launch_options import (
+    rewrite_for_sync,
     strip_unifideck_env_tokens,
 )
 from unifideck.services.shortcut.reconcile_phases import _ReconcilePhasesMixin
@@ -242,3 +243,49 @@ def test_reclaim_orphan_matches_force_update(
     entry = _entry(before)
     host._reclaim_orphan(entry, game, 1234)
     assert entry["LaunchOptions"] == expected
+
+
+# ── item 36: a leading %command% is repaired, not preserved ─────────
+@pytest.mark.parametrize(
+    ("before", "expected"),
+    [
+        pytest.param("%command% epic:Salt", "epic:Salt", id="bare-leading"),
+        pytest.param("  %command%   epic:Salt", "epic:Salt", id="whitespace"),
+        pytest.param("%command%", "epic:Salt", id="only-the-token"),
+    ],
+)
+def test_a_leading_command_token_is_dropped(before: str, expected: str) -> None:
+    """A shortcut starting with ``%command%`` does not launch at all.
+
+    Measured on-device in audit §2.9: two attempts out of two never
+    launched, while the same string with any token in front launched fine.
+    The audit recorded it as "not chased further" and it had no register row.
+
+    It is reachable through sync: ``preserve_user_params`` splices the new
+    store id in and keeps the prefix verbatim, so the broken form survived a
+    Force Sync unchanged. Register item 24a's fix is what made that matter —
+    replacing ``_update_existing_shortcut``'s wholesale overwrite with
+    preservation removed the only thing that had ever cleaned these up.
+    """
+    assert rewrite_for_sync(before, "epic:Salt") == expected
+
+
+@pytest.mark.parametrize(
+    "before",
+    [
+        pytest.param("mangohud %command% epic:Salt", id="wrapper-word"),
+        pytest.param("gamemoderun %command% epic:Salt", id="gamemode"),
+        pytest.param("VAR=1 %command% epic:Salt", id="env-assignment"),
+    ],
+)
+def test_a_command_token_with_something_in_front_is_left_alone(
+    before: str,
+) -> None:
+    """``%command%`` is only meaningful as a separator, and here it separates.
+
+    Steam applies wrapper words and assignments before it pre-exec — §2.9
+    measured `env %command% epic:Salt` running the launcher *under* ``env``
+    and still delivering ``argv[1]``. Repairing these would break a working,
+    documented user customisation.
+    """
+    assert rewrite_for_sync(before, "epic:Salt") == before

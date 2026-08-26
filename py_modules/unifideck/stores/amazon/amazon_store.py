@@ -75,7 +75,6 @@ class AmazonStore(BrowserAuthRebuildMixin, StoreBase):
     CLI_TOOL = CLITool(
         name="nile",
         search_paths=["bin/nile"],
-        version_flag="--version",
     )
 
     def __init__(

@@ -83,7 +83,6 @@ class GOGStore(BrowserAuthRebuildMixin, StoreBase):
     CLI_TOOL = CLITool(
         name="gogdl",
         search_paths=["bin/gogdl"],
-        version_flag="--version",
     )
 
     def __init__(

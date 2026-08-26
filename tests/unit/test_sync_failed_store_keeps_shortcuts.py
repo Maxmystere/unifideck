@@ -197,3 +197,62 @@ def test_legacy_sweep_does_not_override_ownership():
 def test_legacy_sweep_and_protected_sets_are_disjoint():
     """An id in both would resolve differently depending on call order."""
     assert not (LEGACY_SWEEP_IDS & PROTECTED_IDS)
+
+
+# ── item 30: the invariant is now nominal, not just documented ──────
+def test_sweepable_stores_is_a_distinct_type_not_a_bare_set() -> None:
+    """§3.5 finding B was a widened caller, not a missing guard.
+
+    The guard existed and its docstring explained itself ("how staging
+    avoided nuking the user's Epic shortcuts after they logged out of
+    Epic"); ``events.py`` passed every registered store anyway. A store
+    contributes zero games without owning zero games in four ways — it
+    raised, it timed out, it was never fetched, or it answered ``[]`` — and
+    each deleted every shortcut it owned.
+
+    ``valid_stores`` is a ``NewType`` so mypy rejects
+    ``reconcile(games, valid_stores=set(registry.store_ids()))`` — the exact
+    line that caused it. Verified against that planted call: mypy reports
+    `Argument "valid_stores" ... has incompatible type "set[Any]"`.
+    Audit register item 30; per §2.1, prefer making the wrong call
+    impossible over testing that it is not made.
+    """
+    from unifideck.services.shortcut.stale_predicate import SweepableStores
+
+    value = SweepableStores(frozenset({"gog"}))
+    assert value == frozenset({"gog"})
+    # A NewType is erased at runtime, so this is a static guarantee. The
+    # runtime half of the invariant is the behavioural tests above.
+    # __supertype__ is the parameterised ``frozenset[str]``, not bare frozenset.
+    assert SweepableStores.__supertype__ == frozenset[str]  # type: ignore[attr-defined]
+
+
+def test_only_sweepable_stores_constructs_the_type() -> None:
+    """The producer must be the single entry point.
+
+    A second producer would reintroduce the second policy this type exists
+    to prevent — which is what ``rpc/mixins/account.py`` nearly was: it
+    calls ``reconcile(games)`` with no ``valid_stores`` and relies on the
+    narrow stores-with-games default, a *different* policy that happens to
+    be safe. Anything constructing the type must be deliberate.
+    """
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parents[2] / "py_modules" / "unifideck"
+    producers = set()
+    for path in root.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if re.search(r"\bSweepableStores\(", text):
+            producers.add(path.relative_to(root).as_posix())
+
+    assert producers == {
+        "services/shortcut/events.py",
+        "services/shortcut/reconcile_phases.py",
+    }, (
+        f"unexpected producer(s) of SweepableStores: {sorted(producers)} — "
+        f"the whole point is that only the sweep-eligibility calculation "
+        f"and reconcile's own narrow default can build one"
+    )
