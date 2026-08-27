@@ -14,6 +14,9 @@ from typing import Any, cast
 from unifideck.launcher.proton.infrastructure.prefix_layout import (
     normalize_prefix_root,
 )
+from unifideck.launcher.proton.infrastructure.wineserver_reap import (
+    kill_wineserver,
+)
 
 logger = logging.getLogger(__name__)
 _UPLAY_ID_RE = re.compile(r"-UplayId=\s*(\d+)")
@@ -178,28 +181,6 @@ async def _run_reg_commands(
             logger.exception("[epic_registry] reg add spawn error")
             continue
     return ok_count
-async def _kill_wineserver(
-    wine_bin: Path, wineprefix: Path,
-) -> None:
-    """Kill wineserver."""
-    wineserver = wine_bin.parent / "wineserver"
-    if not wineserver.is_file():
-        return
-    env = dict(os.environ)
-    env["WINEPREFIX"] = str(wineprefix)
-    with contextlib.suppress(TimeoutError, OSError,
-        subprocess.SubprocessError,):
-        proc = await asyncio.create_subprocess_exec(
-            str(wineserver), "--kill",
-            env=env,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        await asyncio.wait_for(proc.wait(), timeout=10)
-        logger.info(
-            "[epic_registry] killed stale wineserver "
-            "after setup",
-        )
 def _resolve_install_paths(
     app: dict[str, Any],
 ) -> tuple[str, str | None] | None:
@@ -219,6 +200,8 @@ def _error_result(reason: str) -> RegistryInjectionResult:
     return RegistryInjectionResult(
         success=False, keys_written=0, reason=reason,
     )
+
+
 async def setup_registry(
     game_id: str,
     prefix_path: Path,
@@ -253,7 +236,7 @@ async def setup_registry(
         uplay_id=uplay_id,
     )
     ok_count = await _run_reg_commands(commands, env)
-    await _kill_wineserver(wine_bin, active_prefix)
+    await kill_wineserver(wine_bin, active_prefix, context="epic_registry")
     total = len(commands)
     all_ok = ok_count == total
     logger.info(

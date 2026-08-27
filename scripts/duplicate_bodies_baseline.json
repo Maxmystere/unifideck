@@ -7,10 +7,6 @@
   },
   "groups": [
     [
-      "launcher/proton/fixes/epic_prefix_fix.py::_kill_wineserver",
-      "launcher/proton/fixes/epic_registry.py::_kill_wineserver"
-    ],
-    [
       "launcher/proton/handlers/battlenet_client.py::find_client_exe",
       "launcher/proton/handlers/battlenet_client.py::find_launcher_exe",
       "launcher/proton/handlers/ubisoft_recovery.py::find_upc_in",
@@ -55,10 +51,6 @@
     [
       "stores/epic/achievements.py::_resolve_auth",
       "stores/epic/sessions.py::_resolve_auth"
-    ],
-    [
-      "stores/gog/config.py::_list",
-      "stores/microsoft/microsoft_config.py::_list"
     ]
   ]
 }

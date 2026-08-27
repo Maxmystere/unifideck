@@ -11,6 +11,9 @@ from pathlib import Path
 from unifideck.launcher.proton.infrastructure.prefix_layout import (
     normalize_prefix_root,
 )
+from unifideck.launcher.proton.infrastructure.wineserver_reap import (
+    kill_wineserver,
+)
 
 logger = logging.getLogger(__name__)
 _PROTON_FALLBACK_WINE_PATHS: list[str] = [
@@ -147,25 +150,6 @@ async def _run_registry_inject(
             "[epic_prefix_fix] registry injection failed: %s", e,
         )
         return False
-async def _kill_wineserver(wine_bin: Path, wineprefix: Path) -> None:
-    """Kill wineserver."""
-    wineserver = wine_bin.parent / "wineserver"
-    if not wineserver.is_file():
-        return
-    env = dict(os.environ)
-    env["WINEPREFIX"] = str(wineprefix)
-    with contextlib.suppress(TimeoutError, OSError, subprocess.SubprocessError):
-        proc = await asyncio.create_subprocess_exec(
-            str(wineserver), "--kill",
-            env=env,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        await asyncio.wait_for(proc.wait(), timeout=10)
-        logger.info(
-            "[epic_prefix_fix] killed stale wineserver",
-        )
-
 async def apply_epic_launcher_fix(
     prefix_path: Path,
     bundled_wrapper: Path,
@@ -201,7 +185,7 @@ async def apply_epic_launcher_fix(
     registry_ok = await _run_registry_inject(
         wine_bin, registry_prefix,
     )
-    await _kill_wineserver(wine_bin, registry_prefix)
+    await kill_wineserver(wine_bin, registry_prefix, context="epic_prefix_fix")
     if registry_ok:
         logger.info("[epic_prefix_fix] quick fix complete")
     else:

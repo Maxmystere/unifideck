@@ -509,6 +509,11 @@ SHARED_HELPERS: dict[str, str] = {
     "normalize_prefix_root": "launcher/proton/infrastructure/prefix_layout.py",
     "resolve_drive_c": "launcher/proton/infrastructure/prefix_layout.py",
     "resolve_registry_prefix": "launcher/proton/infrastructure/prefix_layout.py",
+    "kill_wineserver": "launcher/proton/infrastructure/wineserver_reap.py",
+    # GOG and Microsoft each defined the same three config coercions as
+    # nested closures. Check 13 caught only ``_list``; ``_s`` and ``_i`` sat
+    # under its body-size floor, which is the floor's honest cost.
+    "text_list": "stores/shared/config_reader.py",
     # Not a store helper, but the same drift class and the same remedy: this
     # arithmetic existed three times under three different names — here, as
     # ``compatibility/library._appid_key_candidates``, and inlined in
