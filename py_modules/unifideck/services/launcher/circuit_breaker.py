@@ -34,36 +34,17 @@ async def emit_circuit_open_toast(
 ) -> None:
     """Emit an error toast when the circuit breaker refuses launch.
 
-    Goes out on ``LAUNCHER_STAGE``, the only channel that reaches the UI
-    from here. This runs in the launcher *subprocess* (``LauncherService``
-    is built solely by ``launcher.bootstrap``), whose bus dies with the
-    process — ``frontend_bridge.install_bus_forwarder`` mirrors
-    LAUNCHER_STAGE, and nothing else, into the file the plugin drains.
-    Until 2026-08 this emitted ``TOAST_NOTIFICATION`` instead, which had
-    no forwarder and no subscriber in either process: a circuit-breaker
-    refusal was completely silent, so a game that had failed three times
-    simply stopped responding to Play with no message at all.
+    Delivery, and the reasons it must stay on ``LAUNCHER_STAGE``, live in
+    :func:`~.error_toasts.emit_launch_error_toast`.
     """
-    from unifideck.launcher.game_title import resolve_title
-    from unifideck.launcher.rpc import emit_stage
+    from .error_toasts import emit_launch_error_toast
 
-    title = resolve_title(ctx.game_key)
-
-    try:
-        await emit_stage(
-            svc._bus,
-            i18n_key="toasts.launcher.errorCircuitBreakerOpen",
-            game_title=title,
-            severity="error",
-            duration_ms=10000,
-            # The string interpolates ``{{game_key}}``; feeding the
-            # resolved display title into it turns "battlenet:D1 failed to
-            # launch" into "Diablo IV failed to launch" without touching
-            # 16 locale files. ``resolve_title`` falls back to the raw key.
-            i18n_params={"game_key": title, "count": failure_count},
-        )
-    except Exception as e:
-        logger.warning("[CircuitBreaker] Failed to emit toast: %s", e)
+    await emit_launch_error_toast(
+        svc, ctx,
+        i18n_key="toasts.launcher.errorCircuitBreakerOpen",
+        extra_params={"count": failure_count},
+        tag="CircuitBreaker",
+    )
 
 
 async def check_circuit_breaker(

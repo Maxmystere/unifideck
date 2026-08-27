@@ -34,6 +34,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
+from unifideck.core.steam_appid_map import read_positive_steam_appid
 from unifideck.core.types.events import Events
 from unifideck.services import metadata_sources
 
@@ -55,7 +56,6 @@ _BACKGROUND_TASKS: set[asyncio.Task[None]] = set()
 # namespaces without breaking the backfill. The wire-level cache
 # layout is the boundary; the constant names are not.
 _CACHE_NAMESPACE = "metadata"
-_STEAM_REAL_APPID_NS = "steam_real_appid"
 _STEAM_METADATA_NS = "steam_metadata"
 
 # Backfill is background work — keep concurrency low so we don't
@@ -166,7 +166,7 @@ def _already_has_metacritic(cache: CacheManager, game: Game) -> bool:
 
 def _has_steam_metacritic(cache: CacheManager, game: Game) -> bool:
     """``metacritic.score`` came in via the Steam appdetails fetch."""
-    steam_id = _read_real_steam_id(cache, game.app_id)
+    steam_id = read_positive_steam_appid(cache, game.app_id)
     if not steam_id:
         return False
     steam_meta = _read_steam_metadata(cache, steam_id)
@@ -208,7 +208,7 @@ def _merge_into_metadata_cache(
     # metacritic by the ``store:game_id`` key, but keeping steam_appid on
     # the entry keeps any steam_appid-keyed reader correct (defensive).
     if not merged.get("steam_appid"):
-        steam_id = _read_real_steam_id(cache, game.app_id)
+        steam_id = read_positive_steam_appid(cache, game.app_id)
         if steam_id:
             merged["steam_appid"] = steam_id
     # Deferred write — one per backfilled game; ``_run`` flushes once
@@ -216,21 +216,6 @@ def _merge_into_metadata_cache(
     cache.set(_CACHE_NAMESPACE, cache_key, merged, flush=False)
 
 
-def _read_real_steam_id(
-    cache: CacheManager,
-    shortcut_app_id: int | None,
-) -> int:
-    """Resolve a shortcut AppID to its real Steam AppID, or ``0``."""
-    if shortcut_app_id is None:
-        return 0
-    try:
-        value = cache.get(
-            _STEAM_REAL_APPID_NS,
-            str(shortcut_app_id),
-        )
-    except Exception:
-        return 0
-    return value if isinstance(value, int) and value > 0 else 0
 
 
 def _read_steam_metadata(

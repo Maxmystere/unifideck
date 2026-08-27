@@ -522,6 +522,34 @@ SHARED_HELPERS: dict[str, str] = {
     # The generator's sibling. Twelve conversion sites were folded onto this
     # in the §1.4 pass; pinning it stops a thirteenth being written inline.
     "to_unsigned": "core/compat_bridge.py",
+    # ``appid_candidates``' main consumer. Five readers of the
+    # ``steam_real_appid`` namespace exist; only the two backfill services
+    # shared a return contract ("a positive AppID or 0"), and those are what
+    # this owns. The other three preserve the ``-1`` sentinel and are marked
+    # divergent on purpose — see the module docstring. Register item 47.
+    "read_positive_steam_appid": "core/steam_appid_map.py",
+    # The title-match save-dir heuristic, twice. The GOG copy guarded the
+    # *raw* title where the other guarded the sanitised one, so a title with
+    # no ASCII alphanumerics matched the first directory it found and cloud
+    # sync would have carried an unrelated folder. Register item 47.
+    "find_save_dir_by_title": "services/cloud_save/path_resolver.py",
+    # The two probe services each held a byte-identical copy of this, and
+    # one cited the other in a comment instead of sharing it — the clearest
+    # statement in the tree that a known duplicate still needs a gate to
+    # become a shared module. Register item 47.
+    "merge_str_list_mapping": "utils/config_helpers.py",
+    # Terminal-failure toasts from the launcher subprocess. Both former
+    # copies re-explained, at length, why they must ride LAUNCHER_STAGE —
+    # which is the fact a third copy would be most likely to get wrong,
+    # since getting it wrong is silent. Register item 47.
+    "emit_launch_error_toast": "services/launcher/error_toasts.py",
+    # Store timestamps of unknown flavour. Three copies — both Epic ones and
+    # GOG's, which escaped check 13 by omitting a single ``.replace("Z", …)``.
+    "parse_timestamp": "stores/shared/timestamps.py",
+    # legendary's launcher OAuth token. Epic's achievements and sessions each
+    # had their own; the two ``_refresh_token`` copies had diverged, and each
+    # carried a defect the other had fixed. Register item 47.
+    "_refresh_token": "stores/epic/launcher_auth.py",
 }
 
 DIVERGENCE_RE = re.compile(r"#\s*intentional-divergence:\s*\S")

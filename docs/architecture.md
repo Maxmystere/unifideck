@@ -86,8 +86,9 @@ Infrastructure primitives. No store or service knowledge.
 | `cleanup_sweeps.py`             | The blocking sweeps behind "delete all data" |
 | `marker_sweep.py`               | Install-dir ownership via `.unifideck*` markers |
 | `stale_installs.py`             | Detects install records with no files left |
-| `compat_bridge.py`              | Reads Steam's compat-tool selection       |
+| `compat_bridge.py`              | Bridges our prefixes into `compatdata/` so Protontricks can see them; owns the signed/unsigned AppID pair |
 | `compat_tool_bridge.py`         | Resolves a compat-tool id to a Proton path |
+| `steam_appid_map.py`            | The one read of the shortcut → real-Steam-AppID cache that returns "an AppID or 0" |
 | `store_capabilities.py`         | Per-store capability sets — the single source of truth behind the `get_store_infos` flags |
 | `io/async_file_ops.py`          | Async file read/write/remove              |
 | `io/safe_file_op.py`            | Atomic write with rollback                |

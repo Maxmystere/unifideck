@@ -20,8 +20,7 @@ from typing import Any
 
 from unifideck.core.store_capabilities import ACHIEVEMENT_STORES
 from unifideck.rpc import RpcError
-from unifideck.stores.epic.achievements import EpicAchievementsError
-from unifideck.stores.gog.achievements import GOGAchievementsError
+from unifideck.stores.shared.achievements_error import StoreAchievementsError
 
 # Single source of truth, shared with the ``get_store_infos`` payload the
 # frontend reads. This used to be a local tuple whose exact twin lived in
@@ -58,7 +57,10 @@ class AchievementsRPCMixin:
             raise RpcError("not_authed", store=store)
         try:
             return await inst.get_game_achievements(game_id, force=force)
-        except (GOGAchievementsError, EpicAchievementsError) as e:
+        # Base class, not a tuple of the two concrete ones: a third
+        # store's achievements error is then handled the day it is
+        # written, instead of escaping unhandled for that store alone.
+        except StoreAchievementsError as e:
             raise RpcError(e.code, **e.context) from e
 
     async def get_last_session_achievements(
