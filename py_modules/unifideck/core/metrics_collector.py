@@ -1,7 +1,5 @@
 """Plugin-wide metrics collector — bus-driven counters + timers + gauges.
 
-OP-08i | py_modules/unifideck/core/metrics_collector.py
-
 ``MetricsCollector`` subscribes to a fixed set of bus events
 and maintains three families of metrics:
 
@@ -36,7 +34,6 @@ from unifideck.event_bus.event_bus import EventBus
 from unifideck.event_bus.event_bus_devex import auto_wire, subscribe
 
 logger = logging.getLogger(__name__)
-
 
 class MetricsCollector:
     """Bus-driven counters / timers / gauges aggregator."""

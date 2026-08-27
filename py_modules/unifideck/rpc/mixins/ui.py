@@ -1,6 +1,4 @@
 """UI RPC mixin for Plugin class.
-
-OP-26g | rpc/mixins/ui.py
 """
 from __future__ import annotations
 
@@ -16,7 +14,6 @@ from unifideck.utils.device import detect_device_type
 
 logger = logging.getLogger(__name__)
 
-
 def _resolve_user_path(path: str) -> str:
     """Expand ``~`` and resolve symlinks. Blocking — wrap with to_thread.
 
@@ -25,7 +22,6 @@ def _resolve_user_path(path: str) -> str:
     to test for ``is_dir``.
     """
     return str(Path(path or "/").expanduser().resolve())
-
 
 def _collect_subdirs(
     resolved: str, show_hidden: bool, sort_by: str,
@@ -59,7 +55,6 @@ def _collect_subdirs(
         entries.sort(key=str.lower)
     return entries
 
-
 def _is_dir_safe(entry: os.DirEntry[str]) -> bool:
     """Return True iff ``entry`` is a directory; False on any OSError.
 
@@ -72,7 +67,6 @@ def _is_dir_safe(entry: os.DirEntry[str]) -> bool:
         return entry.is_dir(follow_symlinks=False)
     except OSError:
         return False
-
 
 class UIRPCMixin:
     """Game-metadata display, language preferences, and directory browsing.

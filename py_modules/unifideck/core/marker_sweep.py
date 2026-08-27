@@ -1,7 +1,5 @@
 """Marker-based sweep of Unifideck-installed game directories.
 
-OP-58b | py_modules/unifideck/core/marker_sweep.py
-
 Every Unifideck install drops an *ownership marker* in the game folder:
 
 * ``.unifideck-id``            — GOG (carries ``game_id``);
@@ -56,7 +54,6 @@ _ALL_MARKERS = (_GOG_MARKER, _MANIFEST_MARKER, _UBISOFT_MARKER)
 # multi-GB game trees).
 _MIN_ROOT_DEPTH = 4
 
-
 def collect_install_roots() -> set[Path]:
     """Library roots where Unifideck has recorded installs.
 
@@ -77,19 +74,16 @@ def collect_install_roots() -> set[Path]:
         and r.is_dir()
     }
 
-
 def _add_paths(roots: set[Path], paths: Iterator[str]) -> None:
     for p in paths:
         if p:
             roots.add(Path(p).expanduser().parent)
-
 
 def _read_json(path: str) -> object:
     try:
         return json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-
 
 def _nile_install_paths() -> Iterator[str]:
     data = _read_json("~/.config/nile/installed.json")
@@ -98,14 +92,12 @@ def _nile_install_paths() -> Iterator[str]:
             if isinstance(entry, dict) and entry.get("path"):
                 yield str(entry["path"])
 
-
 def _legendary_install_paths() -> Iterator[str]:
     data = _read_json("~/.config/legendary/installed.json")
     if isinstance(data, dict):
         for entry in data.values():
             if isinstance(entry, dict) and entry.get("install_path"):
                 yield str(entry["install_path"])
-
 
 def _games_map_work_dirs() -> Iterator[str]:
     try:
@@ -122,7 +114,6 @@ def _games_map_work_dirs() -> Iterator[str]:
         if len(fields) >= 2 and fields[1]:
             yield fields[1]
 
-
 def _parse_marker(marker: Path) -> tuple[str, str] | None:
     """Return ``(store, game_id)`` recorded in a marker file, or None."""
     data = _read_json(str(marker))
@@ -138,7 +129,6 @@ def _parse_marker(marker: Path) -> tuple[str, str] | None:
         return ("ubisoft", str(space_id)) if space_id else None
     store, gid = data.get("store"), data.get("store_id")
     return (str(store), str(gid)) if store and gid else None
-
 
 def iter_marked_dirs(
     roots: set[Path],
@@ -157,7 +147,6 @@ def iter_marked_dirs(
                 seen.add(game_dir)
                 yield game_dir, parsed[0], parsed[1]
 
-
 def find_for_game(
     roots: set[Path], store: str, game_id: str,
 ) -> Path | None:
@@ -166,7 +155,6 @@ def find_for_game(
         if mstore == store and mgid == game_id:
             return game_dir
     return None
-
 
 def sweep_game(store: str, game_id: str) -> bool:
     """Delete the marked install dir for one game (per-game fallback).
@@ -184,7 +172,6 @@ def sweep_game(store: str, game_id: str) -> bool:
         store, target,
     )
     return safe_rmtree(target)
-
 
 def sweep_all(roots: set[Path]) -> int:
     """Delete every marked install dir under *roots*. Returns the count.

@@ -1,7 +1,5 @@
 """Heuristic .exe locator for installed Windows games.
 
-OP-08g | py_modules/unifideck/core/exe_finder.py
-
 Many stores hand back an install path but not the launcher
 ``.exe`` itself — Unifideck has to scan the install directory
 and pick the right binary. ``ExeFinder`` implements a
@@ -57,7 +55,6 @@ WRAPPER_EXES = {
     "launcher.exe",
     "unrealcefsubprocess.exe",
 }
-
 
 class ExeFinder:
     """Score-based .exe picker for game install directories."""
@@ -211,6 +208,5 @@ class ExeFinder:
             best_path,
         )
         return cast("str | None", best_path)
-
 
 exe_finder = ExeFinder()

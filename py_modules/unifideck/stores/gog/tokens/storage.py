@@ -1,7 +1,5 @@
 """Encrypted token persistence — load, persist, clear.
 
-OP-52b | py_modules/unifideck/stores/gog/tokens/storage.py
-
 ``_TokenStorage`` owns the *meaning* of GOG's token file: which keys the
 payload carries and how they map onto :class:`GOGUserInfo`. Everything below
 that — reading bytes, decrypting, detecting a legacy plaintext file, the
@@ -44,7 +42,6 @@ _LOG_PREFIX = "[GOGTokens]"
 #: gogdl re-writes this plaintext copy of the credentials into its own
 #: config dir on every invocation. Removed after each persist.
 _GOGDL_MIRROR_NAME = "gog_credentials.json"
-
 
 class _TokenStorage:
     """Token storage."""

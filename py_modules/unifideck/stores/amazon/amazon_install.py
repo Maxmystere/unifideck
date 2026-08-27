@@ -1,7 +1,5 @@
 """Amazon Games installer — install / uninstall pipeline using nile.
 
-OP-49d | py_modules/unifideck/stores/amazon/amazon_install.py
-
 ``AmazonInstaller`` orchestrates installs and uninstalls via the
 ``nile`` CLI. The install pipeline :
 
@@ -12,7 +10,7 @@ OP-49d | py_modules/unifideck/stores/amazon/amazon_install.py
 3. **subprocess** — spawn nile with structured progress callbacks
    (parses nile's stdout for "downloaded X/Y bytes" lines);
 4. **finalize** — parse the fuel.json from ``amazon_fuel.py``
-   (OP-49f) to extract the launch executable, write the
+ to extract the launch executable, write the
    ``.unifideck-id`` marker, register with the install registry.
 
 The uninstall path is symmetric : remove install dir, drop registry
@@ -64,8 +62,6 @@ logger = logging.getLogger(__name__)
 _PROGRESS_RE_BRACKET = re.compile(r"\[\s*([\d.]+)\s*%\s*\]")
 ProgressCallback = Callable[[Any], Awaitable[None]]
 
-
-
 @dataclass
 class _RunOutcome:
     """Result of one ``nile install`` subprocess run.
@@ -81,7 +77,6 @@ class _RunOutcome:
     rc: int
     tail: str = ""
     spawn_error: str | None = None
-
 
 def _format_exit_error(outcome: _RunOutcome) -> str:
     """Turn a failed run into an error string.
@@ -100,7 +95,6 @@ def _format_exit_error(outcome: _RunOutcome) -> str:
         return f"nile_spawn_failed: {outcome.spawn_error}"
     base = f"nile_exit_{outcome.rc}"
     return f"{base}: {outcome.tail}" if outcome.tail else base
-
 
 class AmazonInstaller:
     """Amazon installer."""

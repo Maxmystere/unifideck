@@ -1,7 +1,5 @@
 """Amazon Games library reader — owned games list + install status merger.
 
-OP-49c | py_modules/unifideck/stores/amazon/amazon_library.py
-
 ``AmazonLibraryReader`` reads the user's owned-games list from the
 ``nile`` user data file (the JSON state that nile maintains after a
 successful login).
@@ -33,7 +31,6 @@ from unifideck.core.io import async_file_ops as aio
 from unifideck.core.types import Game
 
 logger = logging.getLogger(__name__)
-
 
 class AmazonLibraryReader:
     """Amazon library reader."""

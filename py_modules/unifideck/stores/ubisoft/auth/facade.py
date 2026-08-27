@@ -1,13 +1,11 @@
 """
 Ubisoft authentication facade — orchestrates the Steam-shortcut auth flow.
 
-OP-58a | py_modules/unifideck/stores/ubisoft/auth/facade.py
-
 Ubisoft Connect has no headless auth flow: the user must sign in
 through the UPC GUI. The trick we use is to create a Steam shortcut
 that launches UPC inside a dedicated auth prefix; once the user signs
 in, UPC writes credentials to the prefix and we propagate them to
-every game prefix afterwards (via ``UbisoftSession``, OP-60a).
+every game prefix afterwards (via ``UbisoftSession``).
 
 ``UbisoftAuth`` is the orchestration class that wires together the
 sub-modules: ``context`` (UI payload), ``shortcut`` (Steam shortcut
@@ -58,7 +56,6 @@ logger = logging.getLogger(__name__)
 # finish; the done-callback drops the ref.
 _PURGE_TASKS: set[asyncio.Task[None]] = set()
 
-
 @dataclass(frozen=True)
 class UbisoftAuthState:
     """Ubisoft auth state."""
@@ -70,7 +67,6 @@ class UbisoftAuthState:
     ensure_auth_prefix: Callable[[], Any]
     queue_auth_assets_ensure: Callable[[str], None]
 
-
 @dataclass(frozen=True)
 class UbisoftAuthServices:
     """Ubisoft auth services."""
@@ -78,7 +74,6 @@ class UbisoftAuthServices:
     plugin_dir: str | None
     shortcut_service: ShortcutService | None
     steamgriddb: SteamGridDBClient | None
-
 
 class UbisoftAuth:
     """Ubisoft auth."""

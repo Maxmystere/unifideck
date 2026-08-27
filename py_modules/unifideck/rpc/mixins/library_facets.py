@@ -1,7 +1,5 @@
 """LibraryFacetsRPCMixin — per-shortcut facets for native Sort/Filters.
 
-OP-26m | py_modules/unifideck/rpc/mixins/library_facets.py
-
 Exposes one bulk RPC the frontend reads at boot (and on
 ``unifideck-sync-completed``) to:
 
@@ -25,7 +23,6 @@ from typing import Any
 from unifideck.rpc.mixins._library_facets import build_enrichment_map
 
 logger = logging.getLogger(__name__)
-
 
 class LibraryFacetsRPCMixin:
     """Bulk library-facet enrichment RPC (read-only cache reshape)."""

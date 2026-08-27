@@ -1,7 +1,5 @@
 """Reconcile phases mixin — bulk shortcut sync from a library snapshot.
 
-OP-14c-bis | py_modules/unifideck/services/shortcut/reconcile_phases.py
-
 Extracted from ``games_map_mixin.py`` (2026-05-17) to keep the
 host file under the 550 LOC volumetry cap. Contains the bulk
 reconcile method + its five phase helpers — the set-diff
@@ -30,7 +28,6 @@ if TYPE_CHECKING:
     from unifideck.core.types import Game
 
 logger = logging.getLogger(__name__)
-
 
 class _ReconcilePhasesMixin:
     """Bulk shortcut reconciliation for :class:`ShortcutService`.

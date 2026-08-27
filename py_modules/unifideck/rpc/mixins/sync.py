@@ -1,6 +1,4 @@
 """Sync RPC mixin for Plugin class.
-
-OP-26f | rpc/mixins/sync.py
 """
 from __future__ import annotations
 
@@ -21,7 +19,6 @@ logger = logging.getLogger(__name__)
 # (``store.get_game_size`` shells out to legendary / gogdl). Keeps the
 # ``get_game_size_bytes`` RPC from hanging on a slow or offline store.
 _SIZE_LOOKUP_TIMEOUT_S = 30.0
-
 
 class SyncRPCMixin(CleanupRPCMixin):
     """Library sync, progress, and game queries.

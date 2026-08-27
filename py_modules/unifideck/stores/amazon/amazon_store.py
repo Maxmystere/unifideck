@@ -1,15 +1,13 @@
 """Amazon Games store — Layer-4 implementation of the unified store interface.
 
-OP-49a | py_modules/unifideck/stores/amazon/amazon_store.py
-
 ``AmazonStore`` is the orchestration class that wires every Amazon
 sub-component together and exposes them through the ``StoreBase``
 contract. It owns one instance each of :
 
-* ``AmazonAuthFlow`` (OP-49b)      — embedded-browser OAuth flow.
-* ``AmazonLibraryReader`` (OP-49c) — owned-games library reader.
-* ``AmazonInstaller`` (OP-49d)     — install/uninstall pipeline.
-* ``AmazonUpdateChecker`` (OP-49e) — periodic update polling.
+* ``AmazonAuthFlow`` — embedded-browser OAuth flow.
+* ``AmazonLibraryReader`` — owned-games library reader.
+* ``AmazonInstaller`` — install/uninstall pipeline.
+* ``AmazonUpdateChecker`` — periodic update polling.
 
 Amazon Games uses ``nile`` (a community CLI mirror of the Amazon
 Games launcher) for the actual downloads ; the store class is the
@@ -60,7 +58,6 @@ if TYPE_CHECKING:
     from unifideck.core.cache_manager import CacheManager
     from unifideck.event_bus.event_bus import EventBus
 logger = logging.getLogger(__name__)
-
 
 class AmazonStore(BrowserAuthRebuildMixin, StoreBase):
     """Amazon store."""

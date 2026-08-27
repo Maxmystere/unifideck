@@ -1,7 +1,5 @@
 """Multi-store library sync orchestrator.
 
-OP-08l | py_modules/unifideck/core/sync_service.py
-
 ``SyncService`` walks every registered store, calls its
 ``get_library`` method, deduplicates the combined output, and
 emits bus events at every stage so the frontend can render a
@@ -54,7 +52,6 @@ logger = logging.getLogger(__name__)
 # via ``sync.cooldown_seconds`` in config.
 DEFAULT_COOLDOWN_SECONDS = 5
 DEFAULT_COOLDOWN_MS = DEFAULT_COOLDOWN_SECONDS * 1000
-
 
 class SyncService(
     _SyncCacheMixin, _SyncRunMixin, _SyncFinalizeMixin,

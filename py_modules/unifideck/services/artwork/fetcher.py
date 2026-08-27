@@ -259,7 +259,7 @@ async def find_artwork_url(
     """Resolve the best SGDB artwork URL for a given game title + kind.
 
     Thin delegation wrapper over ``steam.steamgriddb.search_artwork``
-    (owned by OP-32a). Two responsibilities:
+    Two responsibilities:
 
     1. **Lazy import** of the SGDB client to keep this
        module's import graph clean — the SGDB module pulls

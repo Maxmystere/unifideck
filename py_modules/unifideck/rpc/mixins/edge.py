@@ -1,7 +1,5 @@
 """EdgeRPCMixin — Microsoft Edge install + readiness RPCs.
 
-OP-26m | py_modules/unifideck/rpc/mixins/edge.py
-
 Browser-based store auth (Epic / GOG / Amazon / Microsoft)
 opens the OAuth URL inside a Wine-prefixed instance of
 Microsoft Edge (flatpak ``com.microsoft.Edge``). The
@@ -36,7 +34,6 @@ import logging
 from typing import Any
 
 logger = logging.getLogger(__name__)
-
 
 class EdgeRPCMixin:
     """Edge prereq RPC : install + check."""

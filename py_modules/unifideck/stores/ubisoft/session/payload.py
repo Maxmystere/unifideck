@@ -1,8 +1,6 @@
 """
 UPC payload sync between Wine prefixes.
 
-OP-60b | py_modules/unifideck/stores/ubisoft/session/payload.py
-
 ``_PayloadSync`` copies credentials and auth-cache artifacts from one
 Wine prefix to another. Two kinds of payload exist:
 
@@ -35,7 +33,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 _CSS_MIN_SOURCE_SIZE = 10
 _HASH_CHUNK_SIZE = 1024 * 1024
-
 
 class _PayloadSync:
     """Payload sync."""

@@ -1,7 +1,5 @@
 """Sync execution mixin for :class:`SyncService`.
 
-OP-08l-quater | core/sync_run_mixin.py
-
 Extracted from ``core/sync_service.py`` to keep that file under the
 550-LOC volumetry cap. Owns the per-run orchestration: setup,
 per-store fetch loop, cancellation handling, and the single-store path.
@@ -34,7 +32,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-
 # Per-store ``get_library`` ceiling. The sync runs stores sequentially,
 # so a single store that hangs (a wedged Wine/UPC catalog parse, a
 # sleeping SD-card mount, a stalled network call) freezes the *whole*
@@ -44,7 +41,6 @@ logger = logging.getLogger(__name__)
 # fast enough to finish the sync (the store reports a ``timeout`` error
 # and contributes zero games for this run; the next sync retries it).
 PER_STORE_FETCH_TIMEOUT_SECONDS = 120
-
 
 class _SyncRunMixin:
     """Per-run sync orchestration for :class:`SyncService`."""

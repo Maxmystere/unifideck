@@ -1,7 +1,5 @@
 """Thin wrapper for the ``legendary`` CLI — info-fetch helper.
 
-OP-48h | py_modules/unifideck/stores/epic/legendary.py
-
 A single module-level function (no class) that wraps the
 ``legendary info <game_id>`` subprocess call and returns the parsed
 JSON output. Used by ``install.py``, ``library.py``, and
@@ -43,7 +41,6 @@ from unifideck.utils.lang_normalize import normalize_language
 
 _logger = logging.getLogger(__name__)
 
-
 def legendary_config_dir() -> Path:
     """Return legendary's config dir (honours ``LEGENDARY_CONFIG_DIR``).
 
@@ -63,7 +60,6 @@ def legendary_config_dir() -> Path:
         Path(env).expanduser() if env
         else Path("~/.config/legendary").expanduser()
     )
-
 
 def write_app_language(app_name: str, language: str) -> None:
     """Record a per-game UI language in legendary's ``config.ini``.
@@ -111,7 +107,6 @@ def write_app_language(app_name: str, language: str) -> None:
     _logger.info(
         "[epic_legendary] recorded language=%s for %s", code, app_name,
     )
-
 
 async def fetch_info(cli_path: str, game_id: str, *, timeout: float, log_prefix: str = "[epic_legendary]") -> dict[str, Any] | None:  # noqa: ASYNC109 — timeout is API value passed to underlying lib (urllib/aiohttp/subprocess), not an asyncio.timeout() wrapper
     """Fetch info."""

@@ -1,6 +1,4 @@
 """Playtime RPC mixin for Plugin class.
-
-OP-26j | rpc/mixins/playtime.py
 """
 from __future__ import annotations
 

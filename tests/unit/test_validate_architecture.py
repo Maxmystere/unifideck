@@ -1180,3 +1180,129 @@ def test_check12_does_not_treat_a_test_importer_as_production_use(
 def test_check12_is_clean_on_the_real_tree(mod) -> None:
     """The gate must pass against the live repo, or it gets switched off."""
     assert mod.find_unimported_modules() == []
+
+
+# ========================================================= #
+# 13. No function body duplicated across modules
+# ========================================================= #
+@pytest.fixture
+def shape_tree(monkeypatch, tmp_path: Path, mod):
+    """A package with one distinctive multi-statement helper."""
+    pkg = tmp_path / "unifideck"
+    body = (
+        "def canonical(value):\n"
+        "    forms = [str(value)]\n"
+        "    if value > 10:\n"
+        "        forms.append(str(value - 10))\n"
+        "    return forms\n"
+    )
+    _plant(pkg, "shared/helper.py", body)
+    monkeypatch.setattr(mod, "PY", pkg)
+    monkeypatch.setattr(mod, "REPO_ROOT", tmp_path)
+    return pkg
+
+
+def _groups(mod) -> list[list[str]]:
+    return sorted(members for _sig, members in mod.find_duplicate_bodies())
+
+
+def test_check13_passes_when_each_body_is_unique(shape_tree, mod) -> None:
+    assert _groups(mod) == []
+
+
+def test_check13_catches_a_copy_that_was_renamed(shape_tree: Path, mod) -> None:
+    """The escape item 47 is about, and check 11 cannot see.
+
+    Check 11 matches a promoted helper by **name**, so
+    ``_appid_key_candidates`` sat beside ``appid_candidates`` — and inlined a
+    third time — for the life of the project (register item 20). Matching on
+    body shape means a rename cannot hide a copy.
+    """
+    _plant(
+        shape_tree, "stores/copy.py",
+        "def _renamed_copy(v):\n"
+        "    forms = [str(v)]\n"
+        "    if v > 10:\n"
+        "        forms.append(str(v - 10))\n"
+        "    return forms\n",
+    )
+    groups = _groups(mod)
+    assert len(groups) == 1
+    assert groups[0] == [
+        "shared/helper.py::canonical",
+        "stores/copy.py::_renamed_copy",
+    ]
+
+
+def test_check13_ignores_a_body_below_the_size_floor(
+    shape_tree: Path, mod,
+) -> None:
+    """Two-line getters collide for uninteresting reasons.
+
+    Comparing them turns the gate into noise, which is how a gate gets
+    switched off rather than fixed (audit §2.1's lookbehind lesson).
+    """
+    _plant(shape_tree, "a/one.py", "def f(x):\n    return x.value\n")
+    _plant(shape_tree, "b/two.py", "def g(y):\n    return y.value\n")
+    assert _groups(mod) == []
+
+
+def test_check13_keeps_attribute_names_significant(
+    shape_tree: Path, mod,
+) -> None:
+    """Erasing attribute names too would match every try/except wrapper.
+
+    These two have identical structure but call different methods, so they
+    are different functions and must not be reported.
+    """
+    _plant(
+        shape_tree, "a/one.py",
+        "def f(p):\n    p.mkdir()\n    p.write_text('x')\n    return True\n",
+    )
+    _plant(
+        shape_tree, "b/two.py",
+        "def g(p):\n    p.unlink()\n    p.touch()\n    return True\n",
+    )
+    assert _groups(mod) == []
+
+
+def test_check13_ignores_duplicates_inside_one_module(
+    shape_tree: Path, mod,
+) -> None:
+    """Two variants in one file are a local style choice, not drift."""
+    # A shape distinct from the fixture's helper, so the only possible
+    # match is the same-file pair — which must be ignored.
+    _plant(
+        shape_tree, "a/one.py",
+        "def f(v):\n"
+        "    out = v.encode()\n"
+        "    out = out.strip()\n"
+        "    return out.decode()\n"
+        "\n\n"
+        "def f2(w):\n"
+        "    out = w.encode()\n"
+        "    out = out.strip()\n"
+        "    return out.decode()\n",
+    )
+    assert _groups(mod) == []
+
+
+def test_check13_baseline_is_still_accurate(mod) -> None:
+    """A stale baseline row silently widens the gate.
+
+    Every grandfathered group must still exist; one that no longer does has
+    been fixed and its row should go, shrinking the list.
+    """
+    baseline = mod._load_shape_baseline()
+    if not baseline:
+        pytest.skip("no baseline in this checkout")
+    live = {"|".join(members) for _sig, members in mod.find_duplicate_bodies()}
+    stale = sorted(baseline - live)
+    assert stale == [], (
+        f"these grandfathered duplicate groups no longer exist — remove them "
+        f"from {mod.SHAPE_BASELINE.name}: {stale}"
+    )
+
+
+def test_check13_is_clean_on_the_real_tree(mod) -> None:
+    assert mod.report_duplicate_bodies() == 0

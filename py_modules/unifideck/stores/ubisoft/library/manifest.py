@@ -1,8 +1,6 @@
 """
 Per-game manifest — typed view of UPC's per-game configuration.
 
-OP-57e | py_modules/unifideck/stores/ubisoft/library/manifest.py
-
 A UPC manifest is the YAML-like blob describing how a game is launched,
 patched, and updated. ``UbisoftGameManifest`` is the typed parser for
 that blob: it extracts the executable name, supported languages, save
@@ -30,7 +28,6 @@ from unifideck.stores.ubisoft.id_map import UbisoftIdMap
 
 logger = logging.getLogger(__name__)
 
-
 def _first_non_empty(
     raw: dict[str, Any],
     keys: tuple[str, ...],
@@ -43,7 +40,6 @@ def _first_non_empty(
             if stripped:
                 return stripped
     return ""
-
 
 @dataclass
 class _VisibleManifestIndex:
@@ -65,7 +61,6 @@ class _VisibleManifestIndex:
     def matches(self, game_id: str, norm_title: str) -> bool:
         """Matches."""
         return game_id in self.ids or norm_title in self.norms
-
 
 class _VisibleManifestProcessor:
     """Visible manifest processor."""

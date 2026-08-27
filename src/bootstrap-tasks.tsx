@@ -144,7 +144,7 @@ export async function checkAccountSwitch(): Promise<void> {
  * Bootstrap task : install the singleton Steam
  * lifetime listener that drives the Unifideck game
  * runner. Returns the disposer used by
- * `runTeardown` (OP-79) on plugin shutdown.
+ * `runTeardown` on plugin shutdown.
  *
  * @returns a disposer that detaches the listener.
  */

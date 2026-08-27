@@ -1,7 +1,5 @@
 """Install mode + verification — pre-flight planning logic.
 
-OP-51d | py_modules/unifideck/stores/gog/install/planner.py
-
 ``GOGInstallPlanner`` answers two pre-install questions:
 
 * **Install mode** — should gogdl run as ``install`` (fresh download
@@ -34,7 +32,6 @@ from .primitives import GOGFolderOps
 logger = logging.getLogger(__name__)
 _CORRUPT_INSTALL_SIZE_THRESHOLD = 100 * 1024 * 1024
 _MIN_SIZE_RATIO = 0.8
-
 
 def _build_verify_result(
     *,
@@ -105,7 +102,6 @@ def _build_verify_result(
         "has_exe": has_exe,
     }
 
-
 def _extract_disk_size_from_size_info(size_info: dict[str, Any]) -> int | None:
     """Extract disk size from size info."""
     for lang_key in ("en-US", "en", "*"):
@@ -119,7 +115,6 @@ def _extract_disk_size_from_size_info(size_info: dict[str, Any]) -> int | None:
             size_info[first].get("disk_size", 0) or 0,
         )
     return None
-
 
 class GOGInstallPlanner:
     """Goginstall planner."""

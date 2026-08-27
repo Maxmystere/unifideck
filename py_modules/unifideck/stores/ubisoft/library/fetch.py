@@ -1,8 +1,6 @@
 """
 Fetch the owned-games catalog from the UPC user data.
 
-OP-57b | py_modules/unifideck/stores/ubisoft/library/fetch.py
-
 ``_LibraryFetch`` reads the UPC catalog from the user's Wine prefix
 (``ownership`` and ``configurations`` directories) and returns the
 parsed owned-games list. Delegates to ``parser.py`` and
@@ -38,7 +36,6 @@ ParseConfigurationsFn = Callable[[str], "list[GameConfig]"]
 ParseOwnershipFn = Callable[[str], list[int]]
 logger = logging.getLogger(__name__)
 
-
 class _PreparedLibrary(NamedTuple):
     """The owned-games working set, ready to hand to the game builder.
 
@@ -52,7 +49,6 @@ class _PreparedLibrary(NamedTuple):
     base_catalog_norms: set[str]
     id_backfill: int
     uuid_backfill: int
-
 
 class _LibraryFetcher:
     """Library fetcher."""

@@ -1,7 +1,5 @@
 """Bus developer-experience helpers — auto-wire + introspection.
 
-OP-09h | py_modules/unifideck/event_bus/event_bus_devex.py
-
 Developer-facing helpers that make working with the bus less
 boilerplate-heavy:
 
@@ -62,7 +60,6 @@ logger = logging.getLogger(__name__)
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
-
 @dataclass
 class _Subscription:
     """One subscription declaration produced by ``@subscribe``.
@@ -84,7 +81,6 @@ class _Subscription:
     priority: int | None = None
     timeout: float | None = None
     scope: str | None = None
-
 
 class SubscriptionRegistry:
     """Append-only registry of declared subscriptions.
@@ -161,9 +157,7 @@ class SubscriptionRegistry:
         """
         self._subs.clear()
 
-
 default_registry = SubscriptionRegistry()
-
 
 def _build_subscription(
     fn: Callable[_P, _R],
@@ -192,7 +186,6 @@ def _build_subscription(
         timeout=timeout,
         scope=scope,
     )
-
 
 def subscribe(
     event: str | Events,
@@ -246,7 +239,6 @@ def subscribe(
 
     return decorator
 
-
 def _looks_like_instance_method(fn: Callable[..., Any]) -> bool:
     """Heuristic: does ``fn``'s first parameter look like ``self`` / ``cls``?
 
@@ -275,7 +267,6 @@ def _looks_like_instance_method(fn: Callable[..., Any]) -> bool:
         return bool(params) and params[0] in ("self", "cls")
     except (TypeError, ValueError):
         return False
-
 
 def auto_wire(
     instance: Any,
@@ -359,7 +350,6 @@ def auto_wire(
             )
     return count
 
-
 def _resolve_subscribe_target(
     instance: Any, attr_name: str,
 ) -> tuple[Any | None, _Subscription | None]:
@@ -398,7 +388,6 @@ def _resolve_subscribe_target(
             meta = getattr(func, "__subscribe_meta__", None)
     return (attr if meta is not None else None), meta
 
-
 def _register_with_watchdog(
     instance: Any,
     attr_name: str,
@@ -430,7 +419,6 @@ def _register_with_watchdog(
             qualname,
             e,
         )
-
 
 class SchemaExtractor:
     """Static analysis: pull per-event kwarg sets out of source code.

@@ -1,7 +1,5 @@
 """Epic Games installer — install/uninstall pipeline using legendary.
 
-OP-48d | py_modules/unifideck/stores/epic/install.py
-
 ``EpicInstaller`` orchestrates installs through ``legendary`` :
 
 1. **preflight** — verify legendary binary, resolve base path, build
@@ -11,7 +9,7 @@ OP-48d | py_modules/unifideck/stores/epic/install.py
 3. **subprocess** — spawn legendary with structured progress callbacks
    (parses legendary's stdout for "+ Downloaded: X/Y" lines);
 4. **finalize** — resolve the launchable .exe (delegate to
-   ``exe_resolver.py``, OP-48g), write the ``.unifideck-id`` marker,
+   ``exe_resolver.py``), write the ``.unifideck-id`` marker,
    register with the install registry, regenerate manifest.
 
 The uninstall path is symmetric : remove install dir, drop registry
@@ -69,7 +67,6 @@ _PROGRESS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
 # and merges dict updates onto the queue item — see DownloadWorker.
 ProgressCallback = Callable[[float | dict[str, Any]], Awaitable[None]]
 
-
 @dataclass
 class _RunOutcome:
     """Result of one ``legendary install`` subprocess run.
@@ -83,7 +80,6 @@ class _RunOutcome:
     rc: int
     tail: str = ""
 
-
 def _format_exit_error(outcome: _RunOutcome) -> str:
     """Turn a failed run into an error string.
 
@@ -95,25 +91,21 @@ def _format_exit_error(outcome: _RunOutcome) -> str:
     base = f"legendary_exit_{outcome.rc}"
     return f"{base}: {outcome.tail}" if outcome.tail else base
 
-
 # How legendary dies when its Selective Downloads prompt can't read
 # stdin (``sdl_prompt`` → bare ``input()`` → EOFError). Retrying is
 # pointless — attempt two hits the same prompt — so the DLC fallback
 # must not burn a whole second download on it.
 _PROMPT_CRASH_MARKERS = ("EOFError", "sdl_prompt")
 
-
 def _is_prompt_crash(tail: str) -> bool:
     """True when legendary died on an unanswerable interactive prompt."""
     return any(marker in tail for marker in _PROMPT_CRASH_MARKERS)
-
 
 # legendary guards install/import/move with a FileLock on
 # ``installed.json.lock`` and allows exactly one at a time. When it can't
 # take the lock it logs this at CRITICAL and then **exits 0**, so the
 # refusal is indistinguishable from success by exit code alone.
 _LOCK_REFUSAL_MARKER = "Failed to acquire installed data lock"
-
 
 def _no_install_error(outcome: _RunOutcome) -> str:
     """Name a ``rc == 0`` run that installed nothing.
@@ -126,7 +118,6 @@ def _no_install_error(outcome: _RunOutcome) -> str:
             f"holding legendary's install lock — {outcome.tail}"
         )
     return f"legendary_exit_0_no_install: {outcome.tail or '(no output captured)'}"
-
 
 class EpicInstaller:
     """Epic installer."""

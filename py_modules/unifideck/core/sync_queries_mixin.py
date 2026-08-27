@@ -1,7 +1,5 @@
 """Read-only query mixin for :class:`SyncService`.
 
-OP-08l-bis | py_modules/unifideck/core/sync_queries_mixin.py
-
 Extracted from ``core/sync_service.py`` (2026-05-14) to keep
 the host file under the 550-LOC volumetry cap. The split is
 clean along the read/write axis :
@@ -33,7 +31,6 @@ from .types import Game
 
 if TYPE_CHECKING:
     import asyncio
-
 
 class _SyncQueriesMixin:
     """Read-only snapshot accessors for :class:`SyncService`.

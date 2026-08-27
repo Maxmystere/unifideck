@@ -1,8 +1,6 @@
 """
 UPC ID ↔ Unifideck install ID mapping — persistent on-disk store.
 
-OP-55g | py_modules/unifideck/stores/ubisoft/id_map.py
-
 UPC identifies a game by its ``space_id`` (a GUID-like string), but
 Unifideck uses a stable ``install_id`` for shortcuts, save-management,
 and cross-store correlation. ``UbisoftIdMap`` is the bidirectional
@@ -39,7 +37,6 @@ from .id_map_sources import (
 from .paths import UbisoftPrefixPaths
 
 logger = logging.getLogger(__name__)
-
 
 class UbisoftIdMap:
     """Ubisoft ID map."""

@@ -1,21 +1,19 @@
 """
 Ubisoft store — Layer-4 implementation of the unified store interface.
 
-OP-55a | py_modules/unifideck/stores/ubisoft/store.py
-
 ``UbisoftStore`` is the orchestration class that wires every sub-component
 of the Ubisoft sub-package together and exposes them through the
 ``StoreBase`` contract used by the rest of the plugin (RPC mixins,
 service layer, registry). It owns one instance each of:
 
-* ``UbisoftConfig`` (OP-55b) — frozen configuration snapshot.
-* ``UbisoftPrefixPaths`` (OP-55c) — Wine prefix path enumeration helpers.
-* ``UbisoftBinaryResolver`` (OP-55d) — UPC binary discovery.
-* ``UbisoftAuth`` (OP-58a) — auth flow via Steam shortcut.
-* ``UbisoftLibrary`` (OP-57a) — game library facade.
-* ``UbisoftInstaller`` (OP-56a) — installer pipeline.
-* ``UbisoftPrefixManager`` (OP-59a) — Wine prefix lifecycle.
-* ``UbisoftSession`` (OP-60a) — UPC session payload propagation.
+* ``UbisoftConfig`` — frozen configuration snapshot.
+* ``UbisoftPrefixPaths`` — Wine prefix path enumeration helpers.
+* ``UbisoftBinaryResolver`` — UPC binary discovery.
+* ``UbisoftAuth`` — auth flow via Steam shortcut.
+* ``UbisoftLibrary`` — game library facade.
+* ``UbisoftInstaller`` — installer pipeline.
+* ``UbisoftPrefixManager`` — Wine prefix lifecycle.
+* ``UbisoftSession`` — UPC session payload propagation.
 
 The ``_shortcut_service`` attribute is left at ``None`` at construction
 time and injected post-discovery by ``services/bootstrap/store_injector.py``;
@@ -55,7 +53,6 @@ if TYPE_CHECKING:
     from .installer import UbisoftInstaller
     from .library import UbisoftLibrary
 logger = logging.getLogger(__name__)
-
 
 class UbisoftStore(StoreBase):
     """Ubisoft store."""

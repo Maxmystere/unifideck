@@ -1,7 +1,5 @@
 """Epic Games library reader — owned games + install status merger.
 
-OP-48c | py_modules/unifideck/stores/epic/library.py
-
 ``EpicLibraryReader`` queries ``legendary`` for the user's owned
 games list and merges it with locally-detected install state to
 produce the ``GameRecord`` shape consumed by the UI.
@@ -18,7 +16,7 @@ Public methods :
 Overlaying installed-state onto the owned-games list is
 ``stores/shared/install_status.merge_install_status``, shared with GOG and
 Amazon (audit §3.4). Filtering of "non-game" assets (UE marketplace stuff,
-mods, plugins) is delegated to ``filter.py`` (OP-48f).
+mods, plugins) is delegated to ``filter.py``.
 """
 
 from __future__ import annotations
@@ -37,7 +35,6 @@ from .filter import should_filter_epic_item
 logger = logging.getLogger(__name__)
 
 DEFAULT_INSTALLED_TTL = 30
-
 
 class EpicLibraryReader:
     """Epic library reader."""

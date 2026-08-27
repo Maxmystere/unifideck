@@ -1,7 +1,5 @@
 """Event bus — core asynchronous pub/sub primitive.
 
-OP-09a | py_modules/unifideck/event_bus/event_bus.py
-
 ``EventBus`` is the central pub/sub primitive of the plugin.
 Every asynchronous interaction between services, RPC mixins and
 stores flows through it.
@@ -65,7 +63,6 @@ Handler = Callable[..., Awaitable[Any]] | Callable[..., Any]
 # writes) while still surfacing a genuinely stuck handler in a bounded
 # window instead of never (UD-013).
 HANDLER_TIMEOUT_SECONDS = 60.0
-
 
 class EventBus:
     """In-process async pub/sub with persistent + one-shot subscriptions."""

@@ -1,8 +1,6 @@
 """
 Detection helpers — pure functions used by the detection cascade.
 
-OP-57h | py_modules/unifideck/stores/ubisoft/library/detection_helpers.py
-
 A grab-bag of pure-function helpers shared by ``detection.py`` and
 ``detection_cascade.py``:
 
@@ -53,7 +51,6 @@ _IN_PREFIX_GAMES_PATH = str(
 )
 _INSTALL_MARKER_FILENAME = ".unifideck_ubisoft"
 
-
 def load_json_file_safe(path: str) -> Any | None:
     """Load JSON file safe."""
     try:
@@ -65,7 +62,6 @@ def load_json_file_safe(path: str) -> Any | None:
         )
     except (OSError, json.JSONDecodeError):
         return None
-
 
 def walk_install_candidates(
     roots: list[str],
@@ -95,7 +91,6 @@ def walk_install_candidates(
                 continue
             yield str(entry), entry.name
 
-
 def in_prefix_game_roots(prefix_path: str) -> list[str]:
     """In prefix game roots."""
     prefix = Path(prefix_path)
@@ -103,7 +98,6 @@ def in_prefix_game_roots(prefix_path: str) -> list[str]:
         str(prefix / _IN_PREFIX_GAMES_PATH),
         str(prefix / "pfx" / _IN_PREFIX_GAMES_PATH),
     ]
-
 
 def find_game_executable(
     install_path: str,
@@ -141,7 +135,6 @@ def find_game_executable(
     )
     return result
 
-
 def _has_exe_within_depth(path: str, max_depth: int) -> bool:
     """Return True if any ``.exe`` exists within ``max_depth`` of ``path``.
 
@@ -152,7 +145,6 @@ def _has_exe_within_depth(path: str, max_depth: int) -> bool:
     walk is swallowed — partial result counts as "no exe found".
     """
     return _scan_for_exe(Path(path), max_depth)
-
 
 def _scan_for_exe(directory: Path, remaining_depth: int) -> bool:
     """Recursive helper for :func:`_has_exe_within_depth`.
@@ -177,7 +169,6 @@ def _scan_for_exe(directory: Path, remaining_depth: int) -> bool:
         return False
     return any(_scan_for_exe(d, remaining_depth - 1) for d in subdirs)
 
-
 def _total_size_exceeds(path: str, threshold: int) -> bool:
     """Return True as soon as the cumulative file size under
     ``path`` exceeds ``threshold`` bytes.
@@ -200,7 +191,6 @@ def _total_size_exceeds(path: str, threshold: int) -> bool:
             if total > threshold:
                 return True
     return False
-
 
 def looks_like_game_install(path: str) -> bool:
     """Heuristic: does ``path`` look like a real game install?
@@ -231,7 +221,6 @@ def looks_like_game_install(path: str) -> bool:
     return _has_exe_within_depth(path, max_depth=2) or _total_size_exceeds(
         path, _GAME_INSTALL_MIN_SIZE,
     )
-
 
 async def write_install_marker(
     space_id: str,
@@ -273,7 +262,6 @@ async def write_install_marker(
             e,
         )
 
-
 def write_marker_sync(
     install_path: str,
     space_id: str,
@@ -293,7 +281,6 @@ def write_marker_sync(
             json.dumps(marker_data),
             encoding="utf-8",
         )
-
 
 class _DetectionHelpers:
     """Detection helpers."""

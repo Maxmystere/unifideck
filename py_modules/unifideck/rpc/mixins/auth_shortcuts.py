@@ -1,7 +1,5 @@
 """AuthShortcutsRPCMixin — per-store auth-shortcut context RPCs.
 
-OP-26k | py_modules/unifideck/rpc/mixins/auth_shortcuts.py
-
 Each registered store has a dedicated Steam shortcut that the
 frontend launches via ``SteamClient.Apps.RunGame`` to drive the
 auth handshake (browser inside a Wine prefix, CLI in a temp
@@ -77,7 +75,6 @@ _AUTH_SHORTCUT_META: dict[str, dict[str, str]] = {
     "amazon":    {"title": "Amazon Games Sign-In", "env": "UNIFIDECK_AMAZON_ACTION"},
     "microsoft": {"title": "Microsoft Sign-In",    "env": "UNIFIDECK_MICROSOFT_ACTION"},
 }
-
 
 class AuthShortcutsRPCMixin:
     """Per-store auth-shortcut context + compat-tool lookup."""
@@ -315,9 +312,7 @@ class AuthShortcutsRPCMixin:
             return int(unsigned), launch_options
         return 0, ""
 
-
 # ─── Module-level helpers ─────────────────────────────────────
-
 
 def _build_and_log(store: str) -> dict[str, Any]:
     """Compute + log the auth-shortcut context for ``store``.
@@ -344,7 +339,6 @@ def _build_and_log(store: str) -> dict[str, Any]:
             result.get("error"),
         )
     return result
-
 
 def _build_auth_shortcut_context(store: str) -> dict[str, Any]:
     """Compute the auth-shortcut context for a CLI-driven store.

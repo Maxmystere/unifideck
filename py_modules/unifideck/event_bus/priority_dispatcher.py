@@ -1,7 +1,5 @@
 """Priority dispatcher — async priority queue + coalescing on top of EventBus.
 
-OP-09c | py_modules/unifideck/event_bus/priority_dispatcher.py
-
 ``PriorityDispatcher`` wraps a plain ``EventBus`` with three
 extra capabilities:
 
@@ -65,7 +63,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_BACKGROUND_CAP = 500
 DROP_WARNING_INTERVAL_SEC = 60.0
 
-
 @dataclass(order=True)
 class _QueueItem:
     """One queued event waiting for dispatch.
@@ -95,7 +92,6 @@ class _QueueItem:
     kwargs: dict[str, Any] = field(compare=False)
     dropped: bool = field(default=False, compare=False)
 
-
 @dataclass
 class DispatcherMetrics:
     """Observability counters maintained by the dispatcher.
@@ -121,7 +117,6 @@ class DispatcherMetrics:
     pending_by_priority: dict[str, int] = field(
         default_factory=lambda: {"CRITICAL": 0, "NORMAL": 0, "BACKGROUND": 0},
     )
-
 
 class PriorityDispatcher:
     """Priority queue + coalescing + backpressure in front of an EventBus."""

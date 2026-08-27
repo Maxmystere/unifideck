@@ -1,8 +1,6 @@
 """
 UPC installer orchestration — drives the multi-phase install pipeline.
 
-OP-56a | py_modules/unifideck/stores/ubisoft/installer/installer.py
-
 ``UbisoftInstaller`` orchestrates a full UPC install through the
 following phases:
 
@@ -58,7 +56,6 @@ from .update_op import _UpdateOperation
 
 logger = logging.getLogger(__name__)
 _UPDATE_TIMEOUT_S = 4 * 60 * 60
-
 
 class UbisoftInstaller:
     """Ubisoft installer."""

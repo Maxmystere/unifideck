@@ -1,6 +1,4 @@
 """Observability RPC mixin for Plugin class.
-
-OP-26a | rpc/mixins/observability.py
 """
 from __future__ import annotations
 
@@ -17,7 +15,6 @@ logger = logging.getLogger(__name__)
 # capped here rather than at the source.
 _AUDIT_TAIL = 100
 _CONFIG_ERROR_TAIL = 25
-
 
 class ObservabilityRPCMixin:
     """Event replay, launcher-toast drain, and the support bundle.

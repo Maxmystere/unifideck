@@ -1,8 +1,6 @@
 """
 UPC manual-UI driver — prepares the prefix and records what UPC installed.
 
-OP-56e | py_modules/unifideck/stores/ubisoft/installer/manual_ui.py
-
 UPC has no silent-install flag, so the install is the user pressing through
 the wizard. UPC itself is opened by the *frontend* via Steam's ``RunGame`` (a
 backend-spawned process has no gamescope session and would never render in
@@ -43,7 +41,6 @@ logger = logging.getLogger(__name__)
 # ``CancelledError`` unwind — there is no awaiting anything there, a thread
 # hop would be cancelled out from under us — so it must stay short.
 _CANCEL_STOP_TIMEOUT_S = 5.0
-
 
 class _ManualUiInstaller:
     """Prepares the prefix for a UPC install and registers the result."""

@@ -1,8 +1,6 @@
 """
 Session reader — extract auth state from a Wine prefix.
 
-OP-60c | py_modules/unifideck/stores/ubisoft/session/reader.py
-
 ``_SessionReader`` reads UPC's authenticated state out of a Wine prefix:
 
 * the credential vault files (DPAPI-encrypted);
@@ -28,7 +26,6 @@ if TYPE_CHECKING:
     from unifideck.stores.ubisoft.paths import UbisoftPrefixPaths
 _CSS_MIN_VALID_SIZE = 100
 logger = logging.getLogger(__name__)
-
 
 class _CredentialReader:
     """Credential reader."""

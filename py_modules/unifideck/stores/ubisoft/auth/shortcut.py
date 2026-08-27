@@ -1,8 +1,6 @@
 """
 Steam shortcut creation for the auth flow — ensures a UPC launcher exists.
 
-OP-58c | py_modules/unifideck/stores/ubisoft/auth/shortcut.py
-
 ``_AuthShortcut`` is responsible for creating (or re-using) a Steam
 shortcut that launches UPC inside the auth-dedicated Wine prefix. The
 shortcut is named "Ubisoft Connect", uses the UPC icon from SteamGridDB,
@@ -39,7 +37,6 @@ _ORPHAN_SHORTCUT_NAMES = frozenset(
     {"upc.exe", "ubisoft connect"},
 )
 
-
 def _dropped_appids(shortcuts: dict[str, Any], keys: list[str]) -> list[int]:
     """Appids of *keys*, for the write guard's ``allow_foreign_drops``.
 
@@ -55,7 +52,6 @@ def _dropped_appids(shortcuts: dict[str, Any], keys: list[str]) -> list[int]:
         if isinstance(appid, int):
             ids.append(appid)
     return ids
-
 
 def _prune_orphan_shortcuts(shortcuts: dict[str, Any]) -> list[int]:
     """Prune orphan shortcuts; return the appids removed."""
@@ -77,7 +73,6 @@ def _prune_orphan_shortcuts(shortcuts: dict[str, Any]) -> list[int]:
         del shortcuts[idx]
     return dropped
 
-
 def _prune_legacy_template_shortcuts(
     shortcuts: dict[str, Any],
 ) -> list[int]:
@@ -95,7 +90,6 @@ def _prune_legacy_template_shortcuts(
         )
         del shortcuts[idx]
     return dropped
-
 
 class _AuthShortcut:
     """Auth shortcut."""

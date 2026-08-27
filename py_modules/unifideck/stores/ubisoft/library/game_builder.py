@@ -1,8 +1,6 @@
 """
 Build display-ready GameRecord entries from owned + installed data.
 
-OP-57d | py_modules/unifideck/stores/ubisoft/library/game_builder.py
-
 ``_GameBuilder`` combines:
 
 * the UPC catalog (owned-games + metadata);
@@ -38,7 +36,6 @@ if TYPE_CHECKING:
     from unifideck.stores.ubisoft.id_map import UbisoftIdMap
     from unifideck.stores.ubisoft.parser import GameConfig
 logger = logging.getLogger(__name__)
-
 
 class _GameBuilder:
     """Game builder."""

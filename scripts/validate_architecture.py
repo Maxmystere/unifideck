@@ -127,6 +127,7 @@ Exit 0 when clean, 1 on a hard mismatch.
 from __future__ import annotations
 
 import ast
+import json
 import re
 import sys
 from pathlib import Path
@@ -529,6 +530,137 @@ def _is_marked_divergent(lines: list[str], def_index: int) -> bool:
             return True
         index -= 1
     return False
+
+
+#: Grandfathered body-shape duplicate groups (check 13). Shrink-only, in the
+#: same spirit as the volumetry allowlists and the i18n baseline.
+SHAPE_BASELINE = Path(__file__).resolve().parent / "duplicate_bodies_baseline.json"
+
+#: Minimum non-docstring statements before a body is compared. Below this,
+#: bodies collide for uninteresting reasons (a two-line getter, a guard plus
+#: a return) and the check becomes noise — the failure mode that gets a gate
+#: switched off rather than fixed.
+_MIN_BODY_STATEMENTS = 3
+
+
+class _Anonymise(ast.NodeTransformer):
+    """Erase identifiers and literals, keep structure and attribute names.
+
+    Two functions match when they *do the same thing to the same attributes*
+    in the same order, whatever their parameters are called. That is the
+    property check 11 could not see: it matched on the helper's **name**, so
+    a copy that was merely renamed walked past it — ``appid_candidates``
+    existed as ``_appid_key_candidates`` and inlined a third time
+    (register item 20).
+
+    Attribute names survive normalisation on purpose. Erasing them too would
+    make every ``try: x.a() except OSError: log()`` identical, which is a
+    false-positive generator; keeping them means the match says "calls
+    ``mkdir`` then ``write_text`` then logs", which is a real claim.
+    """
+
+    def visit_Name(self, node: ast.Name) -> ast.Name:
+        return ast.copy_location(ast.Name(id="_", ctx=node.ctx), node)
+
+    def visit_arg(self, node: ast.arg) -> ast.arg:
+        return ast.copy_location(ast.arg(arg="_", annotation=None), node)
+
+    def visit_Constant(self, node: ast.Constant) -> ast.Constant:
+        return ast.copy_location(ast.Constant(value="_"), node)
+
+
+def _body_signature(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+    """Normalised shape of *fn*'s body, or ``None`` if too small to compare."""
+    body = [
+        stmt for stmt in fn.body
+        if not (
+            isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant)
+        )
+    ]
+    if len(body) < _MIN_BODY_STATEMENTS:
+        return None
+    try:
+        clone = ast.parse(ast.unparse(ast.Module(body=body, type_ignores=[])))
+    except (SyntaxError, ValueError):
+        return None
+    return ast.dump(_Anonymise().visit(clone), annotate_fields=False)
+
+
+def find_duplicate_bodies() -> list[tuple[str, list[str]]]:
+    """Groups of identically-shaped function bodies in different modules.
+
+    Same-file duplicates are ignored: an overload pair or two adjacent
+    variants in one module is a local style choice, not the cross-module
+    drift this exists to catch.
+    """
+    groups: dict[str, list[str]] = {}
+    for file in sorted(PY.rglob("*.py")):
+        if "__pycache__" in file.parts:
+            continue
+        try:
+            tree = ast.parse(file.read_text(encoding="utf-8", errors="ignore"))
+        except (OSError, SyntaxError):
+            continue
+        rel = file.relative_to(PY).as_posix()
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            sig = _body_signature(node)
+            if sig is None:
+                continue
+            groups.setdefault(sig, []).append(f"{rel}::{node.name}")
+    return [
+        (sig, sorted(members))
+        for sig, members in groups.items()
+        if len({m.split("::")[0] for m in members}) > 1
+    ]
+
+
+def _load_shape_baseline() -> set[str]:
+    if not SHAPE_BASELINE.is_file():
+        return set()
+    try:
+        data = json.loads(SHAPE_BASELINE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    return {"|".join(sorted(g)) for g in data.get("groups", [])}
+
+
+def report_duplicate_bodies() -> int:
+    """Print check 13's verdict; return the number of hard failures."""
+    baseline = _load_shape_baseline()
+    found = find_duplicate_bodies()
+    new = [
+        members for _sig, members in found
+        if "|".join(members) not in baseline
+    ]
+    if not new:
+        if baseline:
+            print(
+                f"OK: no new duplicated function bodies "
+                f"({len(baseline)} group(s) grandfathered; this list may only "
+                f"shrink)"
+            )
+        else:
+            print("OK: no duplicated function bodies across modules")
+        return 0
+    for members in new:
+        _fail(
+            "identical function body in "
+            + str(len({m.split("::")[0] for m in members}))
+            + " modules: " + ", ".join(members)
+        )
+    print(
+        "\n  Two functions doing the same thing to the same attributes in the\n"
+        "  same order, in different modules. Check 11 cannot see this: it\n"
+        "  matches a shared helper by NAME, so a copy that was renamed walks\n"
+        "  past it — 'appid_candidates' lived as '_appid_key_candidates' and\n"
+        "  inlined a third time (register item 20).\n"
+        "  Promote it to a shared module and add a SHARED_HELPERS row, or — if\n"
+        "  the two genuinely must differ — add the group to\n"
+        f"  {SHAPE_BASELINE.name} with a reason."
+    )
+    return len(new)
 
 
 def find_duplicate_shared_helpers() -> list[tuple[str, str, str]]:
@@ -1187,6 +1319,10 @@ def main() -> int:
 
     # Check 11 (hard): a promoted shared helper is defined exactly once.
     hard_failures += report_shared_helpers()
+
+    # Check 13 (hard): no NEW function body duplicated across modules.
+    # Catches the renamed copy check 11's name matching cannot see.
+    hard_failures += report_duplicate_bodies()
 
     # Check 12 (hard): every first-party module is imported by something.
     # Closes the vulture blind spot (min_confidence 80 reports neither

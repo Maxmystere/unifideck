@@ -1,0 +1,82 @@
+{
+  "_schema": {
+    "note": "Grandfathered groups of identically-shaped function bodies — check 13 of scripts/validate_architecture.py.",
+    "rule": "SHRINK-ONLY. A NEW cross-module body duplicate fails the gate. Do not add rows to normalise new copy-paste; promote the helper into a shared module and add a SHARED_HELPERS row instead.",
+    "baseline": "2026-08-26. Check 11 matches a promoted helper by NAME, so a copy that was merely renamed escaped it (register item 47). This check matches on body SHAPE — identifiers and literals erased, structure and attribute names kept — so a rename cannot hide a copy.",
+    "reading_a_row": "Each group lists <module>::<function>. Several are genuine convergence targets; a few are legitimately parallel (the rpc/mixins _require_* service accessors) and are expected to stay."
+  },
+  "groups": [
+    [
+      "launcher/proton/compat/gog_setup/__init__.py::_prefix_root",
+      "launcher/proton/compat/vcruntime.py::_prefix_root",
+      "launcher/proton/compat/winetricks.py::_prefix_root"
+    ],
+    [
+      "launcher/proton/fixes/epic_prefix_fix.py::_kill_wineserver",
+      "launcher/proton/fixes/epic_registry.py::_kill_wineserver"
+    ],
+    [
+      "launcher/proton/fixes/epic_prefix_fix.py::normalize_prefix_root",
+      "launcher/proton/fixes/epic_prerequisites.py::_normalize_prefix_root",
+      "launcher/proton/fixes/epic_registry.py::_normalize_prefix_root"
+    ],
+    [
+      "launcher/proton/handlers/battlenet_client.py::_client_dir",
+      "stores/battlenet/paths.py::client_dir"
+    ],
+    [
+      "launcher/proton/handlers/battlenet_client.py::find_client_exe",
+      "launcher/proton/handlers/battlenet_client.py::find_launcher_exe",
+      "launcher/proton/handlers/ubisoft_recovery.py::find_upc_in",
+      "stores/battlenet/paths.py::client_config",
+      "stores/battlenet/paths.py::client_exe",
+      "stores/battlenet/paths.py::launcher_exe"
+    ],
+    [
+      "launcher/proton/handlers/battlenet_client.py::resolve_drive_c",
+      "launcher/wrapper_session_specs.py::resolve_drive_c"
+    ],
+    [
+      "rpc/mixins/cloud_save.py::_cloudsave",
+      "rpc/mixins/download.py::_require_download",
+      "rpc/mixins/launch.py::_require_launch_history",
+      "rpc/mixins/playtime.py::_require_playtime"
+    ],
+    [
+      "services/cloud_save/gog_strategy.py::_match_child_by_title",
+      "services/cloud_save/status.py::_match_title_dir"
+    ],
+    [
+      "services/feature_flag_service.py::_load_mapping",
+      "services/probe_reaction_service.py::_load_mapping"
+    ],
+    [
+      "services/launcher/circuit_breaker.py::emit_circuit_open_toast",
+      "services/launcher/error_toasts.py::emit_launcher_error_toast"
+    ],
+    [
+      "services/metadata_backfill.py::_read_real_steam_id",
+      "services/pcgw_backfill.py::_read_real_steam_id"
+    ],
+    [
+      "stores/epic/achievements.py::__init__",
+      "stores/gog/achievements.py::__init__"
+    ],
+    [
+      "stores/epic/achievements.py::_is_expired",
+      "stores/epic/sessions.py::_is_expired"
+    ],
+    [
+      "stores/epic/achievements.py::_parse_ts",
+      "stores/epic/sessions.py::_parse_ts"
+    ],
+    [
+      "stores/epic/achievements.py::_resolve_auth",
+      "stores/epic/sessions.py::_resolve_auth"
+    ],
+    [
+      "stores/gog/config.py::_list",
+      "stores/microsoft/microsoft_config.py::_list"
+    ]
+  ]
+}

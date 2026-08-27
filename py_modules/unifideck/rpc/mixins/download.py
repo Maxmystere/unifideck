@@ -1,7 +1,5 @@
 """Download RPC mixin for Plugin class.
 
-OP-26i | py_modules/unifideck/rpc/mixins/download.py
-
 Carries two related surfaces:
 
 * per-game lifecycle — ``install_game`` / ``uninstall_game`` /
@@ -11,7 +9,7 @@ Carries two related surfaces:
 
 Storage-location RPCs (``get_storage_locations``,
 ``set_default_storage_location``, ``set_custom_install_path``)
-live in a sibling ``StorageRPCMixin`` (OP-26j); this file only
+live in a sibling ``StorageRPCMixin``; this file only
 resolves a chosen storage id to a filesystem path.
 
 Two private helpers centralise the null checks:
@@ -42,7 +40,6 @@ from unifideck.services import update_check_cache
 from unifideck.utils import mount_naming, mounts
 
 logger = logging.getLogger(__name__)
-
 
 class DownloadRPCMixin:
     """Game install/uninstall, download queue, and storage locations."""
@@ -386,7 +383,6 @@ class DownloadRPCMixin:
         removed = await self._require_download().clear_history(item_id)
         return {"success": True, "removed": removed}
 
-
 # ─── Storage type → path resolution ───────────────────────────
 #
 # External-mount enumeration is delegated to ``utils/mounts.py``
@@ -394,7 +390,6 @@ class DownloadRPCMixin:
 # see that module for why a FUSE-mounted external drive (NTFS via
 # ntfs-3g, some exFAT setups) needs a demoted subprocess to be
 # reachable from this backend's root process at all.
-
 
 def _size_cache_file(config: Any) -> str:
     """Path to the persistent download-size cache (in the data dir).
@@ -413,7 +408,6 @@ def _size_cache_file(config: Any) -> str:
                 or data_dir
             )
     return str(Path(data_dir).expanduser() / "game_sizes.json")
-
 
 def _resolve_storage_path(storage_type: str | None, config: Any) -> str | None:
     """Convert a storage type string to a filesystem path.
@@ -437,7 +431,6 @@ def _resolve_storage_path(storage_type: str | None, config: Any) -> str | None:
         return _external_games_path(storage_type)
     logger.warning("[download] unknown storage type: %s", storage_type)
     return None
-
 
 def _external_games_path(storage_type: str) -> str | None:
     """Resolve an external-mount storage id to its ``Games/`` dir.
@@ -494,7 +487,6 @@ def _external_games_path(storage_type: str) -> str | None:
     )
     logger.debug("[download] resolved %s → %s (%s)", storage_type, games_path, match.fstype)
     return games_path
-
 
 def _custom_path(config: Any) -> str | None:
     """Read ``download.custom_path`` from config; None if unset/invalid."""

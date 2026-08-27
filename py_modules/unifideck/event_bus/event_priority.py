@@ -1,7 +1,5 @@
 """Event priority enum — ordering hints for the dispatcher.
 
-OP-09b | py_modules/unifideck/event_bus/event_priority.py
-
 ``EventPriority`` is an ``IntEnum`` with three levels used by
 ``PriorityDispatcher`` to order event delivery:
 
@@ -44,7 +42,6 @@ class EventPriority(IntEnum):
     NORMAL = 1
     BACKGROUND = 2
 
-
 _DEFAULT_PRIORITY: dict[Events, EventPriority] = {
     Events.GAME_LAUNCHED: EventPriority.CRITICAL,
     Events.GAME_STOPPED: EventPriority.CRITICAL,
@@ -76,7 +73,6 @@ COALESCE_KEY: dict[Events, str] = {
     Events.DOWNLOAD_PROGRESS: "download_id",
 }
 
-
 def get_priority(event: Events | str) -> EventPriority:
     """Return the canonical ``EventPriority`` for ``event``.
 
@@ -100,7 +96,6 @@ def get_priority(event: Events | str) -> EventPriority:
         return _DEFAULT_PRIORITY.get(resolved, EventPriority.NORMAL)
     except ValueError:
         return EventPriority.NORMAL
-
 
 def get_coalesce_key(event: Events | str) -> str:
     """Return the coalescing-key kwarg name for ``event``.

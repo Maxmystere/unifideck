@@ -1,8 +1,6 @@
 """
 Auth prefix builder — variant of template_builder for the auth flow.
 
-OP-59d | py_modules/unifideck/stores/ubisoft/prefix/auth_builder.py
-
 The auth prefix has different requirements from the template prefix:
 it must allow the UPC GUI to come up and the user to sign in
 interactively, whereas the template prefix runs UPC headlessly. This
@@ -33,7 +31,6 @@ if TYPE_CHECKING:
     from .helpers import _PrefixHelpers
     from .template_builder import _TemplatePrefixBuilder
 logger = logging.getLogger(__name__)
-
 
 class _AuthPrefixBuilder:
     """Auth prefix builder."""

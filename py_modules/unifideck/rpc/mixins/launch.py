@@ -1,6 +1,4 @@
 """Launch RPC mixin for Plugin class.
-
-OP-26d | rpc/mixins/launch.py
 """
 from __future__ import annotations
 
@@ -13,7 +11,6 @@ from unifideck.rpc.errors import RpcError
 logger = logging.getLogger(__name__)
 
 _MAX_SAVE_FILES = 500
-
 
 class LaunchRPCMixin:
     """Game launch notifications, circuit breaker, launch logs, save folders."""

@@ -1,7 +1,5 @@
 """GOG library facade — owned games + installed-state + display metadata.
 
-OP-50c | py_modules/unifideck/stores/gog/library.py
-
 ``GOGLibrary`` is the public entry point of the library logic for the
 GOG store. Responsibilities:
 
@@ -11,7 +9,7 @@ GOG store. Responsibilities:
   markers);
 * merge owned-list + install-state into uniform ``GameRecord`` entries
   ready for display in the UI;
-* trigger marker migration (``library_migration.py``, OP-50d) on first
+* trigger marker migration (``library_migration.py``) on first
   run to upgrade pre-v6 markers to the canonical JSON format.
 
 In-memory cached; invalidated on auth state change, install/uninstall,
@@ -44,7 +42,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 _INSTALL_MARKER = ".unifideck-id"
 _GOG_LIBRARY_TIMEOUT_S = 15.0
-
 
 class GOGLibrary:
     """Goglibrary."""

@@ -1,7 +1,5 @@
 """Full-cleanup RPC machinery for :class:`SyncRPCMixin`.
 
-OP-26f-bis | rpc/mixins/sync_cleanup.py
-
 Extracted from ``rpc/mixins/sync.py`` to keep that file under the
 550-LOC volumetry cap. Holds the "Delete all Unifideck data" flow —
 shortcut removal, grid-artwork wipe, store sign-out, credential
@@ -21,7 +19,6 @@ from unifideck.core.safe_delete import safe_rmtree
 from unifideck.rpc.mixins.cleanup_finalize import _CleanupFinalizeMixin
 
 logger = logging.getLogger(__name__)
-
 
 class CleanupRPCMixin(_CleanupFinalizeMixin):
     """"Delete all Unifideck data" flow + its app_id collectors."""

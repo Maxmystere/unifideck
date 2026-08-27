@@ -1,7 +1,5 @@
 """gogdl subprocess + progress monitor.
 
-OP-51f | py_modules/unifideck/stores/gog/install/progress.py
-
 ``_GogdlProgressMonitor`` wraps the ``gogdl`` subprocess invocation
 with structured progress reporting:
 
@@ -64,7 +62,6 @@ _GOGDL_TAIL_PROGRESS_PCT = 99.0
 _RC_SPAWN_FAILED = -2
 _RC_KILLED = -1
 
-
 @dataclass
 class _RunOutcome:
     """Result of one ``gogdl`` subprocess run.
@@ -90,7 +87,6 @@ class _RunOutcome:
         """True when gogdl completed successfully."""
         return self.rc == 0
 
-
 @dataclass
 class _RunState:
     """Per-run mutable state shared between the drain and its line handler."""
@@ -104,7 +100,6 @@ class _RunState:
     })
     tail_buf: TailRingBuffer = field(default_factory=TailRingBuffer)
     in_tail: bool = False
-
 
 def format_gogdl_error(outcome: _RunOutcome) -> str:
     """``gogdl_exit_{rc}: {tail}`` — the house error format.
@@ -125,7 +120,6 @@ def format_gogdl_error(outcome: _RunOutcome) -> str:
         return f"gogdl_spawn_failed: {outcome.tail}"
     base = f"gogdl_exit_{outcome.rc}"
     return f"{base}: {outcome.tail}" if outcome.tail else base
-
 
 class _GogdlProgressMonitor(_GogdlRepairMixin):
     """Gogdl progress monitor (download half; repair half is the mixin)."""

@@ -1,8 +1,6 @@
 """
 UPC session facade — propagate auth state across Wine prefixes.
 
-OP-60a | py_modules/unifideck/stores/ubisoft/session/facade.py
-
 UPC stores its auth state (credentials, refresh tokens, machine GUID)
 inside the Wine prefix where the user signed in. To launch games from
 other prefixes we have to copy that state into each prefix on demand.
@@ -10,9 +8,9 @@ other prefixes we have to copy that state into each prefix on demand.
 ``UbisoftSession`` is the orchestration class for this propagation. It
 delegates to:
 
-* ``reader.py`` (OP-60c) — read sessions out of the auth prefix;
-* ``payload.py`` (OP-60b) — copy credentials/artifacts to target prefixes;
-* ``propagator.py`` (OP-60d) — orchestrate propagation across multiple
+* ``reader.py`` — read sessions out of the auth prefix;
+* ``payload.py`` — copy credentials/artifacts to target prefixes;
+* ``propagator.py`` — orchestrate propagation across multiple
   game prefixes when the auth state changes.
 
 The session facade exposes the ``_read_machine_guid`` helper used by
@@ -37,7 +35,6 @@ from .reader import _CredentialReader
 
 logger = logging.getLogger(__name__)
 _CAPTURE_SENTINEL = "credentials_captured"
-
 
 class UbisoftSession:
     """Ubisoft session."""

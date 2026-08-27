@@ -1,7 +1,5 @@
 """GOG install pipeline orchestrator.
 
-OP-51a | py_modules/unifideck/stores/gog/install/installer.py
-
 ``GOGInstaller`` orchestrates a full install through four phases:
 
 1. **preflight** — verify gogdl binary, resolve base path, build the
@@ -46,7 +44,6 @@ from .uninstall_pipeline import _UninstallPipeline
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class _InstallContext:
     """Install context."""
@@ -63,7 +60,6 @@ class _InstallContext:
     support_dir: str = ""
     install_mode: str = ""
     found_path: str = ""
-
 
 class GOGInstaller:
     """Goginstaller."""

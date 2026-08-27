@@ -1,7 +1,5 @@
 """Domain dataclasses — Game, StoreInfo, CLITool.
 
-OP-08a | py_modules/unifideck/core/types/domain.py
-
 The three core domain records used everywhere across the
 plugin:
 
@@ -62,7 +60,6 @@ class Game:
     logo_url: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
-
 @dataclass
 class StoreInfo:
     """Static descriptor for one store.
@@ -121,7 +118,6 @@ class StoreInfo:
     # the §3.1 ``uses_wine`` precedent: make the duplicate impossible rather
     # than check it.
 
-
 @dataclass
 class CLITool:
     """Descriptor for an external CLI dependency.
@@ -143,7 +139,6 @@ class CLITool:
     # which had zero callers and is gone; ``min_version`` was never compared
     # for any store. SHA-256 pinning in package.json is the real guarantee.
     # Audit register item 44.
-
 
 @dataclass
 class SyncRequest:

@@ -1,16 +1,14 @@
 """Epic Games Store — Layer-4 implementation of the unified store interface.
 
-OP-48a | py_modules/unifideck/stores/epic/store.py
-
 ``EpicStore`` is the orchestration class that wires every Epic
 sub-component together and exposes them through the ``StoreBase``
 contract. It owns one instance each of :
 
-* ``EpicAuthFlow`` (OP-48b)      — OAuth via embedded browser.
-* ``EpicLibraryReader`` (OP-48c) — owned-games library reader.
-* ``EpicInstaller`` (OP-48d)     — install/uninstall pipeline.
-* ``EpicUpdateChecker`` (OP-48e) — periodic update polling.
-* ``EpicExeResolver`` (OP-48g)   — locate the launchable .exe.
+* ``EpicAuthFlow`` — OAuth via embedded browser.
+* ``EpicLibraryReader`` — owned-games library reader.
+* ``EpicInstaller`` — install/uninstall pipeline.
+* ``EpicUpdateChecker`` — periodic update polling.
+* ``EpicExeResolver`` — locate the launchable .exe.
 
 Epic Games uses ``legendary`` (a community CLI replacement for the
 Epic Games Launcher, written in Python) for all download/install
@@ -72,7 +70,6 @@ if TYPE_CHECKING:
     from unifideck.event_bus.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
-
 
 class EpicStore(BrowserAuthRebuildMixin, StoreBase):
     """Epic store."""

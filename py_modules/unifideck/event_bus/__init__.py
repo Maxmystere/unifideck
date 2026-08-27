@@ -1,7 +1,5 @@
 """Event bus sub-package — public surface.
 
-OP-09 | py_modules/unifideck/event_bus/__init__.py
-
 Re-exports the canonical event-bus symbols a caller (services, RPC
 mixins, stores) typically reaches for : ``EventBus`` itself, the
 ``EventPriority`` enum, the ``BusPipeline`` orchestrator, and the

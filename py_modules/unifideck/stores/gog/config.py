@@ -1,7 +1,5 @@
 """GOG store configuration — frozen dataclass with deferred path resolution.
 
-OP-50b | py_modules/unifideck/stores/gog/config.py
-
 ``GOGConfig`` is a frozen dataclass holding every tunable parameter
 of the GOG sub-package: download directory, gogdl binary path,
 OAuth URLs, token file location, gogdl config directory, etc.
@@ -40,7 +38,6 @@ _DEFAULT_TOKEN_FILE = "~/.config/unifideck/gog_token.json"  # file path, not a t
 _DEFAULT_GOGDL_CONFIG_DIR = "~/.config/unifideck/gogdl"
 _DEFAULT_DOWNLOAD_DIR = "~/GOG Games"
 GOG_AUTH_URL_FILE = "~/.local/share/unifideck/gog_auth_url.txt"
-
 
 @dataclass(frozen=True)
 class GOGConfig:

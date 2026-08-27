@@ -1,8 +1,6 @@
 """
 Wine prefix lifecycle manager for Ubisoft games.
 
-OP-59a | py_modules/unifideck/stores/ubisoft/prefix/manager.py
-
 ``UbisoftPrefixManager`` owns the creation, validation, and destruction
 of Wine prefixes used by Ubisoft games. Three categories of prefix
 coexist:
@@ -37,7 +35,6 @@ from .helpers import _PrefixHelpers
 from .template_builder import _TemplatePrefixBuilder
 
 logger = logging.getLogger(__name__)
-
 
 class UbisoftPrefixManager:
     """Ubisoft prefix manager."""

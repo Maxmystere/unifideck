@@ -1,8 +1,6 @@
 """
 Crowd-sourced Ubisoft game-ID lookup tables — download & cache.
 
-OP-55h | py_modules/unifideck/stores/ubisoft/id_map_sources.py
-
 Ubisoft does not publish a public mapping from UPC ``space_id`` to
 human-readable game name; we rely on a community-maintained list hosted
 on GitHub (``iArtorias/ubisoft_game_ids``).
@@ -76,7 +74,6 @@ _CONNECT_THEN_SPACE = re.compile(
 # scan synchronously during a library fetch (it would stall the sync).
 _MAX_LEVELDB_FILE_BYTES = 16 * 1024 * 1024
 
-
 def extract_cache_game_ids(
     prefix_path: str,
     localstorage_relative_path: str,
@@ -106,7 +103,6 @@ def extract_cache_game_ids(
             return result
     return result
 
-
 def _scan_leveldb_dir(leveldb: Path, result: dict[str, str]) -> None:
     """Scan every ``*.ldb``/``*.log`` file in a leveldb dir into ``result``.
 
@@ -133,7 +129,6 @@ def _scan_leveldb_dir(leveldb: Path, result: dict[str, str]) -> None:
             continue
         _extract_ids_from_binary(content, result)
 
-
 def _extract_ids_from_binary(data: bytes, result: dict[str, str]) -> None:
     """Pull ``spaceId``/``ubisoftConnectGameId`` pairs from a leveldb blob.
 
@@ -150,7 +145,6 @@ def _extract_ids_from_binary(data: bytes, result: dict[str, str]) -> None:
             connect_id = match.group(id_group)
             if space_id and connect_id:
                 result.setdefault(space_id, connect_id)
-
 
 def extract_game_id_from_registry(
     prefix_path: str,
@@ -174,7 +168,6 @@ def extract_game_id_from_registry(
             return user_id
     return None
 
-
 def read_reg_file(reg_path: str) -> str | None:
     """Read reg file."""
     try:
@@ -184,7 +177,6 @@ def read_reg_file(reg_path: str) -> str | None:
         )
     except OSError:
         return None
-
 
 def scan_system_reg_installs(content: str) -> str | None:
     """Scan system reg installs."""
@@ -211,7 +203,6 @@ def scan_system_reg_installs(content: str) -> str | None:
         return fallback_id
     return None
 
-
 def extract_id_from_user_reg_sibling(
     reg_path: str,
 ) -> str | None:
@@ -233,7 +224,6 @@ def extract_id_from_user_reg_sibling(
         )
         return game_id
     return None
-
 
 class _IdMapSources:
     """Id map sources."""
@@ -461,7 +451,6 @@ class _IdMapSources:
                 return install_id
         return None
 
-
 def _download_game_id_database(
     url: str,
     dest_path: str,
@@ -493,7 +482,6 @@ def _download_game_id_database(
             f.write(chunk)
     tmp_path.replace(dest_p)
 
-
 def _parse_uuid_catalog(filepath: str) -> dict[str, str]:
     """Parse unifiDB's ``uuid_catalog.json`` into ``uuid → name``.
 
@@ -516,7 +504,6 @@ def _parse_uuid_catalog(filepath: str) -> dict[str, str]:
         if isinstance(uuid, str) and isinstance(name, str) and name:
             out[uuid] = name
     return out
-
 
 def _parse_game_id_database(
     filepath: str,

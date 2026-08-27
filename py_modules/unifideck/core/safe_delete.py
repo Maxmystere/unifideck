@@ -1,7 +1,5 @@
 """Shared safe-deletion helpers for uninstall / cleanup flows.
 
-OP-58 | py_modules/unifideck/core/safe_delete.py
-
 Centralises the "is this path safe to ``rmtree``?" guard that the per-store
 uninstallers (Epic, GOG, Amazon, Ubisoft) and the global "Delete all data"
 cleanup each used to re-implement (some only checked ``/`` and ``$HOME``,
@@ -25,7 +23,6 @@ logger = logging.getLogger(__name__)
 # 3 → rejected. Mirrors Ubisoft's existing ``_DELETE_MIN_PATH_DEPTH`` guard.
 _MIN_DEPTH = 4
 
-
 def is_safe_to_delete(path: str | Path) -> bool:
     """True iff *path* is safe to recursively delete.
 
@@ -48,7 +45,6 @@ def is_safe_to_delete(path: str | Path) -> bool:
         return False
     return len(resolved.parts) >= _MIN_DEPTH
 
-
 def _is_ancestor(maybe_ancestor: Path, child: Path) -> bool:
     """True iff *maybe_ancestor* is an ancestor of (or equal to) *child*."""
     try:
@@ -56,7 +52,6 @@ def _is_ancestor(maybe_ancestor: Path, child: Path) -> bool:
         return True
     except ValueError:
         return False
-
 
 def safe_rmtree(path: str | Path) -> bool:
     """``rmtree`` *path* iff it passes :func:`is_safe_to_delete`.
@@ -79,7 +74,6 @@ def safe_rmtree(path: str | Path) -> bool:
     if not gone:
         logger.warning("[safe_delete] %s still present after rmtree", p)
     return gone
-
 
 def canonical_prefix(game_id: str) -> Path:
     """Per-game Proton prefix path for non-Ubisoft stores.

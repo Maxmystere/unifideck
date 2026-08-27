@@ -1,7 +1,5 @@
 """Download data models — the per-item record + error classification.
 
-OP-15c | py_modules/unifideck/services/download/models.py
-
 ``DownloadItem`` is the frozen dataclass describing one queued
 download : store, game_id, target path, language, current state
 (queued / running / paused / done / failed), progress (bytes done
@@ -23,7 +21,6 @@ from typing import Any
 # ``download_history.json`` so the list survives restarts + plugin
 # reinstalls.
 MAX_FINISHED_HISTORY = 10
-
 
 @dataclass
 class DownloadItem:
@@ -153,7 +150,6 @@ class DownloadItem:
         if "is_update" not in d and "was_previously_installed" in d:
             d["is_update"] = d["was_previously_installed"]
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
-
 
 def classify_download_error(exc: Exception) -> str:
     """Map an exception's message to a typed error code.

@@ -1,7 +1,5 @@
 """StoreRPCMixin — store auth + login-state RPC.
 
-OP-26e | py_modules/unifideck/rpc/mixins/store.py
-
 Covers the auth surface only. The neighbouring surfaces live in
 sibling mixins, all composed onto ``Plugin`` in ``main.py``:
 
@@ -23,7 +21,6 @@ import logging
 from typing import Any
 
 logger = logging.getLogger(__name__)
-
 
 class StoreRPCMixin:
     """Store-auth RPC: start/check/clear flows + login status."""

@@ -1,7 +1,5 @@
 """ActionRPCMixin — mixin form of the ``unifideck://`` URI dispatcher.
 
-OP-26a | py_modules/unifideck/rpc/mixins/action.py
-
 Reaches for ``self.registry`` / ``self.services`` /
 ``self.sync_service`` directly on the host ``Plugin`` class, which
 composes this mixin as a base. That is the only composition style in

@@ -1,8 +1,6 @@
 """
 Wine prefix helpers — symlink fixups, marker writing, basic file ops.
 
-OP-59b | py_modules/unifideck/stores/ubisoft/prefix/helpers.py
-
 Helper class with a grab-bag of operations the prefix builders rely on:
 
 * ``fix_pfx_symlink`` — repairs a ``<prefix>/pfx`` symlink pointing at the
@@ -41,7 +39,6 @@ if TYPE_CHECKING:
     from .manager import UbisoftPrefixManager
 logger = logging.getLogger(__name__)
 _SILENT_INSTALL_FLAG = "/S"
-
 
 class _PrefixHelpers:
     """Prefix helpers."""

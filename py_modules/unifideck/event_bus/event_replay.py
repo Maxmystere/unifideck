@@ -1,7 +1,5 @@
 """Event replay buffer — per-event-type ring buffers of recent events.
 
-OP-09d | py_modules/unifideck/event_bus/event_replay.py
-
 ``EventReplayBuffer`` is **not** a single FIFO of all events — it's
 a dict of per-event-type ``deque(maxlen=...)`` buffers. Different
 event types get different caps:
@@ -53,7 +51,6 @@ _DEFAULT_CAPS: dict[Events, int] = {
 }
 _FALLBACK_CAP = 20
 
-
 @dataclass
 class _RecordedEvent:
     """One recorded event entry.
@@ -88,7 +85,6 @@ class _RecordedEvent:
             "kwargs": self.kwargs,
             "timestamp": round(self.timestamp, 3),
         }
-
 
 class EventReplayBuffer:
     """Per-event-type ring buffers with custom caps."""

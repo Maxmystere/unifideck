@@ -1,8 +1,6 @@
 """
 Detect installed Ubisoft games — find on-disk games not in the registry.
 
-OP-57f | py_modules/unifideck/stores/ubisoft/library/detection.py
-
 When Unifideck is freshly installed or the user has manually copied
 game files between prefixes, the install registry may be incomplete:
 games may exist on disk that Unifideck doesn't know about.
@@ -41,7 +39,6 @@ from .detection_helpers import (
 )
 
 logger = logging.getLogger(__name__)
-
 
 class _InstallDetector:
     """Install detector."""

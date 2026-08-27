@@ -63,7 +63,6 @@ logger = logging.getLogger(__name__)
 #: on completion via ``add_done_callback``.
 _BACKGROUND_TASKS: set[asyncio.Task[None]] = set()
 
-
 async def boot_plugin(
     plugin: Any,
     *,
@@ -111,7 +110,6 @@ async def boot_plugin(
     _wire_prefix_bridge(plugin)
     logger.info("[Unifideck] plugin loaded")
 
-
 async def _boot_layer2_core(plugin: Any, decky_runtime_dir: str) -> Any:
     """Layer 2 — EventBus + pipeline + cache.
 
@@ -126,7 +124,6 @@ async def _boot_layer2_core(plugin: Any, decky_runtime_dir: str) -> Any:
     register_default_caches(plugin.cache)
     return pipeline
 
-
 def _resolve_defaults_path(decky_plugin_dir: str) -> str:
     """Locate the bundled config.json across Decky build layouts.
 
@@ -137,7 +134,6 @@ def _resolve_defaults_path(decky_plugin_dir: str) -> str:
     """
     from unifideck.config.defaults_path import resolve_defaults_config_path
     return resolve_defaults_config_path(decky_plugin_dir)
-
 
 async def _boot_config_and_validate(
     plugin: Any,
@@ -183,7 +179,6 @@ async def _boot_config_and_validate(
         user_config_path=plugin._user_config_path,
     )
 
-
 def _boot_layer4_stores(plugin: Any, decky_plugin_dir: str) -> None:
     """Layer 4 — StoreRegistry + SyncService + auto-discovery."""
     plugin.registry = StoreRegistry(plugin.bus)
@@ -212,7 +207,6 @@ def _boot_layer4_stores(plugin: Any, decky_plugin_dir: str) -> None:
         config=plugin.config,
     )
 
-
 async def _boot_layer5_services(
     plugin: Any, pipeline: Any, decky_plugin_dir: str,
 ) -> None:
@@ -223,7 +217,7 @@ async def _boot_layer5_services(
     1. ``bootstrap_services`` builds the full service container
        (shortcut, download, cdp, browser_monitor, ...).
     2. ``inject_store_dependencies`` walks ``_STORE_INJECTIONS``
-       (OP-13g) and writes each (attr, service) pair onto its
+ and writes each (attr, service) pair onto its
        auto-discovered store. Stores that expose
        ``_rebuild_auth_after_injection`` get it called so they
        can wire their auth flow against the freshly-injected
@@ -265,7 +259,6 @@ async def _boot_layer5_services(
     plugin.sync_service.resume_size_backfill()
     await start_async_services(plugin.services)
 
-
 async def _boot_updater(plugin: Any, decky_plugin_dir: str) -> None:
     """Wire the self-updater service.
 
@@ -289,7 +282,6 @@ async def _boot_updater(plugin: Any, decky_plugin_dir: str) -> None:
         logger.exception("[Updater] failed to wire — update checking disabled")
         plugin._updater_service = None
 
-
 async def _boot_update_sweep(plugin: Any) -> None:
     """Wire the background game-update sweep.
 
@@ -311,7 +303,6 @@ async def _boot_update_sweep(plugin: Any) -> None:
     except Exception:
         logger.exception("[UpdateSweep] failed to wire — updates checked on demand")
         plugin._update_sweep_service = None
-
 
 def _wire_prefix_bridge(plugin: Any) -> None:
     """Keep ``compatdata`` bridge links in step with the installed games.
@@ -378,7 +369,6 @@ def _wire_prefix_bridge(plugin: Any) -> None:
             task.add_done_callback(_BACKGROUND_TASKS.discard)
     except Exception:
         logger.exception("[Unifideck] could not wire the prefix bridge")
-
 
 async def _start_store_background_tasks(plugin: Any) -> None:
     """Kick off per-store background tasks outside the generic Layer-5

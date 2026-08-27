@@ -1,20 +1,18 @@
 """GOG store — Layer-4 implementation of the unified store interface.
 
-OP-50a | py_modules/unifideck/stores/gog/store.py
-
 ``GOGStore`` is the orchestration class that wires every sub-component
 of the GOG sub-package together and exposes them through the
 ``StoreBase`` contract used by the rest of the plugin (RPC mixins,
 service layer, registry). It owns one instance each of:
 
-* ``GOGConfig`` (OP-50b)         — frozen configuration snapshot.
-* ``GOGTokenManager`` (OP-52a)   — OAuth tokens + persistence.
-* ``GOGLibrary`` (OP-50c)        — owned-games library facade.
-* ``GOGInstaller`` (OP-51a)      — install/uninstall pipeline.
-* ``GOGUpdatesChecker`` (OP-50g) — update polling.
-* ``GOGDlcManager`` (OP-50f)     — DLC enumeration + install.
-* ``GOGBrowserAuth`` (OP-50h)    — embedded-browser OAuth flow.
-* ``GOGExeResolver`` (OP-50e)    — locate the launchable .exe.
+* ``GOGConfig`` — frozen configuration snapshot.
+* ``GOGTokenManager`` — OAuth tokens + persistence.
+* ``GOGLibrary`` — owned-games library facade.
+* ``GOGInstaller`` — install/uninstall pipeline.
+* ``GOGUpdatesChecker`` — update polling.
+* ``GOGDlcManager`` — DLC enumeration + install.
+* ``GOGBrowserAuth`` — embedded-browser OAuth flow.
+* ``GOGExeResolver`` — locate the launchable .exe.
 
 Implements the standard ``StoreBase`` API: ``store_info``, ``is_authed``,
 ``auth``, ``logout``, ``library``, ``install``, ``uninstall``, ``launch``,
@@ -67,7 +65,6 @@ if TYPE_CHECKING:
     from unifideck.core.cache_manager import CacheManager
     from unifideck.event_bus.event_bus import EventBus
 logger = logging.getLogger(__name__)
-
 
 class GOGStore(BrowserAuthRebuildMixin, StoreBase):
     """Gogstore."""
