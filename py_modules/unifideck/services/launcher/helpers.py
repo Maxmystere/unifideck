@@ -370,7 +370,40 @@ async def cloud_sync_phase(
         elif direction == "up":
             await svc._cloud_svc.sync_up(store, game_id)
     except Exception as e:
-        logger.warning("[Helpers] Cloud sync %s failed, ignoring: %s", direction, e)
+        # Surface it. This used to be a bare ``logger.warning(... ignoring ...)``,
+        # so a failed upload was **completely silent**: the user quit the game
+        # believing their progress had gone to the cloud, and nothing said
+        # otherwise until they lost it on another device.
+        #
+        # ``cloud_failure`` was written for exactly this and had no caller —
+        # its whole module was unimported (audit register item 37). Audit §1.2
+        # then read its config lookup as live and, on that basis, deleted the
+        # two RPCs that would have let a user silence the toast, reasoning
+        # that "current behaviour is acceptable". There was no behaviour: the
+        # toast never fired. Surfacing it is the 2026-08-26 product decision.
+        #
+        # Best-effort by design — a toast must never turn a survivable sync
+        # failure into a failed launch, which is why the whole thing is
+        # wrapped again here.
+        logger.warning("[Helpers] Cloud sync %s failed: %s", direction, e)
+        try:
+            from unifideck.launcher.cloud.cloud_failure import (
+                handle_cloud_sync_failure,
+            )
+
+            await handle_cloud_sync_failure(
+                svc._bus,
+                getattr(svc, "_config", None),
+                phase=f"sync_{direction}",
+                store=store,
+                game_id=game_id,
+                error=e,
+            )
+        except Exception:
+            logger.exception(
+                "[Helpers] cloud-failure reporting itself failed for %s",
+                direction,
+            )
 
 
 async def run_game_subprocess(

@@ -21,6 +21,7 @@ import { EventBusClient } from "../api/event-bus-client";
 import { type ToastActionPayload } from "../types/events";
 import { CloudSaveConflictModal } from "../components/modals/CloudSaveConflictModal";
 import { resolveToastDuration } from "./toast-duration";
+import { buildToastParams } from "./toast-params";
 
 /** Show a toast via the imperative Decky toaster API. */
 function showToast(
@@ -75,10 +76,7 @@ export function startBootEventListener(): () => void {
       // `game_title` arrives as a top-level field while the strings
       // interpolate `{{gameTitle}}`; merging it here is what stops every
       // launcher toast rendering with the placeholder unfilled.
-      const params = {
-        ...(p.game_title ? { gameTitle: String(p.game_title) } : {}),
-        ...((p.i18n_params ?? {}) as Record<string, string>),
-      } as Record<string, string>;
+      const params = buildToastParams(p);
       const message = p.i18n_key ? String(i18n.t(p.i18n_key, params)) : "";
       if (!message) return;
 

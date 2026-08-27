@@ -312,6 +312,24 @@ def auto_wire(
     Returns:
         Number of methods that were actually subscribed.
     """
+    # Fall back to the bus's own watchdog when the caller did not pass one.
+    #
+    # This parameter existed from the start and **every one of the ~20
+    # ``auto_wire`` call sites passes two positional arguments**, so
+    # ``watchdog`` was always ``None``, ``_register_with_watchdog`` never
+    # ran, and ``HandlerWatchdog`` tracked zero handlers for the life of the
+    # project — a support bundle reported ``watchdog: {}`` against 42
+    # registered events, which reads as "healthy" rather than "not wired"
+    # (audit register item 4g).
+    #
+    # Reading it off the bus rather than editing 20 constructors is what
+    # makes this safe to land on its own: services are constructed with a
+    # bus and have no access to the pipeline, so threading it by hand would
+    # have meant a new parameter on every service. ``pipeline_factory``
+    # attaches it once.
+    if watchdog is None:
+        watchdog = getattr(bus, "watchdog", None)
+
     count = 0
     for attr_name in dir(instance):
         if attr_name.startswith("__"):

@@ -331,3 +331,73 @@ def test_a_tolerated_read_does_not_mask_a_second_undeclared_key(
         )],
     )
     assert errors == 1
+
+
+# ========================================================= #
+# The two LAUNCHER_STAGE payload builders must agree        #
+# ========================================================= #
+def test_the_two_toast_builders_produce_the_same_payload_shape() -> None:
+    """``emit_stage`` and ``launcher_toast`` are one contract in two places.
+
+    Both build a ``LAUNCHER_STAGE`` payload and both end up in the same
+    bridge file, but they exist separately for a real reason: the deep launch
+    helpers (umu retry, winetricks, prefix init) are plain functions several
+    frames below anything holding an ``EventBus``, so ``launcher_toast``
+    writes to the bridge directly. 38 of the 46 backend toast call sites use
+    it.
+
+    ``launcher_toast``'s own docstring states the invariant and admits it is
+    hand-maintained: *"The two builders must stay in step: a field one
+    produces and the other doesn't is a payload that renders differently
+    depending on which process emitted it."* Nothing checked it — the same
+    hand-maintained-pair shape as ``uses_wine`` ↔ ``WRAPPER_STORES`` in audit
+    §3.1, where the pair was fine right up until it wasn't.
+
+    They agree today (7 keys each). This pins that.
+    """
+    import ast
+    from pathlib import Path
+
+    from tests.unit._repo_root import find_repo_file
+
+    def payload_keys(rel: str, fn_name: str) -> set[str]:
+        path = find_repo_file(rel)
+        assert path is not None, rel
+        tree = ast.parse(Path(path).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == fn_name
+            ):
+                keys: set[str] = set()
+                for sub in ast.walk(node):
+                    if (
+                        isinstance(sub, ast.Subscript)
+                        and isinstance(sub.slice, ast.Constant)
+                        and getattr(sub.value, "id", "") == "payload"
+                    ):
+                        keys.add(sub.slice.value)
+                    if isinstance(sub, ast.Dict):
+                        for k in sub.keys:
+                            if isinstance(k, ast.Constant) and isinstance(
+                                k.value, str,
+                            ):
+                                keys.add(k.value)
+                return keys
+        raise AssertionError(f"{fn_name} not found in {rel}")
+
+    bus_side = payload_keys(
+        "py_modules/unifideck/launcher/rpc.py", "emit_stage",
+    )
+    bridge_side = payload_keys(
+        "py_modules/unifideck/launcher/frontend_bridge.py", "launcher_toast",
+    )
+
+    assert bus_side, "emit_stage built no payload keys — parser broken?"
+    assert bus_side == bridge_side, (
+        f"the two LAUNCHER_STAGE builders have drifted.\n"
+        f"  only emit_stage:     {sorted(bus_side - bridge_side)}\n"
+        f"  only launcher_toast: {sorted(bridge_side - bus_side)}\n"
+        f"A field one sends and the other does not renders differently "
+        f"depending on which process emitted the toast."
+    )

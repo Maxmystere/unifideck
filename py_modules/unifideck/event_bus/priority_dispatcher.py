@@ -145,9 +145,15 @@ class PriorityDispatcher:
             bus: the underlying ``EventBus`` to forward to.
             background_cap: maximum pending BACKGROUND items
                 before new ones are refused (default 500).
-            watchdog: optional ``HandlerWatchdog`` — currently
-                stored but invocation goes through the bus
-                directly (the bus uses the watchdog internally).
+            watchdog: optional ``HandlerWatchdog``. Stored here for
+                the health snapshot; the supervision itself happens
+                in ``EventBus._invoke_supervised``, which reads the
+                watchdog off the bus. This parameter's docstring
+                claimed "the bus uses the watchdog internally" from
+                the start — untrue until 2026-08-26, when the bus
+                was actually wired to it (audit register item 4g).
+                Until then nothing called ``watchdog.invoke`` and it
+                tracked zero handlers.
             latency_collector: optional sink for per-event
                 dispatch latencies.
             replay_buffer: optional ring buffer to record

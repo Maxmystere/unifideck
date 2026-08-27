@@ -1,26 +1,35 @@
-"""Cloud-sync failure classification and user-facing toast actions.
+"""Cloud-sync failure classification and user-facing toasts.
 
-**Nothing imports this module.** Every function here — ``classify_cloud_error``,
-``get_failure_behavior``, ``handle_cloud_sync_failure``, ``_resolve_toast_action``
-and the four ``_classify_*`` helpers — has zero callers, so a cloud-save sync
-failure at launch is silent today.
+Called from ``services/launcher/helpers.cloud_sync_phase`` when a sync
+raises. Classifies the exception into a stable code, honours
+``cloud.failure_behavior.<store>``, and emits a ``LAUNCHER_STAGE`` toast —
+the one channel that reaches the UI from the out-of-process launcher.
 
-That matters beyond the dead code, because two decisions were taken on the
-assumption this ran. Audit §1.2 recorded that ``cloud.failure_behavior.<store>``
-is "read live at launch" and, on that basis, **deleted** the two RPCs that would
-have let a user turn the toast off — there was never a toast to turn off. And
-register item 4b describes this module's ``_TOAST_ACTIONS`` as the canonical
-producer of the toast-action payload the frontend drops on the floor; in fact
-neither half exists, which makes 4b cheaper rather than harder.
+**This module was unimported until 2026-08-26**, and the history matters
+because two decisions were taken on the assumption it ran:
 
-Kept rather than deleted because whether cloud-sync failures should surface to
-the user at all is a product call, and this is the written-and-translated
-material to surface them with. Tracked as audit register item 37; the decision
-is recorded in ``docs/audit-register.md``.
+* ``cloud_sync_phase`` caught every sync exception with a bare
+  ``logger.warning(... ignoring ...)``. A failed **upload** was completely
+  silent: the user quit the game believing their progress had reached the
+  cloud, and found out otherwise on another device.
+* Audit §1.2 read ``get_failure_behavior`` as "read live at launch" and, on
+  that basis, deleted the two RPCs that would have let a user silence the
+  toast — reasoning that the current behaviour was acceptable. There was no
+  behaviour to accept. The config key survives and is still honoured here;
+  it is hand-editable in ``~/.config/unifideck/config.json``.
 
-# unimported: audit register item 37 — dead pending the product decision on
-# whether cloud-sync failures surface at all. See §1.2 and item 4b, both of
-# which were decided on the false premise that this module runs.
+Surfacing upload failures is a product decision taken 2026-08-26 (audit
+register item 37).
+
+Two contracts to keep in mind when changing the payload:
+
+* the message strings interpolate ``{{error}}``, while this module sends a
+  machine ``error_code`` plus ``error_i18n_key`` so the reason stays
+  translatable. ``src/services/toast-params.ts`` resolves one into the
+  other; sending English from here would be untranslatable.
+* ``_TOAST_ACTIONS`` still uses an ``{i18n_label_key, target_url}`` shape,
+  while both frontend renderers parse ``{verb, args}``. Those actions are
+  therefore **not** rendered yet — audit register item 4b.
 """
 from __future__ import annotations
 

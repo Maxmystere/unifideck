@@ -21,6 +21,7 @@ import { unwrapRpcEnvelope } from "../api/useRPC";
 import { EventBusClient } from "../api/event-bus-client";
 import { CloudSaveConflictModal } from "../components/modals/CloudSaveConflictModal";
 import { resolveToastDuration } from "./toast-duration";
+import { buildToastParams } from "./toast-params";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -73,10 +74,7 @@ function showLauncherToast(ev: LauncherToast): void {
   // toast rendered with the placeholder unfilled ("Starting  through
   // Battle.net…"). An explicit i18n_params entry still wins, since a caller
   // that named the variable meant it.
-  const params = {
-    ...(ev.game_title ? { gameTitle: ev.game_title } : {}),
-    ...((ev.i18n_params ?? {}) as Record<string, string>),
-  } as Record<string, string>;
+  const params = buildToastParams(ev);
 
   // Cloud-save conflict → modal so the user can pick keep-local/remote.
   if (ev.action?.verb === "retry-sync") {

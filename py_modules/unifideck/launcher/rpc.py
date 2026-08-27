@@ -45,6 +45,10 @@ async def emit_stage(
     "[launcher.rpc] stage: key=%s title=%s game=%s prio=%s",
     i18n_key, i18n_title_key, game_title, priority,
    )
+    # NOTE: ``frontend_bridge.launcher_toast`` builds this same payload for
+    # launcher code with no bus (38 of the 46 backend toast sites). The two
+    # must stay in step; pinned by
+    # ``test_the_two_toast_builders_produce_the_same_payload_shape``.
     payload: dict[str, Any] = {
         "i18n_key": i18n_key,
         "game_title": game_title,

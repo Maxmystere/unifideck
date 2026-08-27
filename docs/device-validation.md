@@ -218,6 +218,32 @@ clear (item 46).
 | DV-M6 | Check the badge text in a non-English UI language | Localized — every string already existed in 16 locales | ( ) | |
 | DV-M7 | In Gaming Mode, repeat DV-M1 | Badge and both buttons render and are focusable with the controller | ( ) | |
 
+## DV-N — item 4g, bus supervision is actually wired (G1)
+
+The acceptance signal is a **Capture Logs bundle**, not the code: the
+`watchdog` and `dispatcher` blocks read as healthy when they are empty, which
+is exactly how this stayed hidden for the life of the project.
+
+| ID | Step | Expected | Status | Evidence |
+|---|---|---|---|---|
+| **DV-N1** | Capture Logs, read `frontend.bus_health.watchdog` | **Non-empty** — one entry per registered handler with an invocation count. It reported `{}` against 42 registered events on 2026-08-25. | ( ) | |
+| DV-N2 | Compare against a bundle taken before this change | The `watchdog` block goes from `{}` to populated; nothing else in the bundle changes shape | ( ) | |
+| DV-N3 | Ordinary session: boot, sync, open App Details, launch a game | No behaviour change. Supervision is observability; if it alters anything user-visible, that is a regression | ( ) | |
+| DV-N4 | `grep -i quarantin ~/homebrew/logs/Unifideck/*.log` | **Nothing.** A quarantine in normal use would mean a handler is timing out repeatedly — a real finding, not a pass | ( ) | |
+| DV-N5 | Sync a full library (the heaviest fan-out) | No slowdown; `[DIAG] event=… total=…ms` timings comparable to before | ( ) | |
+
+## DV-O — item 37, cloud-sync upload failures surface
+
+| ID | Step | Expected | Status | Evidence |
+|---|---|---|---|---|
+| **DV-O1** | Make an upload fail: launch a GOG or Epic game with cloud saves, quit, and drop the network (or fill the disk) so `sync_up` raises | A **warning toast**: "Cloud save upload failed for gog (Network unreachable). Your progress is stored locally only." Before this it was silent — log only. | ( ) | |
+| **DV-O2** | Read the `{{error}}` half of that toast carefully | A **translated reason** ("Network unreachable"), not an empty pair of brackets and not a raw code. This is the trap the wiring would have shipped. | ( ) | |
+| DV-O3 | Repeat DV-O1 with the UI in a non-English language | Both the message and the reason localized (`cloudSync.error.*` covers all 11 codes) | ( ) | |
+| DV-O4 | Fill the disk instead of dropping the network | Reason reads "Not enough disk space", i.e. the classifier picks the right code | ( ) | |
+| DV-O5 | Set `cloud.failure_behavior.gog = "silent"` in `~/.config/unifideck/config.json`, repeat DV-O1 | **No toast**, log only. The config key survives even though §1.2 deleted its RPCs. | ( ) | |
+| DV-O6 | A **successful** launch + quit with cloud saves working | No toast. A false positive here would be worse than the silence it replaces. | ( ) | |
+| DV-O7 | Launch a game on a store with no cloud-save support | No toast, no error | ( ) | |
+
 ---
 
 ## Lost baselines
