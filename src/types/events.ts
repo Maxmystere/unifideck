@@ -102,5 +102,15 @@ export interface ToastActionPayload {
   /** Resolved game title. Merged into the i18n params as `gameTitle`. */
   game_title?: string;
   duration_ms?: number;
-  action?: { verb: string; args: string[] };
+  /**
+   * One-click remediation offered with the toast.
+   *
+   * `i18n_label_key` names it. Two producers emit this: the cloud-save
+   * conflict path (which also sends `local_snapshot`/`remote_snapshot`, and
+   * is rendered as a pick modal) and `cloud_failure` (transient failures,
+   * rendered as a clickable toast). Both use this one shape — a second
+   * `{i18n_label_key, target_url}` form existed until 2026-08-26 and would
+   * have read `undefined` here (audit register item 4b).
+   */
+  action?: { verb: string; args: string[]; i18n_label_key?: string };
 }

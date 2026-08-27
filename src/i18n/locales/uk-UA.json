@@ -404,9 +404,7 @@
       "openStorageManager": "Звільнити місце",
       "signInToStore": "Увійти",
       "retrySync": "Повторити",
-      "retryLibrarySync": "Оновити бібліотеку",
-      "openSaveFolder": "Відкрити папку збережень",
-      "showLogs": "Показати логи"
+      "retryLibrarySync": "Оновити бібліотеку"
     },
     "library": {
       "_comment": "Toasts emitted by SyncService when a per-store library sync fails. The retry button triggers a fire-and-forget refresh via the unifideck://refresh-library/<store> verb; the user doesn't wait for the result inline, the Library view picks it up through its SYNC_PROGRESS subscription.",

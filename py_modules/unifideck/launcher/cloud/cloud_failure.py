@@ -238,59 +238,74 @@ async def _emit_toast(
 
 def _resolve_toast_action(
     code: str, *, store: str, game_id: str, phase: str,
-) -> dict[str, str] | None:
+) -> dict[str, Any] | None:
+    """The one-click remediation for *code*, in the frontend's shape.
 
-    """Resolve toast action."""
+    Emits ``{verb, args, i18n_label_key}`` — the same shape
+    ``CloudSaveService._emit_save_conflict`` already sends and both
+    renderers already parse. It used to emit
+    ``{i18n_label_key, target_url}`` instead, a **second** action shape for
+    the same field, so a renderer written for one would read ``undefined``
+    from the other. That is the ``app_id``/``game_id`` split of audit §1.1.1,
+    between two producers rather than a producer and a consumer, and it was
+    invisible because this module had no caller (item 37).
+
+    A Steam deep link is expressed as the ``open-url`` verb with the target
+    and an optional fallback as args, so one shape covers both a backend verb
+    and an external URL without a second field to branch on.
+    """
     action = _TOAST_ACTIONS.get(code)
     if action is None:
         return None
     ctx_vars = {"store": store, "game_id": game_id, "phase": phase}
-    working: dict[str, str] = dict(action)
-    for url_key in ("target_url", "fallback_url"):
-        if url_key not in working:
-            continue
-        try:
-            working[url_key] = working[url_key].format(**ctx_vars)
-        except (KeyError, IndexError) as err:
-            logger.warning(
-                "[cloud_failure] action template error for "
-                "code=%s key=%s: %s — dropping action",
-                code, url_key, err,
-            )
-            return None
-    return working
-_TOAST_ACTIONS = {
+    try:
+        args = [arg.format(**ctx_vars) for arg in action["args"]]
+    except (KeyError, IndexError) as err:
+        logger.warning(
+            "[cloud_failure] action template error for code=%s: %s — "
+            "dropping action", code, err,
+        )
+        return None
+    return {
+        "verb": action["verb"],
+        "args": args,
+        "i18n_label_key": action["i18n_label_key"],
+    }
+
+
+#: code → the remediation offered with its toast.
+#:
+#: ``verb`` is a ``unifideck://`` action verb, except ``open-url`` which the
+#: frontend opens directly (args: target, then optional fallback).
+_TOAST_ACTIONS: dict[str, dict[str, Any]] = {
     "disk_space_low": {
         "i18n_label_key": "toasts.actions.openStorageManager",
-        "target_url": "steam://settings/storage",
-        "fallback_url": "steam://settings",
+        "verb": "open-url",
+        "args": ["steam://settings/storage", "steam://settings"],
+    },
+    "disk_full": {
+        "i18n_label_key": "toasts.actions.openStorageManager",
+        "verb": "open-url",
+        "args": ["steam://settings/storage", "steam://settings"],
     },
     "auth_expired": {
         "i18n_label_key": "toasts.actions.signInToStore",
-        "target_url": "unifideck://auth/{store}",
+        "verb": "auth",
+        "args": ["{store}"],
     },
     "network_unreachable": {
         "i18n_label_key": "toasts.actions.retrySync",
-        "target_url": "unifideck://retry-sync/{store}/{game_id}/{phase}",
+        "verb": "retry-sync",
+        "args": ["{store}", "{game_id}", "{phase}"],
     },
     "timed_out": {
         "i18n_label_key": "toasts.actions.retrySync",
-        "target_url": "unifideck://retry-sync/{store}/{game_id}/{phase}",
+        "verb": "retry-sync",
+        "args": ["{store}", "{game_id}", "{phase}"],
     },
     "server_error": {
         "i18n_label_key": "toasts.actions.retrySync",
-        "target_url": "unifideck://retry-sync/{store}/{game_id}/{phase}",
-    },
-    "unknown": {
-        "i18n_label_key": "toasts.actions.openSaveFolder",
-        "target_url": "unifideck://open-save-folder/{store}/{game_id}",
-    },
-    "permission_denied": {
-        "i18n_label_key": "toasts.actions.openSaveFolder",
-        "target_url": "unifideck://open-save-folder/{store}/{game_id}",
-    },
-    "cancelled": {
-        "i18n_label_key": "toasts.actions.openSaveFolder",
-        "target_url": "unifideck://open-save-folder/{store}/{game_id}",
+        "verb": "retry-sync",
+        "args": ["{store}", "{game_id}", "{phase}"],
     },
 }

@@ -196,7 +196,6 @@
     "sync.retryingMissingArtwork",
     "sync.savingShortcuts",
     "sync.sgdbLookup",
-    "toasts.actions.showLogs",
     "toasts.authConnected",
     "toasts.authConnectedMessage",
     "toasts.authError",

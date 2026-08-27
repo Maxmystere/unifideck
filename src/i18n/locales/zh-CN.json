@@ -404,9 +404,7 @@
       "openStorageManager": "释放空间",
       "signInToStore": "登录商店",
       "retrySync": "重试",
-      "retryLibrarySync": "刷新游戏库",
-      "openSaveFolder": "查看存档文件夹",
-      "showLogs": "查看日志"
+      "retryLibrarySync": "刷新游戏库"
     },
     "library": {
       "_comment": "Toasts emitted by SyncService when a per-store library sync fails. The retry button triggers a fire-and-forget refresh via the unifideck://refresh-library/<store> verb; the user doesn't wait for the result inline, the Library view picks it up through its SYNC_PROGRESS subscription.",

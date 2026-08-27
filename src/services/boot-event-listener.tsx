@@ -22,6 +22,7 @@ import { type ToastActionPayload } from "../types/events";
 import { CloudSaveConflictModal } from "../components/modals/CloudSaveConflictModal";
 import { resolveToastDuration } from "./toast-duration";
 import { buildToastParams } from "./toast-params";
+import { isConflictAction, resolveToastAction } from "./toast-action";
 
 /** Show a toast via the imperative Decky toaster API. */
 function showToast(
@@ -29,12 +30,16 @@ function showToast(
   body: string,
   severity?: "info" | "warning" | "error",
   durationMs?: number,
+  onClick?: (() => void) | null,
+  actionLabel?: string,
 ): void {
   try {
     toaster.toast({
       title,
       body,
       duration: resolveToastDuration(durationMs, severity),
+      ...(onClick ? { onClick } : {}),
+      ...(actionLabel ? { subtext: actionLabel } : {}),
     });
   } catch {
     console.log(`[BootEventListener] ${title}: ${body}`);
@@ -80,9 +85,13 @@ export function startBootEventListener(): () => void {
       const message = p.i18n_key ? String(i18n.t(p.i18n_key, params)) : "";
       if (!message) return;
 
-      // Cloud-save conflict → modal
-      if (p.action?.verb === "retry-sync") {
-        const [store, gameId, phase] = p.action.args;
+      // Cloud-save conflict → modal. Discriminated on the SNAPSHOTS, not
+      // the verb: `cloud_failure` also sends `retry-sync` for a transient
+      // failure with nothing to choose between, and branching on the verb
+      // alone would open a pick modal with two empty sides on every dropped
+      // Wi-Fi (audit register item 4b).
+      if (isConflictAction(p)) {
+        const [store, gameId, phase] = p.action?.args ?? [];
         showModal(
           <CloudSaveConflictModal
             gameTitle={String(
@@ -119,12 +128,19 @@ export function startBootEventListener(): () => void {
         return;
       }
 
-      // Generic toast
+      // Generic toast, optionally clickable. Decky toasts take an onClick
+      // rather than a button, so the whole toast is the affordance and the
+      // action's label goes in the body.
+      const onClick = resolveToastAction(p.action);
+      const label =
+        onClick && p.action?.i18n_label_key
+          ? String(i18n.t(p.action.i18n_label_key))
+          : "";
       if (p.i18n_title_key) {
         const title = String(i18n.t(p.i18n_title_key, params));
-        showToast(title, message, p.severity, p.duration_ms);
+        showToast(title, message, p.severity, p.duration_ms, onClick, label);
       } else {
-        showToast(message, "", p.severity, p.duration_ms);
+        showToast(message, label, p.severity, p.duration_ms, onClick, label);
       }
     }),
   );

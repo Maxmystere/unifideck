@@ -244,6 +244,20 @@ is exactly how this stayed hidden for the life of the project.
 | DV-O6 | A **successful** launch + quit with cloud saves working | No toast. A false positive here would be worse than the silence it replaces. | ( ) | |
 | DV-O7 | Launch a game on a store with no cloud-save support | No toast, no error | ( ) | |
 
+## DV-P — item 4b, toast actions render
+
+Run with **DV-O** (both come from the cloud-failure path).
+
+| ID | Step | Expected | Status | Evidence |
+|---|---|---|---|---|
+| **DV-P1** | Cause an upload failure with the **network down** (DV-O1) | Toast is **clickable**, subtext reads "Retry". Tapping it retries the sync. | ( ) | |
+| **DV-P2** | Cause an upload failure with the **disk full** | Subtext "Free up space"; tapping opens Steam's storage settings | ( ) | |
+| DV-P3 | Cause an **auth-expired** failure (sign out mid-session) | Subtext "Sign in"; tapping starts that store's sign-in | ( ) | |
+| **DV-P4** | Force a genuine cloud-save **conflict** (diverge local and cloud, then quit) | The **pick modal** opens with real numbers on both sides — *not* a plain toast | ( ) | |
+| **DV-P5** | Repeat DV-P1 and confirm the modal does **not** open | The trap this guards: `retry-sync` has two producers, and branching on the verb alone would open a pick modal with two empty sides on every dropped Wi-Fi | ( ) | |
+| DV-P6 | An ordinary launcher toast with no action | No subtext, not clickable, unchanged | ( ) | |
+| DV-P7 | Any toast in a non-English UI | Action label localized | ( ) | |
+
 ---
 
 ## Lost baselines
