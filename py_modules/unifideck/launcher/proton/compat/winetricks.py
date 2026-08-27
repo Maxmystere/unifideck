@@ -15,6 +15,9 @@ from pathlib import Path
 from unifideck.launcher.frontend_bridge import launcher_toast
 from unifideck.launcher.proton.fixes.game_fixes import get_required_winetricks
 from unifideck.launcher.proton.infrastructure.core import ProtonLaunchPlan
+from unifideck.launcher.proton.infrastructure.prefix_layout import (
+    normalize_prefix_root,
+)
 from unifideck.launcher.proton.infrastructure.umu_runtime import (
     UMU_TIMEOUT_RC,
     run_umu_with_retry,
@@ -36,11 +39,17 @@ _WINETRICKS_TIMEOUT_SECONDS = 300.0
 
 
 def _prefix_root(plan: ProtonLaunchPlan) -> Path:
-    """Resolve the prefix root (strip a trailing ``pfx`` segment)."""
-    p = plan.prefix_path.resolve()
-    while p.name == "pfx":
-        p = p.parent
-    return p
+    """The prefix root for *plan*, with any trailing ``pfx`` stripped.
+
+    A four-line wrapper over the canonical
+    ``prefix_layout.normalize_prefix_root``. This module, ``vcruntime``
+    and ``winetricks`` each held a byte-identical copy of that logic
+    beside it, and three more lived in ``proton/fixes/`` under the
+    canonical name — six copies of a helper that was already promoted.
+    Check 11 could not see them: it matches by name, and these were
+    renamed (audit register items 20 and 47).
+    """
+    return normalize_prefix_root(plan.prefix_path)
 
 
 def _already_done(marker: Path) -> bool:

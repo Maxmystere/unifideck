@@ -25,6 +25,10 @@ import os
 import tempfile
 from pathlib import Path
 
+from unifideck.launcher.proton.infrastructure.prefix_layout import (
+    resolve_drive_c,
+)
+
 logger = logging.getLogger(__name__)
 
 CLIENT_DIR = "Program Files (x86)/Battle.net"
@@ -48,15 +52,6 @@ def id_map_path() -> Path:
     base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
     return Path(base) / "unifideck" / "battlenet_id_map.json"
 
-
-def resolve_drive_c(prefix: Path | str) -> Path | None:
-    """Resolve a prefix's drive_c across both layouts, or None."""
-    root = Path(prefix)
-    modern = root / "pfx" / "drive_c"
-    if modern.is_dir():
-        return modern
-    legacy = root / "drive_c"
-    return legacy if legacy.is_dir() else None
 
 
 def _client_dir(prefix: Path | str) -> Path | None:

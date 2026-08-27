@@ -11,6 +11,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from unifideck.launcher.proton.infrastructure.prefix_layout import (
+    normalize_prefix_root,
+)
+
 logger = logging.getLogger(__name__)
 _UPLAY_ID_RE = re.compile(r"-UplayId=\s*(\d+)")
 @dataclass(frozen=True)
@@ -19,12 +23,6 @@ class RegistryInjectionResult:
     success: bool
     keys_written: int
     reason: str = ""
-def _normalize_prefix_root(prefix_path: Path) -> Path:
-    """Normalize prefix root."""
-    p = prefix_path.resolve()
-    while p.name == "pfx":
-        p = p.parent
-    return p
 def _select_active_wineprefix(prefix_root: Path) -> Path:
     """Select active wineprefix."""
     pfx_path = prefix_root / "pfx"
@@ -227,7 +225,7 @@ async def setup_registry(
     legendary_config: Path,
 ) -> RegistryInjectionResult:
     """Setup registry."""
-    prefix_root = _normalize_prefix_root(prefix_path)
+    prefix_root = normalize_prefix_root(prefix_path)
     app = _load_installed_json(legendary_config, game_id)
     if app is None:
         return _error_result("installed_json_missing_or_unreadable")

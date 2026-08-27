@@ -8,19 +8,16 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from unifideck.launcher.proton.infrastructure.prefix_layout import (
+    normalize_prefix_root,
+)
+
 logger = logging.getLogger(__name__)
 _PROTON_FALLBACK_WINE_PATHS: list[str] = [
     "~/.steam/steam/steamapps/common/Proton - Experimental/files/bin/wine",
     "~/.steam/steam/steamapps/common/Proton 10.0/files/bin/wine",
     "~/.steam/steam/steamapps/common/Proton 9.0 (Beta)/files/bin/wine",
 ]
-def normalize_prefix_root(prefix_path: Path) -> Path:
-    """Normalize prefix root."""
-    p = prefix_path.resolve()
-    while p.name == "pfx":
-        p = p.parent
-    return p
-
 def _copy_wrapper_to_drive_c(
     drive_c: Path,
     bundled_wrapper: Path,

@@ -23,6 +23,9 @@ from unifideck.launcher.proton.infrastructure.container_escape import (
     escape_argv,
 )
 from unifideck.launcher.proton.infrastructure.core import ProtonLaunchPlan
+from unifideck.launcher.proton.infrastructure.prefix_layout import (
+    normalize_prefix_root,
+)
 
 logger = logging.getLogger(__name__)
 _INSTALLER_TIMEOUT_S = 600
@@ -44,7 +47,7 @@ async def apply_epic_prerequisites(plan: ProtonLaunchPlan) -> bool:
     helper.
     """
     game_id = plan.context.game_id
-    prefix_root = _normalize_prefix_root(plan.prefix_path)
+    prefix_root = normalize_prefix_root(plan.prefix_path)
     new_marker, legacy_marker = _get_marker_paths(game_id, prefix_root)
     if new_marker.is_file() or legacy_marker.is_file():
         logger.debug(
@@ -92,13 +95,6 @@ async def apply_epic_prerequisites(plan: ProtonLaunchPlan) -> bool:
             severity="warning",
         )
     return ok
-
-def _normalize_prefix_root(prefix_path: Path) -> Path:
-    """Normalize prefix root."""
-    p = prefix_path.resolve()
-    while p.name == "pfx":
-        p = p.parent
-    return p
 
 def _get_marker_paths(game_id: str, prefix_root: Path) -> tuple[Path, Path]:
     """Get marker paths.

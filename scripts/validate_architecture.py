@@ -500,6 +500,15 @@ SHARED_HELPERS: dict[str, str] = {
     # GOG's and Ubisoft's ``get_installed_path`` bodies were byte-identical;
     # Amazon's was the same shape on a different key. Audit register item 48.
     "install_path_from_record": "stores/shared/installed_path.py",
+    # Prefix-layout primitives. Eight copies of these two existed *beside*
+    # the module that already owned them — six of ``normalize_prefix_root``
+    # (three renamed ``_prefix_root``, three under the canonical name in
+    # ``proton/fixes/``) and two of ``resolve_drive_c``. Check 11 saw none of
+    # them, because it matches by name; check 13 found them by body shape.
+    # Audit register items 20 and 47.
+    "normalize_prefix_root": "launcher/proton/infrastructure/prefix_layout.py",
+    "resolve_drive_c": "launcher/proton/infrastructure/prefix_layout.py",
+    "resolve_registry_prefix": "launcher/proton/infrastructure/prefix_layout.py",
     # Not a store helper, but the same drift class and the same remedy: this
     # arithmetic existed three times under three different names — here, as
     # ``compatibility/library._appid_key_candidates``, and inlined in

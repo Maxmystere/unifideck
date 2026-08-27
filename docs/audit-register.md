@@ -149,6 +149,27 @@ Found by re-deriving against the tree rather than reading the register.
 | 46 | Circuit breaker never resets on success | VALIDATING — see the P0 table above; needs DV-L1 |
 | 47 | `SHARED_HELPERS` is name-exact, so a renamed copy escapes check 11 | VALIDATING | Closed 2026-08-26 with **check 13**, matching on body *shape* — identifiers and literals erased, structure and attribute names kept — so a rename cannot hide a copy. Verified against a planted `_appid_key_candidates`, the exact historical escape. **A name-variant matcher was tried first and rejected on measurement**: it fired on seven unrelated `_write_marker*` functions with different signatures, the `fix_pfx_symlink` trap of §3.3, and a gate that reds untouched code gets switched off. Body-shape found **16 real groups** over 2357 functions, grandfathered shrink-only in `duplicate_bodies_baseline.json` — including the `epic/sessions.py` ↔ `epic/achievements.py` mirroring the convergence map flagged, and a genuine twin pair (`winetricks._write_marker` ↔ `epic_prerequisites._write_marker_sync`). 7 tests. |
 
+## Convergence backlog (check 13)
+
+Machine-tracked in `scripts/duplicate_bodies_baseline.json`, **shrink-only**.
+Found by body shape, so a renamed copy cannot hide. 16 groups at baseline,
+**13 remaining**.
+
+| Group | Verdict |
+|---|---|
+| ~~`normalize_prefix_root` ×6~~ | **DONE 2026-08-26.** Three renamed `_prefix_root(plan)` in `proton/compat/` and three under the canonical name in `proton/fixes/` — all six sitting *beside* `infrastructure/prefix_layout.py`, which already owned the helper. Now pinned in `SHARED_HELPERS`. |
+| ~~`resolve_drive_c` ×2~~ | **DONE.** Same story; the better docstring (the umu `pfx -> .` self-symlink that made Ubisoft recovery miss a real `upc.exe`) was promoted onto the canonical version rather than deleted with the copy. Four consumers repointed. |
+| `find_client_exe` / `client_exe` / `launcher_exe` / `find_upc_in` / `client_config` ×6 | **Next.** A "find a named file under a dir" family split across `launcher/proton/handlers/` and `stores/battlenet/paths.py` — the launcher duplicating the store's own path logic. |
+| `_client_dir` / `client_dir` ×2 | Same pair, same fix. |
+| `_kill_wineserver` ×2 | Both in `proton/fixes/`; `infrastructure/wineserver_reap.py` is the obvious home. |
+| epic `_parse_ts` / `_resolve_auth` / `_is_expired` ×2 (3 groups) | `stores/epic/sessions.py`'s own header says it is a "Mirror of `gog/sessions.py`". Worth a measured diff before merging — §3.2's lesson is that the outlier is sometimes the better implementation. |
+| `_list` ×2 (`gog/config.py`, `microsoft/config.py`) | **Cross-store config parsing** — directly the divergence this programme is about. |
+| `_read_real_steam_id` ×2 | `metadata_backfill` / `pcgw_backfill`. |
+| `_match_child_by_title` / `_match_title_dir` ×2 | Both in `services/cloud_save/`. |
+| `_load_mapping` ×2 | **Do not fold.** Both live in services that item **4i** may delete entirely; folding them first would be work thrown away. |
+| `emit_circuit_open_toast` / `emit_launcher_error_toast` | **Keep.** Same shape, different message and different failure. Parallel by design, not a copy. |
+| `_require_*` ×4 (RPC service accessors) | **Keep.** Four one-line accessors that must each name their own service; a shared one would need the name passed in and read worse. |
+
 ## Gate blind spots to close
 
 Each closes a defect class the audit hit repeatedly. These are the durable half.

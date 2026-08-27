@@ -7,18 +7,8 @@
   },
   "groups": [
     [
-      "launcher/proton/compat/gog_setup/__init__.py::_prefix_root",
-      "launcher/proton/compat/vcruntime.py::_prefix_root",
-      "launcher/proton/compat/winetricks.py::_prefix_root"
-    ],
-    [
       "launcher/proton/fixes/epic_prefix_fix.py::_kill_wineserver",
       "launcher/proton/fixes/epic_registry.py::_kill_wineserver"
-    ],
-    [
-      "launcher/proton/fixes/epic_prefix_fix.py::normalize_prefix_root",
-      "launcher/proton/fixes/epic_prerequisites.py::_normalize_prefix_root",
-      "launcher/proton/fixes/epic_registry.py::_normalize_prefix_root"
     ],
     [
       "launcher/proton/handlers/battlenet_client.py::_client_dir",
@@ -31,10 +21,6 @@
       "stores/battlenet/paths.py::client_config",
       "stores/battlenet/paths.py::client_exe",
       "stores/battlenet/paths.py::launcher_exe"
-    ],
-    [
-      "launcher/proton/handlers/battlenet_client.py::resolve_drive_c",
-      "launcher/wrapper_session_specs.py::resolve_drive_c"
     ],
     [
       "rpc/mixins/cloud_save.py::_cloudsave",
