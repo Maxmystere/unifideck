@@ -68,7 +68,7 @@ def test_no_options_changes_nothing(raw: str, tmp_path) -> None:
     state = LauncherService._build_runtime_state(ctx)
 
     assert ctx.env_overrides == {}
-    assert state.wrappers == []
+    assert not hasattr(state, "wrappers")
     assert state.game_args == []
     assert state.lsfg_requested is False
 
@@ -169,16 +169,39 @@ def test_tokenize_options_falls_back_on_malformed_input() -> None:
 
 
 # ========================================================= #
-# 5. What is deliberately NOT wired, and the measurement why
+# 5. game_args, and the two changes that made wiring it safe
 # ========================================================= #
-def test_wrappers_and_game_args_stay_unpopulated(tmp_path) -> None:
-    """Pins the deferral, so re-wiring it is a deliberate act with a red test.
+def test_game_args_is_populated_from_the_argv_tail(tmp_path) -> None:
+    """Wired 2026-08-26 (register item 23a), after two preconditions.
 
-    See :func:`test_bare_argv_tokens_would_become_game_args` for the reason.
+    It was deferred because the frontend's ``extractUserParams`` preserved
+    the user's ``mangohud``/``gamemoderun`` into the tail, so populating
+    ``game_args`` handed those to the **game**. That is fixed at the source:
+    ``extractUserParams`` now keeps only ``KEY=value`` assignments, because a
+    bare word after the game key was never a wrapper — Steam applies wrappers
+    pre-exec, which §2.9 measured.
     """
-    ctx = _ctx("mangohud gamemoderun", tmp_path)
+    ctx = _ctx("-windowed --skip-intro", tmp_path)
     state = LauncherService._build_runtime_state(ctx)
-    assert state.wrappers == []
+    assert not hasattr(state, "wrappers")
+    assert state.game_args == ["-windowed", "--skip-intro"]
+
+
+def test_an_env_only_tail_yields_no_game_args(tmp_path) -> None:
+    """The common case must not start passing arguments to the game.
+
+    A user's ``KEY=value`` is an environment override (item 23), not an
+    argument, and the parser must keep the two apart.
+    """
+    ctx = _ctx("MY_VAR=1 LSFG=1", tmp_path)
+    state = LauncherService._build_runtime_state(ctx)
+    assert state.game_args == []
+
+
+def test_a_bare_launch_passes_nothing_to_the_game(tmp_path) -> None:
+    """The regression guard: no options means no argv tail."""
+    ctx = _ctx("", tmp_path)
+    state = LauncherService._build_runtime_state(ctx)
     assert state.game_args == []
 
 
@@ -201,18 +224,21 @@ def test_bare_argv_tokens_would_become_game_args() -> None:
         "UNIFIDECK_UBISOFT_ACTION=auth mangohud gamemoderun",
     )
     assert parsed.env_overrides == {"UNIFIDECK_UBISOFT_ACTION": "auth"}
-    assert parsed.wrappers == []
+    assert not hasattr(parsed, "wrappers")
     assert parsed.game_args == ["mangohud", "gamemoderun"]
 
 
-def test_explicit_command_marker_does_split_correctly() -> None:
-    """With ``%command%`` present the parser is right, which is the open question.
+def test_a_command_marker_no_longer_collects_wrapper_words() -> None:
+    """Tokens before ``%command%`` are dropped, deliberately.
 
-    The design call §2.9 defers is what a bare token *without* this marker
-    means, not whether the marker itself works.
+    They used to land in ``ParsedOptions.wrappers``, which six argv builders
+    prepended — and which could only ever be empty in production, because
+    Steam applies wrapper words pre-exec and this parser only ever sees the
+    post-expansion argv tail. The field is gone (register item 23b); what
+    survives is the half that is real, the game arguments after the marker.
     """
     parsed = parse_launch_options("mangohud %command% -windowed --skip-intro")
-    assert parsed.wrappers == ["mangohud"]
+    assert not hasattr(parsed, "wrappers")
     assert parsed.game_args == ["-windowed", "--skip-intro"]
 
 
@@ -273,9 +299,11 @@ def test_parser_against_measured_argv_tails(
     parsed = parse_launch_options(argv_tail)
     assert parsed.env_overrides == expected_env
     assert parsed.game_args == expected_game_args
-    # Never populated from an argv tail: Steam performs wrapping itself, before
-    # the launcher exists. See audit §2.9 finding 2 and register item 23b.
-    assert parsed.wrappers == []
+    # There is no ``wrappers`` field any more: Steam performs wrapping
+    # itself, before the launcher exists, so the field could only ever be
+    # empty. Deleted in register item 23b; asserted as absence so it cannot
+    # quietly come back. See audit §2.9 finding 2.
+    assert not hasattr(parsed, "wrappers")
 
 
 # ========================================================= #

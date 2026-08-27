@@ -90,8 +90,22 @@ function escapeRegExp(value: string): string {
 }
 
 /**
- * Strip Unifideck env tokens, the store_game_id and the launcher path from
- * the user's launch_options, keeping only their own wrappers.
+ * The user's own launch-option tokens that are still meaningful in the tail.
+ *
+ * Strips our `UNIFIDECK_*` flags, the store id and the launcher path — and
+ * **drops bare wrapper words**, which is the part that is not obvious.
+ *
+ * A wrapper like `mangohud` only works *before* `%command%`, where Steam
+ * applies it pre-exec: measured on-device (audit §2.9 finding 2), `env
+ * %command% epic:Salt` ran the launcher under `env` and still delivered
+ * `argv[1]`. Everything this function returns is appended **after** the game
+ * key, where a bare word is not a wrapper at all — it is just an argument.
+ * Preserving `mangohud` there achieved nothing, and once `game_args` is
+ * populated (register item 23a) it would have been passed to the *game*.
+ *
+ * `KEY=value` assignments are kept, because those genuinely do work in the
+ * tail — that is the route register item 23 wired, and the only reliable one
+ * for a game running under a forced Proton.
  */
 export function extractUserParams(
   launchOptions: string,
@@ -110,7 +124,13 @@ export function extractUserParams(
       .replace(new RegExp(`"${escLauncher}"`, "g"), "")
       .replace(new RegExp(escLauncher, "g"), "");
   }
-  return cleaned.replace(/\s{2,}/g, " ").trim();
+  // Keep only what still means something after the game key: environment
+  // assignments. A bare token here cannot act as a wrapper (see above).
+  return cleaned
+    .split(/\s+/)
+    .filter((tok) => tok !== "" && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tok))
+    .join(" ")
+    .trim();
 }
 
 /** Compose the launch options string for one run. */

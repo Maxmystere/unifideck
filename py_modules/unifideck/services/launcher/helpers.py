@@ -117,7 +117,7 @@ def build_native_argv(
     wrapped with the Steam Runtime when present (matches the retired
     bash launcher's behaviour), else exec'd directly.
     """
-    argv: list[str] = list(state.wrappers)
+    argv: list[str] = []
     if _is_gog_dosbox_wrapper(ctx):
         logger.info("[Helpers] using GOG DOSBox wrapper module for %s", exe_path)
         # ``sys.executable`` — the interpreter already running this code

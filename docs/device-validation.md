@@ -258,6 +258,20 @@ Run with **DV-O** (both come from the cloud-failure path).
 | DV-P6 | An ordinary launcher toast with no action | No subtext, not clickable, unchanged | ( ) | |
 | DV-P7 | Any toast in a non-English UI | Action label localized | ( ) | |
 
+## DV-Q — items 23a/23b, launch-option arguments
+
+Touches the launch hot path. **DV-Q1 is the one that matters** — everything
+else is a feature, this is the regression guard.
+
+| ID | Step | Expected | Status | Evidence |
+|---|---|---|---|---|
+| **DV-Q1** | Launch a game with **no** launch options | Launches exactly as before. Nothing extra on the game's argv. | ( ) | |
+| DV-Q2 | `<store>:<id> -windowed` on a game that accepts it | The game receives `-windowed` — read `/proc/<pid>/cmdline` of the game process, not a log line | ( ) | |
+| DV-Q3 | `<store>:<id> MY_VAR=1` | `MY_VAR` in the game's environment, and **nothing** added to its argv | ( ) | |
+| DV-Q4 | Ubisoft or Battle.net sign-in from the QAM, with `mangohud` in that shortcut's options | Sign-in works; `mangohud` is **not** passed to the client. It used to be preserved into the temp options where it did nothing. | ( ) | |
+| DV-Q5 | `mangohud %command% <store>:<id>` | Still works — Steam applies the wrapper pre-exec, unchanged by this | ( ) | |
+| DV-Q6 | Launch an Epic and a GOG game (their argv builders both changed) | Both launch; correct per-game prefix | ( ) | |
+
 ---
 
 ## Lost baselines

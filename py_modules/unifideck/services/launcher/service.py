@@ -213,22 +213,30 @@ class LauncherService:
         (``dispatcher._env_overrides_from``), because ``LaunchContext`` is
         frozen.
 
-        ``wrappers`` and ``game_args`` are deliberately still unpopulated,
-        and audit §2.9 records why. ``parse_launch_options`` was written for
-        a full Steam ``LaunchOptions`` string, where ``%command%`` marks the
-        boundary between wrapper words and game arguments. What reaches the
-        dispatcher is the *post-expansion argv tail*, which frequently has
-        no ``%command%`` left in it -- and the parser's fallback for that
-        case moves every bare token into ``game_args``. Our argv tail
-        legitimately carries the user's own wrapper words (the frontend's
-        ``extractUserParams`` preserves ``mangohud``/``gamemoderun`` into the
-        temp-shortcut options), so wiring it would have appended
-        ``mangohud gamemoderun`` to the *game's* command line. Measured, not
-        theorised: see the §2.9 worked example.
+        ``game_args`` is populated since 2026-08-26 (audit register item
+        23a); ``wrappers`` no longer exists (item 23b).
 
-        Deciding what a bare token in the argv tail means is a design call,
-        not a wiring one. Until it is made, these stay empty, which is the
-        behaviour every release so far has shipped.
+        Both halves were blocked on the same measurement. ``parse_launch_
+        options`` was written for a full Steam ``LaunchOptions`` string,
+        where ``%command%`` marks the boundary between wrapper words and
+        game arguments — but what reaches the dispatcher is the
+        *post-expansion argv tail*, which usually has no marker left. Wiring
+        ``game_args`` from it used to append the user's own
+        ``mangohud gamemoderun`` to the **game's** command line, because the
+        frontend's ``extractUserParams`` preserved those words into the
+        temp-shortcut options.
+
+        Two changes made it safe, in this order:
+
+        * ``extractUserParams`` now keeps only ``KEY=value`` assignments. A
+          bare word after the game key was never a wrapper — Steam applies
+          wrappers pre-exec, before ``%command%`` — so preserving it achieved
+          nothing and was the sole source of the hazard.
+        * ``wrappers`` is gone, and the parser now **drops** tokens before a
+          ``%command%`` rather than re-homing them into ``game_args``.
+
+        What remains is the honest reading: a bare token in the tail is a
+        game argument, which is what Steam delivers it as.
 
         Extracted from ``launch`` (lot 13a) to keep that
         method's fan-out under the gate.
@@ -240,7 +248,10 @@ class LauncherService:
         # ``time.monotonic``. Reading a user-controlled dict for an internal
         # timestamp would be a trap now that the dict is populated.
         parsed = parse_launch_options(ctx.raw_options)
-        return RuntimeState(lsfg_requested=parsed.lsfg_requested)
+        return RuntimeState(
+            lsfg_requested=parsed.lsfg_requested,
+            game_args=parsed.game_args,
+        )
 
     async def _handle_auth_path(self, ctx: LaunchContext) -> Result:
         """Route a non-launch context to the right handler.
