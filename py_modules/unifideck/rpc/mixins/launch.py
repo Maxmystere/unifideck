@@ -151,9 +151,6 @@ class LaunchRPCMixin:
         )
         return info.get("store"), resolved_game, info.get("title")
 
-    # no-frontend-caller: audit register 4a — the circuit breaker is
-    # user-invisible and user-unresettable; this is its read side,
-    # pending the badge that surfaces CIRCUIT_STATE_CHANGED.
     async def get_launch_failures(self, game_key: str) -> Any:
         """Return recent failures + circuit state for a game.
 
@@ -170,14 +167,10 @@ class LaunchRPCMixin:
             "fail_count": fail_count,
         }
 
-    # no-frontend-caller: audit register 4a — the only way to unblock a
-    # tripped game short of waiting out the 10-minute window. Needs a UI.
     async def clear_launch_failures(self, game_key: str) -> Any:
         """Wipe failure history for one game (full reset)."""
         return self._require_launch_history().clear_failures(game_key)
 
-    # no-frontend-caller: audit register 4a — sibling of
-    # clear_launch_failures; same missing UI.
     async def arm_circuit_bypass(self, game_key: str) -> Any:
         """Arm a one-shot bypass flag (5-minute validity)."""
         return self._require_launch_history().arm_bypass(game_key)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """scripts/check_orphan_keys.py — Validate translation-key coverage.
 
-Three independent checks, any of which can fail the run:
+Four independent checks, any of which can fail the run:
 
 1. Orphan check — literal keys used in the codebase (``t("key")`` /
    ``i18nKey="key"``) that are NOT declared in a locale file.
@@ -37,6 +37,12 @@ Three independent checks, any of which can fail the run:
    which may only ever SHRINK — the same rule the volumetry allowlists use.
    A newly-dead key fails immediately; a baseline key that becomes reachable
    prints a reminder to drop it from the baseline.
+
+4. Backend-key check — an ``i18n_key=`` the **backend** names that no locale
+   declares. Check 1 only scans ``t("key")`` in ``src/``, so the 48 literal
+   ``i18n_key=`` arguments in ``py_modules/`` were checked from neither
+   direction. i18next prints the key itself when it is missing, so the cost
+   of a typo is the user reading ``toasts.launcher.errorNetwork`` verbatim.
 
 Exits non-zero if any check finds a problem.
 """
@@ -101,6 +107,61 @@ def find_unreferenced_keys(source_keys: set[str]) -> list[str]:
             continue
         unreferenced.append(key)
     return unreferenced
+
+
+#: Keyword arguments whose literal value is an i18n key the frontend renders.
+#: The backend sends these over the bus (``LAUNCHER_STAGE``) and i18next
+#: falls back to printing the key itself when it is missing — so a typo here
+#: shows the user ``toasts.launcher.errorNetwork`` verbatim.
+BACKEND_I18N_KWARGS = ("i18n_key", "i18n_title_key")
+
+
+def find_backend_keys_without_a_string(declared: set[str]) -> list[tuple[str, str]]:
+    """Backend-named i18n keys that no locale declares.
+
+    Check 1 runs ``t("key")`` in ``src/`` against the locales, so a key the
+    **backend** names has never been checked from either direction. That
+    matters because the backend is a first-class producer of user-facing
+    strings: 48 literal ``i18n_key=`` arguments live in ``py_modules/``.
+
+    The class is real. ``ExitCode.user_message_key`` mapped nine exit codes
+    to ``toasts.launcher.*`` keys of which **eight were never written into
+    any locale** — the inverse of the audit's usual finding (§1.1.2, where
+    the strings existed and only the delivery was dead). It went unnoticed
+    because the function also had no callers; had anyone wired it, users
+    would have seen raw key names.
+
+    Scoped to the two kwargs rather than any dotted string on purpose: a
+    first cut matching every ``"a.b.c"`` literal reported 9 false positives,
+    all of them config keys and filenames (``sync.cooldown_seconds``,
+    ``library.json``).
+    """
+    import ast
+
+    root = REPO_ROOT / "py_modules" / "unifideck"
+    missing: list[tuple[str, str]] = []
+    for path in sorted(root.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            for kw in node.keywords:
+                if (
+                    kw.arg in BACKEND_I18N_KWARGS
+                    and isinstance(kw.value, ast.Constant)
+                    and isinstance(kw.value.value, str)
+                    and kw.value.value not in declared
+                ):
+                    missing.append((
+                        kw.value.value,
+                        f"{path.relative_to(REPO_ROOT)}:{kw.value.lineno}",
+                    ))
+    return missing
 
 
 def _load_unused_baseline() -> set[str]:
@@ -213,6 +274,9 @@ def main() -> int:
         if missing:
             locale_incomplete[locale_name] = missing
 
+    # --- Check 4: backend-named keys with no string behind them ---
+    backend_missing = find_backend_keys_without_a_string(source_keys)
+
     # --- Check 3: declared keys nothing reaches (locale -> code) ---
     baseline = _load_unused_baseline()
     unreferenced = find_unreferenced_keys(source_keys)
@@ -220,7 +284,12 @@ def main() -> int:
     revived = sorted(baseline - set(unreferenced) - (baseline - source_keys))
     stale_baseline = sorted(baseline - source_keys)
 
-    if not locale_orphans and not locale_incomplete and not newly_dead:
+    if (
+        not locale_orphans
+        and not locale_incomplete
+        and not newly_dead
+        and not backend_missing
+    ):
         print(
             f"[check_orphan_keys] OK — {len(used_keys_map)} used keys and "
             f"{len(source_keys)} {SOURCE_LOCALE} keys verified across "
@@ -267,6 +336,22 @@ def main() -> int:
             print(f"\n[{locale_name}] Missing {len(missing)} keys:", file=sys.stderr)
             for key in missing:
                 print(f"  {key}", file=sys.stderr)
+
+    if backend_missing:
+        print(
+            f"\n[check_orphan_keys] FAIL — {len(backend_missing)} i18n key(s) "
+            f"named by the BACKEND have no string in {SOURCE_LOCALE}:",
+            file=sys.stderr,
+        )
+        for key, loc in backend_missing:
+            print(f"  {key}  →  {loc}", file=sys.stderr)
+        print(
+            "\n  i18next renders a missing key as the key itself, so this is "
+            "what\n  the user would read. Either add the string to all locale "
+            "files, or\n  stop naming it — see ExitCode.user_message_key, which "
+            "mapped eight\n  keys that were never written.",
+            file=sys.stderr,
+        )
 
     if newly_dead:
         print(

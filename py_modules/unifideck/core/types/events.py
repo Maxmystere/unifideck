@@ -170,11 +170,11 @@ class Events(StrEnum):
     # LaunchHistoryService._emit_state whenever a failure is recorded, a
     # success wipes the history, failures are cleared, or a bypass is armed.
     #
-    # unwired: consumer deferred to remediation register 4a, which builds the
-    # badge + reset controls. It is polled (it is in WATCHED_EVENTS) but no
-    # subscriber exists in either process, so a user whose game trips the
-    # breaker gets a refusal toast, no badge, and no way to reset short of
-    # waiting out the window.
+    # Consumed since 2026-08-26 by ``src/hooks/useCircuitState.ts``, which
+    # renders the badge and the two reset controls in PlayMeta (register item
+    # 4a). Before that it was polled — it has always been in WATCHED_EVENTS —
+    # and dropped, so a user whose game tripped the breaker got a refusal
+    # toast, no badge, and no way to reset short of waiting out the window.
     #
     # Payload fields — this is the REAL contract, read off the emit site.
     # Until 2026-08 this block documented `game_key`, `state`, `recent_count`

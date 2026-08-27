@@ -160,7 +160,13 @@ class LauncherService:
         One-liner extracted from ``launch`` so the ``Result``
         constructor call doesn't inflate that method's fan-out.
         """
-        return Result(success=False, error="circuit_open")
+        # ``error_code`` as well as ``error``: ``_map_result_to_exitcode``
+        # dispatches on ``error_code`` **exclusively**, so leaving it None
+        # collapsed every classified failure to GAME_FAILED (8) and made the
+        # CIRCUIT_BREAKER_OPEN branch dead. Audit register item 4c.
+        return Result(
+            success=False, error="circuit_open", error_code="circuit_open",
+        )
 
     async def _try_launch(
         self, ctx: LaunchContext, state: RuntimeState,

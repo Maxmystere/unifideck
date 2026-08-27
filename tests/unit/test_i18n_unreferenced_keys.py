@@ -1,4 +1,4 @@
-"""Guard test — check 3 of ``scripts/check_orphan_keys.py``.
+"""Guard test — checks 3 and 4 of ``scripts/check_orphan_keys.py``.
 
 The checker had two directions, both code → locale: "used in code but not
 declared" and "declared in en-US but missing elsewhere". Nothing ran
@@ -30,7 +30,11 @@ What is pinned here:
    gate switched off;
 4. runtime-composed keys (``t(`errors.download.${code}`)``) are not
    reported;
-5. the baseline is shrink-only and self-cleaning.
+5. the baseline is shrink-only and self-cleaning;
+6. **check 4**, the other missing direction: an ``i18n_key=`` the *backend*
+   names with no string behind it. ``ExitCode.user_message_key`` mapped
+   eight such keys — the inverse case, where the delivery existed and the
+   strings never did.
 """
 from __future__ import annotations
 
@@ -184,3 +188,71 @@ def test_locale_files_are_not_their_own_haystack(
         {"src/i18n/locales/en-US.json": '{"dead": {"key": "text"}}\n'},
     )
     assert mod.find_unreferenced_keys({"dead.key"}) == ["dead.key"]
+
+
+# ── check 4: backend-named keys must have a string ──────────────
+def test_every_backend_named_key_has_a_string(mod) -> None:
+    """The direction neither check 1 nor check 2 covered.
+
+    Check 1 scans ``t("key")`` in ``src/``; check 2 compares locales against
+    en-US. A key the **backend** names was checked from neither side, and
+    there are 48 literal ``i18n_key=`` arguments in ``py_modules/``.
+
+    ``ExitCode.user_message_key`` mapped nine exit codes to
+    ``toasts.launcher.*`` keys of which **eight were never written into any
+    locale** — the inverse of the audit's usual finding, where the strings
+    existed and the delivery was dead. i18next prints a missing key
+    verbatim, so wiring it would have shown users the key name.
+    """
+    declared = set(
+        mod.flatten_json(
+            json.loads((mod.LOCALES_DIR / "en-US.json").read_text(encoding="utf-8")),
+        ),
+    )
+    missing = mod.find_backend_keys_without_a_string(declared)
+    assert missing == [], (
+        f"backend names i18n keys with no string behind them: {missing}"
+    )
+
+
+def test_check4_reports_a_key_with_no_string(mod, tmp_path, monkeypatch) -> None:
+    """The check must bite, not return [] forever."""
+    src = tmp_path / "py_modules" / "unifideck" / "svc.py"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_text(
+        'emit_stage(bus, i18n_key="toasts.launcher.neverWritten")\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(mod, "REPO_ROOT", tmp_path)
+    found = mod.find_backend_keys_without_a_string({"toasts.launcher.real"})
+    assert [k for k, _ in found] == ["toasts.launcher.neverWritten"]
+
+
+def test_check4_accepts_a_key_that_exists(mod, tmp_path, monkeypatch) -> None:
+    src = tmp_path / "py_modules" / "unifideck" / "svc.py"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_text(
+        'emit_stage(bus, i18n_key="toasts.launcher.real")\n', encoding="utf-8",
+    )
+    monkeypatch.setattr(mod, "REPO_ROOT", tmp_path)
+    assert mod.find_backend_keys_without_a_string({"toasts.launcher.real"}) == []
+
+
+def test_check4_ignores_config_keys_and_filenames(mod, tmp_path, monkeypatch) -> None:
+    """The false-positive class that decided the check's scope.
+
+    A first cut matched every ``"a.b.c"`` literal and reported nine
+    non-i18n strings — ``sync.cooldown_seconds``, ``library.json``,
+    ``launcher.exe`` and friends. Scoping to the two kwargs removes them
+    without an allowlist.
+    """
+    src = tmp_path / "py_modules" / "unifideck" / "svc.py"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.write_text(
+        'cfg.get("sync.cooldown_seconds")\n'
+        'path = "library.json"\n'
+        'find("launcher.exe")\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(mod, "REPO_ROOT", tmp_path)
+    assert mod.find_backend_keys_without_a_string(set()) == []

@@ -78,6 +78,13 @@ export const rpcRoutes = {
   // Playtime (PlaytimeRPCMixin)
   notifyGameLaunched: "notify_game_launched",
   notifyGameStopped: "notify_game_stopped",
+  // Circuit-breaker surface (audit register item 4a). These three were
+  // implemented with no frontend caller: after three failed launches the
+  // user got a flicker, no message, and no way to reset short of waiting
+  // out the window.
+  getLaunchFailures: "get_launch_failures",
+  clearLaunchFailures: "clear_launch_failures",
+  armCircuitBypass: "arm_circuit_bypass",
   getPlaytime: "get_playtime",
   // Action dispatcher (ActionRPCMixin) — bidirectional bridge
   dispatchUnifideckAction: "dispatch_unifideck_action",

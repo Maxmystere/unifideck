@@ -203,6 +203,21 @@ Run after **any** change in this programme. These replace the near-identical
 | DV-L3 | Launch and quit a game that was never failing | No failures recorded; no spurious entry created | ( ) | |
 | DV-L4 | Press Stop mid-game (signal termination) | Not recorded as a launch failure | ( ) | |
 
+## DV-M — item 4a/4c, the circuit-breaker surface (G2)
+
+Run **after DV-L1** — the badge is only trustworthy once the breaker can
+clear (item 46).
+
+| ID | Step | Expected | Status | Evidence |
+|---|---|---|---|---|
+| **DV-M1** | Trip the breaker (3 failed launches in 10 min), then open the game's page | A **"3 recent launch failures"** badge appears beside Space Required, with **Force launch** and **Reset failures** buttons. Before this, the page looked completely normal. | ( ) | |
+| DV-M2 | Press **Reset failures** | Badge disappears; the next Play is not refused; log shows `Cleared failures for <store>:<id>` | ( ) | |
+| DV-M3 | Trip it again, press **Force launch**, then Play | The launch goes through once (one-shot bypass) | ( ) | |
+| DV-M4 | Open a game that has **never** failed | **No badge.** A permanent counter on a healthy game would be noise and would make the badge easy to ignore on an unhealthy one | ( ) | |
+| DV-M5 | Trip the breaker, then navigate away and back | Badge still shown — proves the mount-time `get_launch_failures` fallback works, since the event only fires on a *change* | ( ) | |
+| DV-M6 | Check the badge text in a non-English UI language | Localized — every string already existed in 16 locales | ( ) | |
+| DV-M7 | In Gaming Mode, repeat DV-M1 | Badge and both buttons render and are focusable with the controller | ( ) | |
+
 ---
 
 ## Lost baselines

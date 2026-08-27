@@ -94,8 +94,13 @@ async def handle_launcher_error(
     # passed ``message=err_msg`` and raised
     # ``TypeError: Result.__init__() got an unexpected keyword
     # argument 'message'`` on every classified launch failure.
+    # ``error_code`` mirrors ``error`` here: the dispatcher's exit-code map
+    # reads only ``error_code``, so without it every classified launcher
+    # error exited GAME_FAILED (8) and the classification computed just above
+    # was thrown away. Audit register item 4c.
     return Result(
         success=False,
         error=err_code,
+        error_code=err_code,
         metadata={"message": err_msg},
     )

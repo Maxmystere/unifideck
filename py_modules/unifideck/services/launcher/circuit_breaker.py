@@ -99,6 +99,9 @@ async def check_circuit_breaker(
             return Result(
                 success=False,
                 error="circuit_open",
+                # See ``LauncherService._circuit_open_result``: the exit-code
+                # map reads ``error_code``, not ``error`` (item 4c).
+                error_code="circuit_open",
                 metadata={
                     "message": (
                         f"Launch refused. Game failed "
