@@ -1296,8 +1296,14 @@ def test_check13_baseline_is_still_accurate(mod) -> None:
     baseline = mod._load_shape_baseline()
     if not baseline:
         pytest.skip("no baseline in this checkout")
-    live = {"|".join(members) for _sig, members in mod.find_duplicate_bodies()}
-    stale = sorted(baseline - live)
+    live = [frozenset(members) for _sig, members in mod.find_duplicate_bodies()]
+    # A baselined group is still "real" if any live group is a subset of it:
+    # consolidating some of its members shrinks the group rather than
+    # removing it. Only a row with no live subset at all is stale.
+    stale = sorted(
+        sorted(row) for row in baseline
+        if not any(found <= row for found in live)
+    )
     assert stale == [], (
         f"these grandfathered duplicate groups no longer exist — remove them "
         f"from {mod.SHAPE_BASELINE.name}: {stale}"
@@ -1306,3 +1312,30 @@ def test_check13_baseline_is_still_accurate(mod) -> None:
 
 def test_check13_is_clean_on_the_real_tree(mod) -> None:
     assert mod.report_duplicate_bodies() == 0
+
+
+def test_check13_a_growing_group_is_not_grandfathered(
+    shape_tree: Path, mod, monkeypatch,
+) -> None:
+    """Shrink-only means shrinking is fine and growing is not.
+
+    A subset of a baselined group is partial consolidation — reporting it
+    would red the gate for making progress, and the honest response to that
+    is to put the copy back. A *superset* is a new copy and must fail.
+    """
+    monkeypatch.setattr(
+        mod, "_load_shape_baseline",
+        lambda: [frozenset({"a/one.py::f", "b/two.py::g"})],
+    )
+    body = (
+        "def {name}(v):\n"
+        "    out = v.encode()\n"
+        "    out = out.strip()\n"
+        "    return out.decode()\n"
+    )
+    _plant(shape_tree, "a/one.py", body.format(name="f"))
+    _plant(shape_tree, "b/two.py", body.format(name="g"))
+    assert mod.report_duplicate_bodies() == 0, "the exact group is grandfathered"
+
+    _plant(shape_tree, "c/three.py", body.format(name="h"))
+    assert mod.report_duplicate_bodies() == 1, "a third copy must fail"

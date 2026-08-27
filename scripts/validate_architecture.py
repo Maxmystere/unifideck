@@ -625,14 +625,22 @@ def find_duplicate_bodies() -> list[tuple[str, list[str]]]:
     ]
 
 
-def _load_shape_baseline() -> set[str]:
+def _load_shape_baseline() -> list[frozenset[str]]:
+    """Grandfathered duplicate groups, as member sets.
+
+    Sets rather than joined strings so a **subset** counts as grandfathered.
+    Removing one copy from a five-way group leaves a four-way group, which is
+    progress — it must not read as a new violation, or partial consolidation
+    reds the gate and the honest response becomes "put the copy back".
+    Adding a member still fails, which is the direction that matters.
+    """
     if not SHAPE_BASELINE.is_file():
-        return set()
+        return []
     try:
         data = json.loads(SHAPE_BASELINE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return set()
-    return {"|".join(sorted(g)) for g in data.get("groups", [])}
+        return []
+    return [frozenset(g) for g in data.get("groups", [])]
 
 
 def report_duplicate_bodies() -> int:
@@ -641,7 +649,7 @@ def report_duplicate_bodies() -> int:
     found = find_duplicate_bodies()
     new = [
         members for _sig, members in found
-        if "|".join(members) not in baseline
+        if not any(frozenset(members) <= row for row in baseline)
     ]
     if not new:
         if baseline:

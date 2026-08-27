@@ -11,10 +11,6 @@
       "launcher/proton/fixes/epic_registry.py::_kill_wineserver"
     ],
     [
-      "launcher/proton/handlers/battlenet_client.py::_client_dir",
-      "stores/battlenet/paths.py::client_dir"
-    ],
-    [
       "launcher/proton/handlers/battlenet_client.py::find_client_exe",
       "launcher/proton/handlers/battlenet_client.py::find_launcher_exe",
       "launcher/proton/handlers/ubisoft_recovery.py::find_upc_in",

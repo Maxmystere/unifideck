@@ -25,6 +25,7 @@ import pytest
 
 from unifideck.launcher.proton.handlers import battlenet as handler
 from unifideck.launcher.proton.handlers import battlenet_client as client
+from unifideck.stores.battlenet import paths as store_paths
 from unifideck.launcher.proton.handlers import battlenet_watch as watch
 from unifideck.launcher.proton.handlers import battlenet_wsi as wsi
 from unifideck.launcher.proton.handlers import wrapper_clients as wc
@@ -59,10 +60,14 @@ class _Plan:
 
 
 def _install_client(prefix: Path) -> None:
-    d = prefix / "drive_c" / client.CLIENT_DIR
+    # Constants come from the store package, which owns them. The launcher
+    # handler used to declare identical literals of its own; those are gone
+    # (audit register item 47), and the sibling Battle.net tests already
+    # reached for the store's copies.
+    d = prefix / "drive_c" / store_paths.CLIENT_DIR
     d.mkdir(parents=True, exist_ok=True)
-    (d / client.CLIENT_EXE).write_bytes(b"MZ")
-    (d / client.LAUNCHER_EXE).write_bytes(b"MZ")
+    (d / store_paths.CLIENT_EXE).write_bytes(b"MZ")
+    (d / store_paths.LAUNCHER_EXE).write_bytes(b"MZ")
     # The versioned payload the shim loads. Without it the prefix is
     # the shape an interrupted install leaves and no client can start.
     build = d / "Battle.net.17651"

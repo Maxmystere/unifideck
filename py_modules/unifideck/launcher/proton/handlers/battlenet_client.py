@@ -25,15 +25,13 @@ import os
 import tempfile
 from pathlib import Path
 
-from unifideck.launcher.proton.infrastructure.prefix_layout import (
-    resolve_drive_c,
-)
-
 logger = logging.getLogger(__name__)
 
-CLIENT_DIR = "Program Files (x86)/Battle.net"
-CLIENT_EXE = "Battle.net.exe"
-LAUNCHER_EXE = "Battle.net Launcher.exe"
+# The Battle.net client path constants are NOT declared here. They live in
+# ``stores/battlenet/paths.py``, which owns them; this module used to hold
+# identical string literals beside them — a hand-maintained pair of the
+# §3.1 class that check 13 cannot see, because constants are not function
+# bodies. Nothing outside this file read them. Audit register item 47.
 # The client itself, inside the versioned payload dir — a DLL, not an exe.
 # Mirrors ``stores/battlenet/paths.CLIENT_DLL``.
 CLIENT_DLL = "battle.net.dll"
@@ -55,11 +53,23 @@ def id_map_path() -> Path:
 
 
 def _client_dir(prefix: Path | str) -> Path | None:
-    drive_c = resolve_drive_c(prefix)
-    if drive_c is None:
-        return None
-    found = drive_c / CLIENT_DIR
-    return found if found.is_dir() else None
+    """The Battle.net client directory inside *prefix*, or ``None``.
+
+    This module held its own copy of this and the two exe lookups below,
+    plus its own ``CLIENT_DIR``/``CLIENT_EXE``/``LAUNCHER_EXE`` literals —
+    the launcher reimplementing the store's own path logic. The two agreed
+    by luck rather than by construction. Audit register item 47.
+
+    **The import stays inside the function.** ``stores/battlenet/paths``
+    reaches back into the launcher (it resolves ``drive_c`` through
+    ``prefix_layout``), so a module-level import closes a cycle — which is
+    what the first attempt at this consolidation did, breaking collection of
+    ``test_battlenet_agent_queue``. ``battlenet_bootstrap`` reaches into the
+    store package the same way, for the same reason.
+    """
+    from unifideck.stores.battlenet import paths
+
+    return paths.client_dir(Path(prefix))
 
 
 def find_client_exe(prefix: Path | str) -> Path | None:
@@ -67,20 +77,16 @@ def find_client_exe(prefix: Path | str) -> Path | None:
 
     Confirmed on-device: ``Battle.net Launcher.exe`` does not.
     """
-    parent = _client_dir(prefix)
-    if parent is None:
-        return None
-    exe = parent / CLIENT_EXE
-    return exe if exe.is_file() else None
+    from unifideck.stores.battlenet import paths
+
+    return paths.client_exe(Path(prefix))
 
 
 def find_launcher_exe(prefix: Path | str) -> Path | None:
     """``Battle.net Launcher.exe`` — started first, owns the wineserver."""
-    parent = _client_dir(prefix)
-    if parent is None:
-        return None
-    exe = parent / LAUNCHER_EXE
-    return exe if exe.is_file() else None
+    from unifideck.stores.battlenet import paths
+
+    return paths.launcher_exe(Path(prefix))
 
 
 def find_payload_dir(prefix: Path | str) -> Path | None:
