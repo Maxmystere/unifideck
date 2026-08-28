@@ -22,6 +22,138 @@ no evidence is not a passed step.
 **⚠ Before running anything marked `DESTRUCTIVE`, ask.** Those can delete a real
 install.
 
+## Where to start
+
+There are 164 steps here. Do **not** work top to bottom — that order is by
+register item, not by value, and most of it is regression cover for changes
+that are very unlikely to have broken anything.
+
+**A first session is 22 steps and proves most of the programme:**
+
+1. `pnpm run build && ./build-plugin.sh dev quick-install`, then
+   `sudo systemctl restart plugin_loader`.
+2. **SW1–SW5** — the standing sweep. If any of these fail, stop and report;
+   nothing below is meaningful on a build that cannot sync or launch.
+3. The **17 decisive steps** listed at the bottom of this file. Each one is a
+   step whose failure would mean a change was wrong, rather than merely
+   unconfirmed.
+
+That is the honest minimum before anything moves to `CLOSED`. Everything else
+can be worked in group order afterwards, or skipped for groups covering
+changes you are confident in — as long as the register row stays `VALIDATING`
+and does not get ticked.
+
+**Three of the recipes below leave state behind if you stop half-way** — 1 (a
+renamed game directory), 2 (a failure threshold of 1) and 6 (an older save
+restored over the live one). Each says how to undo it. Undo before you stop,
+not at the end of the session.
+
+---
+
+## Inducing the conditions
+
+Many steps below say "trip the breaker" or "force a token refresh" without
+saying **how**. These are the recipes, derived from the code rather than
+guessed. Every one is reversible and the undo is given with it.
+
+Do these on a game you do not mind disturbing. Nothing here deletes anything,
+but recipe 6 touches real save files.
+
+### 1. Make a launch fail on demand
+*Needed by DV-B1, DV-B2, DV-L1, DV-M1, DV-M3, DV-M5, DV-V7, DV-V8.*
+
+Move the game's executable aside — the launcher then fails at exec. Renaming
+the **directory** rather than the file is what makes it deterministic: a stale
+`games.map` row alone is not enough, because the launcher re-resolves the exe
+from the install directory when the row looks wrong.
+
+```bash
+grep '^gog:' ~/.local/share/unifideck/games.map        # pick a game, note its dir
+mv "/path/to/Game Dir" "/path/to/Game Dir.OFF"          # undo: mv it back
+```
+Press Play. Undo by renaming back — do this **before** you finish testing, or
+the game reads as uninstalled on the next sync.
+
+### 2. Trip the circuit breaker in one launch instead of three
+*Needed by DV-B1, DV-L1, DV-M1, DV-M3, DV-M5, DV-V7.*
+
+The threshold and window are config-driven, so you do not have to fail three
+launches inside ten minutes. Edit `~/.config/unifideck/config.json` (it exists
+and currently holds only `download` / `steam` / `ui` — add this block), then
+`sudo systemctl restart plugin_loader`:
+
+```json
+"circuit_breaker": { "failures_threshold": 1, "window_seconds": 600 }
+```
+
+One failed launch (recipe 1) now opens the breaker. **Remove the block and
+restart when finished** — leaving it at 1 makes any single crash refuse the
+next launch. Defaults are `3` / `600` / `fast_boot_seconds: 10`.
+
+### 3. Force an Epic token refresh
+*Needed by DV-V5.*
+
+Do not wait for the token to age out. Set its expiry into the past:
+
+```bash
+cp ~/.config/legendary/user.json ~/.config/legendary/user.json.bak
+python3 -c "import json,pathlib;p=pathlib.Path.home()/'.config/legendary/user.json';\
+d=json.loads(p.read_text());d['expires_at']='2020-01-01T00:00:00.000Z';p.write_text(json.dumps(d))"
+```
+Then open the Epic achievements panel. `legendary status` rewrites the file, so
+it repairs itself; the `.bak` is there if the refresh fails outright.
+
+### 4. Take the network down
+*Needed by DV-D4, DV-F5, DV-J1, DV-O1, DV-P1.*
+
+```bash
+nmcli networking off     # undo: nmcli networking on
+```
+Timing matters for the mid-operation steps — start the sync or install first,
+then drop the network while it is running.
+
+### 5. Make one store fail to answer a sync
+*Needed by DV-J1, DV-D4.*
+
+Sign that store out from **QAM → Store Connections**, then Force Sync. This is
+the important one for DV-J1: the store must keep its shortcuts, not lose them.
+Sign back in afterwards.
+
+### 6. Cloud-save conflicts — the two kinds are induced differently
+*Needed by DV-O1, DV-P2, DV-P4, DV-P5.*
+
+**Back up the save directory first** (`cloud_sync_state.json` lists the resolved
+path per game). These are the only recipes here that touch real save data.
+
+- **HARD** (plain error toast, no pick): empty the local save directory before
+  quitting. The strategy refuses to push nothing over a real cloud copy.
+- **SOFT** (the pick modal, DV-P4): the local saves must exist but look
+  *regressed* against the cloud. Play so a cloud copy exists, restore an older
+  copy from `~/.local/share/unifideck/save_backups/` over the live directory,
+  then quit.
+
+DV-P5 is the pair to DV-P4 and needs no setup beyond recipe 4: a network-down
+upload failure must produce a **plain toast and no modal**.
+
+### 7. Stall a CLI install
+*Needed by DV-F6, DV-F7, DV-F8.*
+
+Already spelled out in those rows: `pkill -STOP -f gogdl` (or `legendary` /
+`nile`) part-way through, then `pkill -CONT -f gogdl` to resume. Under 120s
+nothing should happen; past 120s it fails with a localized stall message.
+
+### Not yet specified
+
+I could not derive a safe, repeatable recipe for these four. Treat them as
+blocked rather than failed if you cannot reach the condition:
+
+| Step | What is missing |
+|---|---|
+| DV-B3 | How to refuse a `shortcuts.vdf` write without risking Steam's own writes |
+| DV-H2 | How to fail a Ubisoft install deterministically — UPC owns the download |
+| DV-J6 | How to reach the Microsoft install path, which is guarded twice on the way in |
+| DV-P2 | How to fill the save volume safely enough to be worth it |
+
 ## Status key
 
 `( )` not run · `(P)` passed · `(F)` failed · `(B)` blocked · `(R)` retired
@@ -375,15 +507,35 @@ baseline no longer exists. Run DV-F1…F4 as absolute assertions ("no process
 survives") rather than as a comparison — the assertion is the real requirement
 and it stands on its own.
 
-## Decisive steps
+## Decisive steps — the 17 that decide a change
 
-If time is short, these are the ones the original plans named as deciding their
-change: **DV-D1, DV-E3, DV-E8, DV-F8, DV-H5, DV-H8, DV-H11, DV-I4, DV-J1,
-DV-J4, DV-K4.** DV-H11 is the only one that can regress an existing install.
+Reproduced in full here so a first session needs nothing else on screen. Each
+is a step whose **failure would mean a change was wrong**, not merely
+unconfirmed. Record the result in the group table above, not here.
 
-From the later groups, the ones that decide their change rather than confirm
-it: **DV-R1** (a capability flag hides a feature rather than failing loudly),
-**DV-S1** (the re-spoof is the only thing replacing deleted persistence),
-**DV-T1** (a shortcut that has never launched), **DV-V1** and **DV-V3** (the
-two closures that were live defects), and **DV-W1** (a config key removed from
-three places at once — miss one and the plugin does not boot).
+⚠ **DV-H11 is the only one that can regress an existing install** — read it
+before running it. **DV-J4 is a measurement, not a test**: it produces the
+baseline item 29 needs, so there is no pass/fail, only a recorded number.
+
+| # | Step | What must be true |
+|---|---|---|
+| 1. **DV-D1** | **Suspend mid-game and wake** — play ~2 min, suspend ~10 min, wake, quit | Session records ~2 min, **not ~12**. The one that must pass. |
+| 2. **DV-E3** | **GOG installed → Force Sync** | Still INSTALLED, `exe_path` intact — the one thing consolidation could break |
+| 3. **DV-E8** | **Start a GOG install after a plugin restart** | Spawns — proves `_after_auth_flow_built` still populates `_gogdl_bin`. Highest-risk row. |
+| 4. **DV-F8** | **Repeat DV-F7 on Epic, then Amazon** | Each fails at ~120s — **the new behaviour**; these two had no stall detection at all |
+| 5. **DV-H5** | **Identity repair on an installed Ubisoft game** (the `--checksum` proof) | The identity files are actually rewritten, not skipped by the quick check |
+| 6. **DV-H8** | **Play a Ubisoft game ~1 min, quit via Steam** | Capture waits for UPC to exit, then succeeds — no torn vault read |
+| 7. **DV-H11** | **Legacy markers still read as installed** — check a prefix created before this build | Ubisoft games installed on the old plaintext marker are still detected. **The only step that can regress an existing install, and the precondition for item 43.** |
+| 8. **DV-I4** | **GOG token round trip survives the `EncryptedTokenFile` extraction** | Still signed in after a restart. Flagged highest risk of that pass. |
+| 9. **DV-J1** | **Make one store fail to answer during a sync** (sign out, or block its network) | Its shortcuts **survive**. The most serious defect in Part 3. |
+| 10. **DV-J4** | **Battle.net library baseline** — record the title count and name the missing F2P/subscription titles | This is a **measurement, not a test**, and it is the precondition for item 29 |
+| 11. **DV-K4** | **Launch a game with NO launch options** | Launches exactly as before. **The regression guard — the one that matters.** |
+| 12. **DV-R1** | Open App Details for a **GOG** and an **Epic** game | Cloud-save UI present on both. This is the regression the old field caused: only Battle.net ever declared it, as `False`, so the two stores that *have* cloud saves both advertised none |
+| 13. **DV-S1** | `systemctl restart plugin_loader`, then open the library | Non-Steam tiles still carry store artwork and metadata — the re-spoof on load is what replaces the deleted persistence |
+| 14. **DV-T1** | Set a shortcut's launch options to `%command% <store>:<id>`, Force Sync, then press Play | The leading `%command%` is gone from the options and the game **launches**. Before this it silently did nothing |
+| 15. **DV-V1** | Play a **GOG** game with cloud saves, then check the resolved save path in the log | It is that game's **own** folder. The GOG title matcher guarded the raw title, so a title with no ASCII alphanumerics matched `"" in child_name` and returned the first directory under `Saved Games` — which sync then uploads and a restore writes over |
+| 16. **DV-V3** | Open the achievements panel for an **Epic** game | Loads. Both Epic auth copies were merged into `LegendaryLauncherAuth`, and this is the consumer whose copy had the broken error path |
+| 17. **DV-W1** | `systemctl restart plugin_loader` and read the boot log | Clean boot, **no missing-config-key error**. Item 44 removed `binary_resolver.version_check_timeout_seconds` from defaults, schema *and* `RUNTIME_REQUIRED_KEYS`; missing one of the three fails boot |
+
+Setup for these: DV-F8 needs recipe 7, DV-J1 needs recipe 5, DV-T1 needs a
+shortcut you have edited by hand. The rest run as written.
