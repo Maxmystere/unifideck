@@ -1042,5 +1042,9 @@
     "typeReinstall": "Reinstalling",
     "typeUpdate": "Updating to",
     "updateButton": "Update to v{{version}}"
+  },
+  "reconcile": {
+    "repairedTitle": "Library data repaired",
+    "repairedBody": "Filled in {{artwork}} artwork, {{metadata}} metadata and {{compat}} compatibility entries left over from an interrupted sync."
   }
 }

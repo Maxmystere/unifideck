@@ -1042,5 +1042,9 @@
     "typeReinstall": "重新安裝",
     "typeUpdate": "升級至",
     "updateButton": "升級至 v{{version}}"
+  },
+  "reconcile": {
+    "repairedTitle": "程式庫資料已修復",
+    "repairedBody": "已補齊上次同步中斷遺留的 {{artwork}} 項封面、{{metadata}} 項中繼資料和 {{compat}} 項相容性資訊。"
   }
 }

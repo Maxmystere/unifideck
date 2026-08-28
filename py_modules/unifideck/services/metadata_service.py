@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
+from unifideck.core.sync_generation import run_id_of
 from unifideck.core.types import Game
 from unifideck.core.types.events import Events
 from unifideck.event_bus.event_bus_devex import auto_wire, subscribe
@@ -178,7 +179,10 @@ class MetadataService(_SteamMetadataMixin):
         self._sync_kwargs = dict(kwargs)
         is_force = bool(kwargs.get("is_force"))
         self._enrichment_task = asyncio.create_task(
-            self._run_enrichment(games, is_force=is_force),
+            self._run_enrichment(
+                games, is_force=is_force,
+                skip=bool(kwargs.get("skip_chain")),
+            ),
             name="metadata-enrichment",
         )
 
@@ -217,6 +221,7 @@ class MetadataService(_SteamMetadataMixin):
 
     async def _run_enrichment(
         self, games: list[Game], *, is_force: bool = False,
+        skip: bool = False,
     ) -> None:
         """Background enrichment loop. ``finally`` emits
         ``POST_SYNC_PHASE_CHANGED(active=False)`` so the sync's
@@ -226,11 +231,21 @@ class MetadataService(_SteamMetadataMixin):
         ``is_force`` (force sync) skips the already-cached partition
         and re-fetches every game — cache entries are bypassed on
         read and overwritten on completion.
+
+        ``skip`` is SyncService's "this run covers exactly what the last
+        completed chain covered" signal. The loop still runs (so the
+        ``finally`` announces the phase and the chain hands off to
+        Artwork), it just does no work.
         """
         total = len(games)
         cancelled_by_replace = False
         try:
-            if not games:
+            if not games or skip:
+                if skip:
+                    logger.info(
+                        "[MetadataService] enrichment skipped — library "
+                        "unchanged since the last completed chain",
+                    )
                 return
             progress = self._sync_progress()
             if progress is not None:
@@ -333,6 +348,9 @@ class MetadataService(_SteamMetadataMixin):
                 phase="metadata", active=False,
                 total=total, done=total,
                 sync_kwargs=sync_kwargs,
+                # Echo the generation so a late phase-done cannot drain a
+                # newer run's pending set (``core/sync_generation.py``).
+                run_id=run_id_of(sync_kwargs),
             )
         logger.info(
             "[MetadataService] background enrichment finished (%d games)",

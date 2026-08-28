@@ -1042,5 +1042,9 @@
     "title": "KOLEKCJE STEAM",
     "enabled": "Kolekcje włączone",
     "disabled": "Kolekcje wyłączone"
+  },
+  "reconcile": {
+    "repairedTitle": "Naprawiono dane biblioteki",
+    "repairedBody": "Uzupełniono {{artwork}} grafik, {{metadata}} metadanych i {{compat}} wpisów zgodności pozostawionych przez przerwaną synchronizację."
   }
 }

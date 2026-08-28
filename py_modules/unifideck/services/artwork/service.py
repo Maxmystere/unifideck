@@ -102,7 +102,11 @@ class ArtworkService(_EventHandlersMixin):
             max_concurrent = self._config.get("artwork.max_concurrent", DEFAULT_MAX_CONCURRENT)
             self._download_timeout = self._config.get("artwork.download_timeout", DEFAULT_DOWNLOAD_TIMEOUT)
 
-        self._semaphore = asyncio.Semaphore(max_concurrent)
+        # Kept alongside the semaphore because the semaphore's own counter
+        # drops as slots are taken; ``_batch_concurrency`` needs the
+        # configured ceiling, not the momentary free count.
+        self._max_concurrent = max(1, int(max_concurrent))
+        self._semaphore = asyncio.Semaphore(self._max_concurrent)
 
         # Track pending tasks so we can wait for them on shutdown
         self._pending_tasks: set[asyncio.Task[Any]] = set()

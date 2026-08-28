@@ -6,12 +6,46 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from unifideck.core.sync_generation import UNTAGGED_RUN_ID, run_id_of
 from unifideck.core.types import Events, Game
 from unifideck.event_bus.event_bus_devex import subscribe
 
 from .stale_predicate import SweepableStores
 
 logger = logging.getLogger(__name__)
+
+# Budget for the post-sync reconcile handler.
+#
+# ``HandlerWatchdog``'s 5s default is smaller than the work: a healthy
+# 1242-game reconcile measured 4.9s on this Deck (2026-08-29 02:15:00 →
+# 02:15:05), and 0.9s at 1229 games. So the margin was a few hundred
+# milliseconds, and any contention on the loop pushed it over — the
+# watchdog cancelled the handler mid-reconcile twice in one session, at
+# 9.5s and 11.6s. A cancelled reconcile leaves shortcuts.vdf unwritten
+# and never emits SHORTCUT_RECONCILE_COMPLETE, so the user gets neither
+# their shortcuts nor the restart prompt (GOG's 228 games had no
+# shortcuts for five minutes because of exactly this).
+#
+# 120s matches ``PER_STORE_FETCH_TIMEOUT_SECONDS`` — generous enough that
+# only a genuinely wedged reconcile trips it, which is what the watchdog
+# is for. Note this only takes effect because ``_register_with_watchdog``
+# now forwards the ``@subscribe(timeout=...)`` override; it used to drop
+# it, leaving every handler on the 5s default.
+RECONCILE_TIMEOUT_SECONDS = 120.0
+
+
+def _is_stale_run(kwargs: dict[str, Any], current: int | None) -> bool:
+    """Whether a phase event belongs to a run older than ``current``.
+
+    Fails open in both untagged directions — an event with no ``run_id``,
+    or a service that has not yet seen a tagged ``SYNC_COMPLETE`` — so a
+    partially-migrated emitter degrades to the old always-run behaviour
+    rather than silently skipping the icon pass forever.
+    """
+    incoming = run_id_of(kwargs)
+    if incoming == UNTAGGED_RUN_ID or current is None:
+        return False
+    return incoming != current
 
 
 def _find_icon_for_appid(grid_dir: str, appid: int) -> str:
@@ -247,7 +281,7 @@ class EventsMixin:
         if isinstance(store, str) and isinstance(game_id, str):
             await self.mark_uninstalled(store, game_id)
 
-    @subscribe(Events.SYNC_COMPLETE)
+    @subscribe(Events.SYNC_COMPLETE, timeout=RECONCILE_TIMEOUT_SECONDS)
     async def _on_sync_complete(self, **kwargs: Any) -> None:
         """Reconcile shortcuts against the new library state.
 
@@ -258,6 +292,10 @@ class EventsMixin:
         overwrites our writes on its next shutdown otherwise).
         """
         games = kwargs.get("games", [])
+        # Latch the generation even on the empty-library early return, so
+        # ``_on_artwork_phase_done`` always compares against the newest run
+        # this service has seen rather than a stale one.
+        self._last_run_id = run_id_of(kwargs)
         if not games:
             return
         is_force = bool(kwargs.get("is_force", False))
@@ -273,6 +311,7 @@ class EventsMixin:
         added = result.get("added", 0)
         removed = result.get("removed", 0)
         kept = result.get("kept", 0)
+        reclaimed = result.get("reclaimed", 0)
         # ``self._bus`` is provided by the host (ShortcutService
         # facade); silently skip the emit if for some reason it's
         # unavailable so a missing bus never breaks reconcile.
@@ -282,7 +321,17 @@ class EventsMixin:
         await bus.emit(
             Events.SHORTCUT_RECONCILE_COMPLETE,
             added=added, removed=removed, kept=kept,
+            # Reclaiming re-attaches orphaned VDF rows to the library by
+            # appid. It was computed and then dropped on the floor, so a
+            # reconcile that only reclaimed (``added=0 removed=0
+            # reclaimed=997``, observed 2026-08-29 02:20) told the
+            # frontend nothing had changed and no restart was offered —
+            # even though the rows Steam had in memory were stale.
+            reclaimed=reclaimed,
             total=len(games),
+            # Generation this reconcile belongs to, so the frontend can
+            # ignore one that arrives for a superseded run.
+            run_id=run_id_of(kwargs),
         )
 
     @subscribe(Events.POST_SYNC_PHASE_CHANGED)
@@ -293,6 +342,23 @@ class EventsMixin:
         if kwargs.get("phase") != "artwork":
             return
         if kwargs.get("active") is not False:
+            return
+        # Only rewrite icons for the generation that is actually current.
+        # An orphaned batch used to reach here minutes after its sync was
+        # superseded and rewrite shortcuts.vdf from its own stale view —
+        # observed 2026-08-29 02:17:12, "updated icons for 510 shortcuts"
+        # against a 645-game generation when the library was 1242.
+        #
+        # The current generation is the one from the last SYNC_COMPLETE this
+        # service handled; there is deliberately no SyncService reference
+        # here, because a ``getattr(self, "_sync_service", None)`` that never
+        # resolves is a check that silently never runs.
+        if _is_stale_run(kwargs, getattr(self, "_last_run_id", None)):
+            logger.info(
+                "[ShortcutService] skipping icon update — artwork phase "
+                "belongs to superseded run %s (current %s)",
+                kwargs.get("run_id"), getattr(self, "_last_run_id", None),
+            )
             return
         logger.info("[ShortcutService] artwork phase done — updating icons")
         await _update_icons_from_grid(self)

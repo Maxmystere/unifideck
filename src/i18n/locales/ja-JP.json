@@ -1042,5 +1042,9 @@
     "title": "STEAM コレクション",
     "enabled": "コレクションが有効",
     "disabled": "コレクションが無効"
+  },
+  "reconcile": {
+    "repairedTitle": "ライブラリデータを修復しました",
+    "repairedBody": "中断された同期で残っていたアートワーク {{artwork}} 件、メタデータ {{metadata}} 件、互換性情報 {{compat}} 件を補完しました。"
   }
 }

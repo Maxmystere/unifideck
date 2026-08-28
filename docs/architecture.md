@@ -111,6 +111,7 @@ an RPC mixin calls into:
 | `sync_finalize_mixin.py` | Post-sync reconcile and cleanup                |
 | `sync_progress.py`       | Phase/percentage model behind the sync bar     |
 | `sync_availability.py`   | Whether a store can be synced right now        |
+| `sync_generation.py`     | Run ids; skips a repeat post-sync chain        |
 
 ### Layer 3 — `stores/shared/`
 
@@ -157,6 +158,7 @@ Infrastructure services that subscribe to the EventBus and own cross-cutting con
 | `metadata_service.py`              | Metacritic + UnifiDB metadata aggregation     |
 | `account_service.py`               | Multi-account lifecycle                       |
 | `proton_service.py`                | Proton version resolution                     |
+| `post_sync_reconcile.py`           | Boot-time repair of interrupted post-sync data |
 
 ### Layer 6 — `rpc/mixins/` + `main.py`
 

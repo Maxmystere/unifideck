@@ -106,6 +106,7 @@ async def boot_plugin(
     await _boot_layer5_services(plugin, pipeline, decky_plugin_dir)
     await _boot_updater(plugin, decky_plugin_dir)
     await _boot_update_sweep(plugin)
+    _boot_post_sync_reconcile(plugin)
     await _start_store_background_tasks(plugin)
     _wire_prefix_bridge(plugin)
     logger.info("[Unifideck] plugin loaded")
@@ -303,6 +304,47 @@ async def _boot_update_sweep(plugin: Any) -> None:
     except Exception:
         logger.exception("[UpdateSweep] failed to wire — updates checked on demand")
         plugin._update_sweep_service = None
+
+def _boot_post_sync_reconcile(plugin: Any) -> None:
+    """Wire the boot-time post-sync data reconcile.
+
+    The metadata → artwork → compat chain runs as background tasks in this
+    process, and this process restarts independently of Steam — most often
+    right after a sync, because that is exactly when the user is told to
+    restart Steam for new shortcuts and artwork. An interrupted chain used
+    to be lost outright: boot checked orphaned *shortcuts* and resumed the
+    size backfill, but nothing ever asked whether artwork, metadata or
+    compat data were actually complete. One measured session left 111 of
+    1242 games with incomplete artwork and 13 (all of Ubisoft, the last
+    store signed into) with none at all.
+
+    Constructed outside the ServiceContainer for the same reason as the
+    updater and the update sweep: it needs ``plugin.sync_service``, which
+    is not a container member. A failure here never blocks boot — the gaps
+    simply wait for the next sync, which is the old behaviour.
+    """
+    try:
+        from unifideck.services.post_sync_reconcile import (
+            PostSyncReconcileService,
+        )
+
+        services = plugin.services
+        svc = PostSyncReconcileService(
+            plugin.bus,
+            plugin.sync_service,
+            artwork=getattr(services, "artwork", None),
+            metadata=getattr(services, "metadata", None),
+            compat=getattr(services, "compatibility", None),
+        )
+        plugin._post_sync_reconcile_service = svc
+        svc.start()
+    except Exception:
+        logger.exception(
+            "[PostSyncReconcile] failed to wire — post-sync gaps will wait "
+            "for the next sync",
+        )
+        plugin._post_sync_reconcile_service = None
+
 
 def _wire_prefix_bridge(plugin: Any) -> None:
     """Keep ``compatdata`` bridge links in step with the installed games.

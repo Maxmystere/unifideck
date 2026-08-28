@@ -337,7 +337,7 @@ def auto_wire(
         bus.on(meta.event, attr)
         count += 1
         if watchdog is not None:
-            _register_with_watchdog(instance, attr_name, watchdog)
+            _register_with_watchdog(instance, attr_name, watchdog, meta.timeout)
         if registry is not None:
             registry.add(
                 _Subscription(
@@ -392,6 +392,7 @@ def _register_with_watchdog(
     instance: Any,
     attr_name: str,
     watchdog: HandlerWatchdog,
+    timeout: float | None = None,
 ) -> None:
     """Register the qualified handler name with the watchdog.
 
@@ -399,6 +400,19 @@ def _register_with_watchdog(
     so the watchdog's metrics are readable
     (``ShortcutService._on_download_complete`` rather than
     just ``_on_download_complete``).
+
+    ``timeout`` is the handler's ``@subscribe(timeout=...)``
+    override. It used not to be forwarded: this function called
+    ``watchdog.register(qualname)`` with one argument, so
+    ``HandlerWatchdog`` fell back to its 5s
+    ``DEFAULT_HANDLER_TIMEOUT_SEC`` for *every* handler and a
+    declared override was silently inert — the meta reached only the
+    introspection-only ``SubscriptionRegistry``, which enforces
+    nothing. That is what made ``ShortcutService._on_sync_complete``
+    undeclarable: a full 1242-game reconcile legitimately takes ~5s,
+    so it was being cancelled mid-write by a budget it had no way to
+    raise, leaving shortcuts.vdf unwritten and
+    ``SHORTCUT_RECONCILE_COMPLETE`` never emitted.
 
     Watchdog registration failures (e.g. a stub watchdog
     without a ``register`` method) are caught and logged at
@@ -409,10 +423,12 @@ def _register_with_watchdog(
         instance: the host instance.
         attr_name: the method's attribute name.
         watchdog: the watchdog to register on.
+        timeout: per-handler budget in seconds, or ``None`` for the
+            watchdog's default.
     """
     qualname = f"{type(instance).__name__}.{attr_name}"
     try:
-        watchdog.register(qualname)
+        watchdog.register(qualname, timeout=timeout)
     except (AttributeError, RuntimeError) as e:
         logger.debug(
             "[event_bus_devex] watchdog register failed for %s: %s",

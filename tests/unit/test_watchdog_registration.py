@@ -226,3 +226,80 @@ async def test_supervision_is_optional_and_never_blocks_delivery() -> None:
     await bus.emit("t_stub", a=1)
 
     assert seen == ["ran"]
+
+
+# ── the per-handler timeout override ────────────────────
+#
+# ``@subscribe(timeout=...)`` existed and was inert. ``auto_wire`` stamped
+# ``meta.timeout`` into the introspection-only ``SubscriptionRegistry`` and
+# then called ``watchdog.register(qualname)`` with a single argument, so the
+# watchdog fell back to its 5s ``DEFAULT_HANDLER_TIMEOUT_SEC`` for every
+# handler in the tree — a declared budget that nothing enforced.
+#
+# That is what made ``ShortcutService._on_sync_complete`` un-declarable. A
+# healthy 1242-game reconcile measured 4.9s against a 5s budget, so any
+# contention on the loop pushed it over: the watchdog cancelled the handler
+# mid-reconcile twice in one session (at 9.5s and 11.6s — fired *late*,
+# itself the signature of a starved loop). A cancelled reconcile leaves
+# shortcuts.vdf unwritten and never emits SHORTCUT_RECONCILE_COMPLETE, so
+# the user gets neither their shortcuts nor the restart prompt. GOG's 228
+# games had no shortcuts for five minutes because of exactly this.
+
+
+class _TimedService:
+    """One handler with a declared budget, one relying on the default."""
+
+    def __init__(self, bus: Any) -> None:
+        self._bus = bus
+        auto_wire(self, bus)
+
+    @subscribe(Events.SYNC_COMPLETE, timeout=120.0)
+    async def _on_sync_complete(self, **kwargs: Any) -> None: ...
+
+    @subscribe(Events.SYNC_STARTED)
+    async def _on_sync_started(self, **kwargs: Any) -> None: ...
+
+
+def _budget(watchdog: HandlerWatchdog, suffix: str) -> float:
+    timeouts = getattr(watchdog, "_timeouts", {})
+    name = next(n for n in timeouts if n.endswith(suffix))
+    return timeouts[name]
+
+
+def test_subscribe_timeout_reaches_the_watchdog() -> None:
+    bus = EventBus()
+    watchdog = HandlerWatchdog()
+    bus.watchdog = watchdog
+    _TimedService(bus)
+
+    assert _budget(watchdog, "_on_sync_complete") == 120.0
+
+
+def test_handler_without_an_override_keeps_the_default() -> None:
+    """Only declared handlers get a custom budget; the rest are untouched."""
+    bus = EventBus()
+    watchdog = HandlerWatchdog()
+    bus.watchdog = watchdog
+    _TimedService(bus)
+
+    timeouts = getattr(watchdog, "_timeouts", {})
+    assert not any(n.endswith("_on_sync_started") for n in timeouts)
+    # Still registered for metrics, just on the default budget.
+    assert any(n.endswith("_on_sync_started") for n in _tracked(watchdog))
+
+
+def test_the_reconcile_handler_declares_a_realistic_budget() -> None:
+    """Pin the actual production declaration, not just the mechanism."""
+    from unifideck.services.shortcut.events import (
+        RECONCILE_TIMEOUT_SECONDS,
+        EventsMixin,
+    )
+    from unifideck.event_bus.supervision.watchdog_handler import (
+        DEFAULT_HANDLER_TIMEOUT_SEC,
+    )
+
+    meta = EventsMixin._on_sync_complete.__subscribe_meta__
+    assert meta.timeout == RECONCILE_TIMEOUT_SECONDS
+    assert RECONCILE_TIMEOUT_SECONDS > DEFAULT_HANDLER_TIMEOUT_SEC, (
+        "a full reconcile measured 4.9s against the 5s default"
+    )

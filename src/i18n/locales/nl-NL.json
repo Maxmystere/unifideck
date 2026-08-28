@@ -1042,5 +1042,9 @@
     "title": "STEAM-COLLECTIES",
     "enabled": "Collecties ingeschakeld",
     "disabled": "Collecties uitgeschakeld"
+  },
+  "reconcile": {
+    "repairedTitle": "Bibliotheekgegevens hersteld",
+    "repairedBody": "{{artwork}} afbeeldingen, {{metadata}} metagegevens en {{compat}} compatibiliteitsvermeldingen aangevuld na een onderbroken synchronisatie."
   }
 }

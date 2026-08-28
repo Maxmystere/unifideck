@@ -1042,5 +1042,9 @@
     "title": "STEAM 收藏夹",
     "enabled": "收藏夹已启用",
     "disabled": "收藏夹已禁用"
+  },
+  "reconcile": {
+    "repairedTitle": "库数据已修复",
+    "repairedBody": "已补齐上次同步中断遗留的 {{artwork}} 项封面、{{metadata}} 项元数据和 {{compat}} 项兼容性信息。"
   }
 }
