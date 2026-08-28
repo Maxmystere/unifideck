@@ -470,6 +470,7 @@
       "authExpired": "Sesión caducada. Inicia sesión de nuevo",
       "toolMissing": "Herramienta de descarga requerida no encontrada",
       "processFailed": "Error de descarga. Por favor inténtalo de nuevo",
+      "stalled": "La descarga se ha detenido sin progreso. Inténtalo de nuevo.",
       "directoryNotFound": "No se pudieron localizar los archivos instalados",
       "lockConflict": "Otra operación está en curso. Inténtalo de nuevo",
       "ubisoftClient": "Error del cliente Ubisoft Connect. Intenta reparar el prefijo",

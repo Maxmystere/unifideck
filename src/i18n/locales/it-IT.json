@@ -470,6 +470,7 @@
       "authExpired": "Sessione scaduta. Effettua nuovamente l'accesso",
       "toolMissing": "Strumento di download richiesto non trovato",
       "processFailed": "Download fallito. Riprova più tardi",
+      "stalled": "Download bloccato senza progressi. Riprova.",
       "directoryNotFound": "Impossibile trovare i file installati",
       "lockConflict": "Un'altra operazione è in corso. Riprova",
       "ubisoftClient": "Errore client Ubisoft Connect. Prova a riparare il prefisso",

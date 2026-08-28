@@ -108,6 +108,12 @@ describe("friendlyDownloadError — bare backend codes", () => {
       "legendary_install_lock_busy: another Epic install is still holding the lock",
       "errors.download.lockConflict",
     ],
+    // The stall watchdog, which fires for all three CLI stores since the
+    // drain loop was shared. Both the seconds and the phase word vary, and
+    // the classifier matches the text before the first colon, so the rule
+    // is on the bare code `stalled` (audit register item 28).
+    ["stalled: no output for 120s while downloading", "errors.download.stalled"],
+    ["stalled: no output for 600s while finalizing", "errors.download.stalled"],
   ])("maps %s", (raw, key) => {
     expect(friendlyDownloadError(raw, t)).toBe(key);
   });
@@ -152,6 +158,7 @@ describe("every key this maps to is translated everywhere", () => {
     "errors.download.directoryNotFound",
     "errors.download.processFailed",
     "errors.download.lockConflict",
+    "errors.download.stalled",
     "errors.download.diskSpace",
     "errors.download.network",
     "errors.download.authExpired",

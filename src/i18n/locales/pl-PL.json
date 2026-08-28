@@ -470,6 +470,7 @@
       "authExpired": "Logowanie wygasło. Zaloguj się ponownie",
       "toolMissing": "Nie znaleziono wymaganego narzędzia pobierania",
       "processFailed": "Pobieranie nie powiodło się. Spróbuj ponownie",
+      "stalled": "Pobieranie zatrzymało się bez postępu. Spróbuj ponownie.",
       "directoryNotFound": "Nie można zlokalizować zainstalowanych plików",
       "lockConflict": "Inna operacja jest w toku. Spróbuj ponownie",
       "ubisoftClient": "Błąd Ubisoft Connect. Spróbuj naprawić prefiks",

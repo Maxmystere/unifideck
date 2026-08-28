@@ -470,6 +470,7 @@
       "authExpired": "Aanmelding verlopen. Meld je opnieuw aan",
       "toolMissing": "Vereist downloadprogramma niet gevonden",
       "processFailed": "Download mislukt. Probeer het opnieuw",
+      "stalled": "Download loopt vast zonder voortgang. Probeer het opnieuw.",
       "directoryNotFound": "Kan geïnstalleerde bestanden niet vinden",
       "lockConflict": "Een andere actie is bezig. Probeer opnieuw",
       "ubisoftClient": "Fout in Ubisoft Connect. Probeer de prefix te repareren",

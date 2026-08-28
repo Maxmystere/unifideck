@@ -470,6 +470,7 @@
       "authExpired": "Oturum süresi doldu. Lütfen tekrar giriş yapın",
       "toolMissing": "Gerekli indirme aracı bulunamadı",
       "processFailed": "İndirme başarısız. Lütfen tekrar deneyin",
+      "stalled": "İndirme ilerleme olmadan durdu. Lütfen tekrar deneyin.",
       "directoryNotFound": "Yüklü dosyalar bulunamadı",
       "lockConflict": "Başka bir işlem devam ediyor. Tekrar deneyin",
       "ubisoftClient": "Ubisoft Connect istemci hatası. Öneki onarmayı deneyin",

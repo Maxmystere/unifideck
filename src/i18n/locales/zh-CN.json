@@ -470,6 +470,7 @@
       "authExpired": "登录已过期。请重新登录",
       "toolMissing": "未找到所需的下载工具",
       "processFailed": "下载失败。请重试",
+      "stalled": "下载停滞，没有任何进度。请重试。",
       "directoryNotFound": "无法找到已安装的文件",
       "lockConflict": "另一项操作正在进行中。请重试",
       "ubisoftClient": "Ubisoft Connect 客户端错误。请尝试修复环境",

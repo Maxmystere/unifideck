@@ -39,7 +39,7 @@ Run after **any** change in this programme. These replace the near-identical
 | SW2 | Open App Details for one game per store | Panel renders; no missing metadata, size or artwork | ( ) | |
 | SW3 | Launch one already-installed game | Launches; correct per-game prefix in `game.log` | ( ) | |
 | SW4 | QAM → Store Connections after `systemctl restart plugin_loader` | All six rows, correct connected/disconnected state | ( ) | |
-| SW5 | QAM → Capture Logs | Bundle builds clean; no traceback | ( ) | |
+| SW5 | QAM → Capture Logs | Bundle builds clean; no traceback, **and it contains `launches/*.log`** — item 4j deleted `LaunchLogsService.export` on the grounds that the bundle already carries those files, so this assertion is what keeps that true | ( ) | |
 
 ---
 
@@ -109,7 +109,7 @@ Run after **any** change in this programme. These replace the near-identical
 | DV-F5 | Drop Wi-Fi during a GOG install | Error is **localized and specific**, not the bare token `download_failed` | ( ) | |
 | DV-F5b | Repeat DV-F5 with a non-English UI language | Still localized | ( ) | |
 | DV-F6 | `pkill -STOP -f gogdl` at ~30%, resume at 60s | Nothing happens — a live-but-slow install is never killed | ( ) | |
-| DV-F7 | Same, left stopped past 120s | Fails with a stall message at ~120s | ( ) | |
+| DV-F7 | Same, left stopped past 120s | Fails with a stall message at ~120s, and the message is **localized** — item 28 added `errors.download.stalled`; before it, the one failure that reached the user as raw English was `stalled: no output for 120s while downloading` | ( ) | |
 | **DV-F8** | **Repeat DV-F7 on Epic, then Amazon** | Each fails at ~120s — **the new behaviour**; these two had no stall detection at all | ( ) | |
 | DV-F9 | Large GOG install through extraction | Not killed during the quiet tail (finalize window) | ( ) | |
 | DV-F10 | One install on each of GOG/Epic/Amazon, screenshot at ~50% | No negative transfer rate; consistent formatting | ( ) | |
@@ -272,6 +272,99 @@ else is a feature, this is the regression guard.
 | DV-Q5 | `mangohud %command% <store>:<id>` | Still works — Steam applies the wrapper pre-exec, unchanged by this | ( ) | |
 | DV-Q6 | Launch an Epic and a GOG game (their argv builders both changed) | Both launch; correct per-game prefix | ( ) | |
 
+## DV-R — items 26 and 31, per-store capability flags
+
+The frontend now reads four capability booleans off the `get_store_infos`
+payload instead of its own hardcoded store lists. A wrong flag does not throw
+— it **hides a feature on a store that has it**, which is exactly how the
+deleted `supports_cloud_saves` field behaved for a year.
+
+| ID | Step | Expected | Status | Evidence |
+|---|---|---|---|---|
+| **DV-R1** | Open App Details for a **GOG** and an **Epic** game | Cloud-save UI present on both. This is the regression the old field caused: only Battle.net ever declared it, as `False`, so the two stores that *have* cloud saves both advertised none | ( ) | |
+| DV-R2 | Same for Amazon, Ubisoft, Battle.net, Microsoft | No cloud-save UI | ( ) | |
+| DV-R3 | Achievements row on a GOG and an Epic game | Present; absent on the other four | ( ) | |
+| DV-R4 | Start a **GOG** install, then an **Epic** one | GOG shows the language picker, Epic does not | ( ) | |
+| DV-R5 | Store Connections → storefront button per row | Appears only on the browser-storefront stores | ( ) | |
+| DV-R6 | `storeInfoStore.getSnapshot()` in the console | Four capability keys present; `icon` and `auth_status` **absent** — both were declared in `api.ts` and never sent | ( ) | |
+
+## DV-S — item 35, the per-overview RPC round-trip removed
+
+`inject_game_to_appinfo` fired from inside the patched `GetAppOverviewByAppID`
+getter, so it ran on **every overview read, library-wide**. Deleting it is only
+safe because `applyAppStorePatch` re-spoofs on every plugin load.
+
+| ID | Step | Expected | Status | Evidence |
+|---|---|---|---|---|
+| **DV-S1** | `systemctl restart plugin_loader`, then open the library | Non-Steam tiles still carry store artwork and metadata — the re-spoof on load is what replaces the deleted persistence | ( ) | |
+| DV-S2 | Open App Details for one game per store | Metadata present, no blank fields | ( ) | |
+| DV-S3 | Scroll the library while tailing the log | **No** `inject_game_to_appinfo` traffic. One call per overview read is what this removed | ( ) | |
+
+## DV-T — item 36, a `%command%`-leading shortcut heals
+
+§2.9 measured this launching 0 of 2 attempts, and item 24a's preservation fix
+had removed the only thing that used to clean it up.
+
+| ID | Step | Expected | Status | Evidence |
+|---|---|---|---|---|
+| **DV-T1** | Set a shortcut's launch options to `%command% <store>:<id>`, Force Sync, then press Play | The leading `%command%` is gone from the options and the game **launches**. Before this it silently did nothing | ( ) | |
+| DV-T2 | A normal `<store>:<id>` shortcut through the same sync | Options untouched | ( ) | |
+| DV-T3 | `mangohud %command% <store>:<id>` through the same sync | **Preserved** — this is the legitimate form and must survive. Overlaps DV-Q5 deliberately | ( ) | |
+
+## DV-U — items 39 and 45, store rows and progress labels
+
+| ID | Step | Expected | Status | Evidence |
+|---|---|---|---|---|
+| DV-U1 | QAM → Store Connections, all six rows | Every row renders a status; none blank. `ROW_CONFIG` waited on status strings no backend emits, so its guidance never appeared — confirm nothing regressed by removing it | ( ) | |
+| DV-U2 | GOG install through extraction and verification | Progress labels localized; **no** hardcoded English "Extracting…" / "Verifying… 12.3%" | ( ) | |
+| DV-U3 | Repeat DV-U2 with a non-English UI language | Still localized — the six deleted producers were English-only restatements of the localized label | ( ) | |
+
+## DV-V — item 47, the convergence closures
+
+Eight duplicate groups were folded, and **four of them turned out to be
+defects**. These steps target the four, not the refactor: a pure
+consolidation is covered by the standing sweep.
+
+| ID | Step | Expected | Status | Evidence |
+|---|---|---|---|---|
+| **DV-V1** | Play a **GOG** game with cloud saves, then check the resolved save path in the log | It is that game's **own** folder. The GOG title matcher guarded the raw title, so a title with no ASCII alphanumerics matched `"" in child_name` and returned the first directory under `Saved Games` — which sync then uploads and a restore writes over | ( ) | |
+| DV-V2 | Same for an **Epic** game with cloud saves | Correct folder; the two matchers are now one | ( ) | |
+| **DV-V3** | Open the achievements panel for an **Epic** game | Loads. Both Epic auth copies were merged into `LegendaryLauncherAuth`, and this is the consumer whose copy had the broken error path | ( ) | |
+| DV-V4 | Epic playtime sync after a session | Reports. Same mixin, the other consumer | ( ) | |
+| DV-V5 | Force an Epic token refresh (play after leaving it idle past expiry) and grep the log | `token refresh done (rc=…)` appears. The sessions copy logged no rc at all, so a refresh that ran and failed looked identical to one that worked | ( ) | |
+| DV-V6 | GOG achievements panel | Unlock **timestamps** correct — GOG's timestamp parser was replaced with the one that normalises a trailing `Z` | ( ) | |
+| DV-V7 | Trip the circuit breaker, press Play | Toast still appears. Its emitter and the launcher-error emitter now share one delivery function | ( ) | |
+| DV-V8 | Force a terminal launcher error | Toast still appears. Overlaps DV-B1/B2 deliberately — both toasts moved in the same commit | ( ) | |
+| DV-V9 | Launch a **Battle.net** game | Client resolves and starts; the four `Battle.net.exe` / launcher / config lookups were folded onto one helper | ( ) | |
+| DV-V10 | Open App Details for a game with a ProtonDB or Deck-Verified badge | Badge present. The two metadata backfills now try **both** AppID forms where they previously tried only the signed one | ( ) | |
+
+## DV-W — items 20 and 44, lookups and a deleted config key
+
+| ID | Step | Expected | Status | Evidence |
+|---|---|---|---|---|
+| **DV-W1** | `systemctl restart plugin_loader` and read the boot log | Clean boot, **no missing-config-key error**. Item 44 removed `binary_resolver.version_check_timeout_seconds` from defaults, schema *and* `RUNTIME_REQUIRED_KEYS`; missing one of the three fails boot | ( ) | |
+| DV-W2 | Library facets → filter by compatibility rating | Filters correctly. `appid_candidates` was consolidated across four call sites, and a signed/unsigned mismatch here shows as an empty facet, not an error | ( ) | |
+
+---
+
+## Needs no device validation
+
+Recorded so the gap is not re-audited. Each of these is provably inert at
+runtime, and the standing sweep covers the rest.
+
+| Item | Why |
+|---|---|
+| 21 | `OP-XX` markers — comments and docstring prose only; zero occurrences in executable code |
+| 24 | Eight deleted modules, each verified to have **no importer** by check 12. SW1–SW5 covers the residual risk |
+| 27 | `vulture_whitelist.py` — a lint input, never imported by the plugin |
+| 30 | A `NewType` and a mypy check; no runtime behaviour |
+| 40 | Deleted dead code plus two corrected CI comments |
+| 46 | Covered by **DV-L**, which was written for it |
+| 4a, 4c | Covered by **DV-M** |
+| 4b | Covered by **DV-P** |
+| 37 | Covered by **DV-O** |
+| 23a, 23b | Covered by **DV-Q** |
+
 ---
 
 ## Lost baselines
@@ -287,3 +380,10 @@ and it stands on its own.
 If time is short, these are the ones the original plans named as deciding their
 change: **DV-D1, DV-E3, DV-E8, DV-F8, DV-H5, DV-H8, DV-H11, DV-I4, DV-J1,
 DV-J4, DV-K4.** DV-H11 is the only one that can regress an existing install.
+
+From the later groups, the ones that decide their change rather than confirm
+it: **DV-R1** (a capability flag hides a feature rather than failing loudly),
+**DV-S1** (the re-spoof is the only thing replacing deleted persistence),
+**DV-T1** (a shortcut that has never launched), **DV-V1** and **DV-V3** (the
+two closures that were live defects), and **DV-W1** (a config key removed from
+three places at once — miss one and the plugin does not boot).

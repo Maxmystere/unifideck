@@ -470,6 +470,7 @@
       "authExpired": "Login expired. Please sign in again",
       "toolMissing": "Required download tool not found",
       "processFailed": "Download failed. Please try again",
+      "stalled": "Download stalled with no progress. Please try again.",
       "directoryNotFound": "Could not locate installed files",
       "lockConflict": "Another operation is in progress. Try again",
       "ubisoftClient": "Ubisoft Connect client error. Try repairing the prefix",

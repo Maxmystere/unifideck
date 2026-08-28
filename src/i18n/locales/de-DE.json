@@ -470,6 +470,7 @@
       "authExpired": "Anmeldung abgelaufen. Bitte melde dich erneut an",
       "toolMissing": "Erforderliches Download-Werkzeug nicht gefunden",
       "processFailed": "Download fehlgeschlagen. Bitte versuche es erneut",
+      "stalled": "Download ohne Fortschritt unterbrochen. Bitte erneut versuchen.",
       "directoryNotFound": "Installierte Dateien konnten nicht gefunden werden",
       "lockConflict": "Ein anderer Vorgang wird ausgeführt. Versuche es erneut",
       "ubisoftClient": "Ubisoft Connect-Client-Fehler. Versuche das Präfix zu reparieren",

@@ -470,6 +470,7 @@
       "authExpired": "Session expirée. Veuillez vous connecter à nouveau",
       "toolMissing": "Outil de téléchargement requis introuvable",
       "processFailed": "Échec du téléchargement. Veuillez réessayer",
+      "stalled": "Téléchargement bloqué, aucune progression. Veuillez réessayer.",
       "directoryNotFound": "Impossible de localiser les fichiers installés",
       "lockConflict": "Une autre opération est en cours. Réessayez",
       "ubisoftClient": "Erreur du client Ubisoft Connect. Essayez de réparer le préfixe",

@@ -470,6 +470,7 @@
       "authExpired": "로그인 세션 만료. 다시 로그인해 주세요",
       "toolMissing": "필수 다운로드 도구를 찾을 수 없습니다",
       "processFailed": "다운로드 실패. 다시 시도해 주세요",
+      "stalled": "다운로드가 진행되지 않고 멈췄습니다. 다시 시도해 주세요.",
       "directoryNotFound": "설치 폴더 위치를 파악할 수 없습니다",
       "lockConflict": "다른 작업이 진행 중입니다. 잠시 후 재시도",
       "ubisoftClient": "Ubisoft Connect 클라이언트 오류. Prefix 복구를 시도해 보세요",

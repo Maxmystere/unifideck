@@ -1164,6 +1164,59 @@ def find_undocumented_subpackages(
     return [name for name in expected if name.split("/")[-1] not in text]
 
 
+# ── check 14: every skill file carries a freshness stamp ──────────────
+SKILLS_DIR = REPO_ROOT / ".claude" / "skills"
+STAMP_RE = re.compile(r"Last verified:\s*\d{4}-\d{2}-\d{2}")
+
+
+def find_unstamped_skills() -> list[str]:
+    """Skill files with no ``Last verified: YYYY-MM-DD`` line.
+
+    A skill is what the next reader trusts instead of reading the tree, so
+    one that does not say when it was last checked cannot be judged at all.
+    Two files had no stamp when this was written and the register's own
+    roadmap claimed stamps existed on "all skills" (audit register item 22).
+
+    This checks *existence*, not accuracy — a machine cannot tell whether
+    prose still describes the code. Existence is the half that can be
+    enforced, and it is the half that was missing.
+    """
+    if not SKILLS_DIR.is_dir():
+        return []
+    return sorted(
+        str(f.relative_to(SKILLS_DIR))
+        for f in SKILLS_DIR.rglob("*.md")
+        if not STAMP_RE.search(f.read_text(encoding="utf-8", errors="replace"))
+    )
+
+
+def report_unstamped_skills() -> int:
+    """Print check 14; return 1 on failure.
+
+    Skipped silently when ``.claude/skills/`` is absent — it is gitignored,
+    so CI never sees it. This check is therefore a **local** gate: it earns
+    its place by running in the same command a developer already runs, not
+    by blocking a pipeline that cannot observe the files.
+    """
+    if not SKILLS_DIR.is_dir():
+        print("SKIP: .claude/skills/ not present (gitignored — CI cannot see it)")
+        return 0
+    unstamped = find_unstamped_skills()
+    total = sum(1 for _ in SKILLS_DIR.rglob("*.md"))
+    if not unstamped:
+        print(f"OK: all {total} skill file(s) carry a freshness stamp")
+        return 0
+    _fail(f"{len(unstamped)} skill file(s) carry no 'Last verified:' stamp")
+    for name in unstamped:
+        print(f"    · {name}")
+    print(
+        "\n  A skill is read instead of the tree. Without a stamp there is no\n"
+        "  way to judge whether it still describes the code. Add a line:\n"
+        "  'Last verified: YYYY-MM-DD against vX.Y.Z'."
+    )
+    return 1
+
+
 def main() -> int:
     main_path = REPO_ROOT / "main.py"
     mixins_init = PY / "rpc" / "mixins" / "__init__.py"
@@ -1379,6 +1432,11 @@ def main() -> int:
     # unused functions nor unimported modules) that let two shadow packages
     # of empty stubs live beside the real ones. Audit register item 24.
     hard_failures += report_unimported_modules()
+
+    # Check 14 (hard, local-only): every skill file carries a freshness
+    # stamp. Register item 22 — the roadmap claimed all skills had one; two
+    # did not, and nothing enforced it.
+    hard_failures += report_unstamped_skills()
 
     if hard_failures:
         print(f"\n{hard_failures} architecture invariant(s) violated")

@@ -470,6 +470,7 @@
       "authExpired": "登入已過期。請重新登入",
       "toolMissing": "找不到所需的下載工具",
       "processFailed": "下載失敗。請重試",
+      "stalled": "下載停滯，沒有任何進度。請重試。",
       "directoryNotFound": "無法找到已安裝的檔案",
       "lockConflict": "另一項操作正在進行中。請重試",
       "ubisoftClient": "Ubisoft Connect 用戶端發生錯誤。請嘗試修復 Wine Prefix",

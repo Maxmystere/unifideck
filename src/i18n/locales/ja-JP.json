@@ -470,6 +470,7 @@
       "authExpired": "セッションが切れました。もう一度ログインしてください",
       "toolMissing": "必要なダウンロードツールが見つかりません",
       "processFailed": "ダウンロードに失敗しました。再試行してください",
+      "stalled": "ダウンロードが進行しないまま停止しました。もう一度お試しください。",
       "directoryNotFound": "インストールされたファイルが見つかりません",
       "lockConflict": "他の処理が実行中です。再試行してください",
       "ubisoftClient": "Ubisoft Connect エラー。プレフィックスの修復を試してください",

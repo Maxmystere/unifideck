@@ -59,6 +59,15 @@ const CODE_KEYS: ReadonlyArray<readonly [RegExp, string]> = [
   // legendary refuses a second concurrent install and exits 0 while doing it.
   [/^legendary_install_lock_busy$/, "errors.download.lockConflict"],
   [/^marker_write_failed$|^mkdir_failed$/, "errors.download.processFailed"],
+  // The stall watchdog's own message (`InstallStalledError`), which reads
+  // `stalled: no output for 120s while downloading`. It is raised for all
+  // three CLI stores since the drain loop was shared, and until now it was
+  // the one failure that reached the user as raw English — the seconds and
+  // the phase are diagnostic detail, not something a user can act on, so a
+  // single key carries it. Matched as the bare code `stalled`, because these
+  // patterns are tested against the text *before* the first colon, not the
+  // whole message. Audit register item 28.
+  [/^stalled$/, "errors.download.stalled"],
   // A store that cannot install at all (the cloud-only store refuses every
   // install / update / uninstall — audit §3.5, register item 11). Mapped to
   // the generic string rather than given its own key: the path is guarded
