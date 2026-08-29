@@ -65,7 +65,7 @@ sys.path.insert(0, str(Path(DECKY_PLUGIN_DIR) / "py_modules"))
 sys.path.insert(0, str(Path(DECKY_PLUGIN_DIR) / "py_modules" / "_vendor"))
 
 def _assert_architecture_matches() -> None:
-    """Fail loudly, and in one line, when this build is for another machine.
+    """Fail loudly when this build does not match the RUNTIME we load into.
 
     A Unifideck zip is architecture-specific: ``py_modules/`` holds
     compiled wheels (cryptography's ``_rust.abi3.so``, cffi, aiohttp's
@@ -80,6 +80,18 @@ def _assert_architecture_matches() -> None:
     and the honest next step — reinstalling the same wrong zip — cannot
     work. Decky's uninstall then has no loaded plugin to unload and
     appears to hang, which is how one bad download becomes an evening.
+
+    **The comparison is against this process, not against the hardware,
+    and on ARM those differ.** Decky Loader ships an x86_64 build; on an
+    ARM handheld it runs under FEX, which reports ``x86_64`` from
+    ``uname``/``platform.machine`` inside the emulated environment while
+    the host shell reports ``aarch64``. That is not a lie to see through
+    — it is the fact that matters. An emulated x86_64 interpreter can
+    only load x86_64 extension modules, so on such a device the x86_64
+    build is the correct one and an aarch64 build is unloadable, whatever
+    the CPU underneath is. Reported the same way round for the same
+    reason: telling someone their aarch64 machine "is x86_64" is why this
+    message now names the runtime instead.
 
     ``bin/ARCH`` records what the build targeted, so the mismatch is
     knowable before the first vendored import. Stdlib only, and it runs
@@ -103,15 +115,24 @@ def _assert_architecture_matches() -> None:
         "x86_64": "x86_64", "amd64": "x86_64", "x64": "x86_64",
         "aarch64": "aarch64", "arm64": "aarch64", "armv8l": "aarch64",
     }
-    host = aliases.get(platform.machine().strip().lower(), platform.machine())
-    if not built_for or aliases.get(built_for, built_for) == host:
+    runtime = aliases.get(platform.machine().strip().lower(), platform.machine())
+    if not built_for or aliases.get(built_for, built_for) == runtime:
         return
+    emulation_note = ""
+    if runtime == "x86_64":
+        emulation_note = (
+            " If this device has an ARM CPU, that is expected and not an "
+            "error: Decky Loader is an x86_64 build running under FEX "
+            "emulation, so the plugin runs as an x86_64 process and needs "
+            "the x86_64 zip even though `uname -m` in a terminal says "
+            "aarch64."
+        )
     message = (
-        f"Unifideck was built for {built_for} but this machine is {host}. "
-        f"The bundled store CLIs and Python libraries are native code and "
-        f"cannot run here, so the plugin is refusing to load rather than "
-        f"failing later with an unrelated-looking ImportError. Install the "
-        f"{host} build of the plugin."
+        f"Unifideck was built for {built_for}, but the plugin runs as a "
+        f"{runtime} process. Its bundled store CLIs and Python libraries "
+        f"are native code and cannot load here, so the plugin is refusing "
+        f"to start rather than failing later with an unrelated-looking "
+        f"ImportError. Install the {runtime} build.{emulation_note}"
     )
     logging.getLogger(__name__).error("[Unifideck] %s", message)
     raise RuntimeError(message)

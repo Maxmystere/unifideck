@@ -230,7 +230,7 @@ def _run_preflight(tmp_path: Path, stamp: str | None, machine: str) -> str | Non
 
 
 def test_a_foreign_build_refuses_to_load_and_says_why(tmp_path: Path) -> None:
-    """The real incident: an aarch64 zip installed on an x86_64 machine.
+    """The real incident: an aarch64 zip loaded into an x86_64 runtime.
 
     Without this the plugin died eleven frames down on
     ``_rust.abi3.so: cannot open shared object file`` — naming a file
@@ -241,6 +241,32 @@ def test_a_foreign_build_refuses_to_load_and_says_why(tmp_path: Path) -> None:
     assert error is not None, "the guard did not fire on a foreign build"
     assert "aarch64" in error and "x86_64" in error
     assert "Install the x86_64 build" in error
+
+
+def test_the_message_names_the_runtime_not_the_machine(tmp_path: Path) -> None:
+    """It reached a user on ARM hardware claiming their machine was x86_64.
+
+    It was not wrong about the process — Decky Loader runs emulated there,
+    so ``platform.machine()`` really does report x86_64 — but calling that
+    "this machine" contradicts the ``uname -m`` the user can run, and sends
+    them looking for a fault that is not there. The FEX note is what turns
+    the mismatch from a contradiction into an instruction.
+    """
+    error = _run_preflight(tmp_path, "aarch64\n", "x86_64")
+    assert error is not None
+    assert "this machine is" not in error
+    assert "runs as a x86_64 process" in error
+    assert "FEX" in error
+
+
+def test_a_native_arm_runtime_is_told_to_install_the_arm_build(
+    tmp_path: Path,
+) -> None:
+    """The emulation note must not appear where it would be nonsense."""
+    error = _run_preflight(tmp_path, "x86_64\n", "aarch64")
+    assert error is not None
+    assert "Install the aarch64 build" in error
+    assert "FEX" not in error
 
 
 def test_a_matching_build_loads(tmp_path: Path) -> None:

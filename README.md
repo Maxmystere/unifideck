@@ -53,13 +53,13 @@ Unifideck brings your games from other stores into Steam, so they show up in you
 - **Decky Loader** must be installed on your Steam Deck.
 - **Microsoft Edge** is required for store sign-in and Xbox Cloud Gaming. If it is missing, Unifideck will prompt you to install it.
 - All other store CLIs and helper tooling are bundled with the plugin.
-- Unifideck is published for **x86_64** and **aarch64 (64-bit ARM)**. The bundled store CLIs and Proton builds differ between them, so download the ZIP whose name ends in your device's architecture — `x86_64` for the Steam Deck and every other AMD/Intel handheld or PC, `aarch64` for ARM hardware. See [ARM support](#arm-support).
+- Unifideck is published for **x86_64** and **aarch64 (64-bit ARM)**. The bundled store CLIs and Python libraries are native code, so the ZIP has to match the architecture **Decky Loader runs as** — which on ARM handhelds is _not_ the architecture of the CPU. See [ARM support](#arm-support) before downloading.
 
 [Decky Loader Installation Guide](https://github.com/SteamDeckHomebrew/decky-loader)
 
 ## Installation
 
-1. Download the latest plugin ZIP for your architecture from the [Releases](https://github.com/mubaraknumann/unifideck/releases) page (`...x86_64.zip` or `...aarch64.zip` — run `uname -m` in a terminal if you are unsure).
+1. Download the latest plugin ZIP for your architecture from the [Releases](https://github.com/mubaraknumann/unifideck/releases) page (`...x86_64.zip` or `...aarch64.zip` — see [ARM support](#arm-support) for which one, and do **not** pick it with `uname -m`).
 2. Open **Quick Access Menu** (three dots button).
 3. Navigate to **Decky** -> **Settings** (gear icon).
 4. Enable **Developer Mode** if it is not already enabled.
@@ -112,25 +112,43 @@ Installed games are playable immediately after install. The Steam restart is sti
 
 ## ARM Support
 
-Unifideck runs on 64-bit ARM (`aarch64`) hardware as well as on x86_64, and a
-separate ZIP is published for each. The plugin is not architecture-neutral:
-the bundled store CLIs (legendary, gogdl, nile, comet) and the Python wheels
-inside `py_modules/` are compiled per architecture, so installing the wrong ZIP
-gives you a plugin that loads and then reports every store as unavailable. The
-architecture the ZIP was built for is recorded in `bin/ARCH`, the plugin
-detects the machine it is running on, and **Settings -> Capture Logs** reports
-both — a mismatch is the first line of that report.
+Unifideck is published for x86_64 and for 64-bit ARM (`aarch64`). The plugin
+is not architecture-neutral: the bundled store CLIs (legendary, gogdl, nile,
+comet) and the Python wheels inside `py_modules/` are compiled per
+architecture, so the wrong ZIP gives you a plugin that cannot start.
 
-Once the right ZIP is installed, the rest follows automatically: the in-app
-updater only offers releases built for your machine, and Unifideck fetches the
-`aarch64` GE-Proton build and umu's ARM Steam Runtime rather than the x86_64
-ones.
+### Which ZIP to install
+
+**Not the one matching your CPU — the one matching the process Decky Loader
+runs as.** On ARM handhelds these differ, and the difference decides which
+build works:
+
+- Decky Loader ships an **x86_64** build. On ARM hardware it runs under **FEX**
+  emulation, and an emulated x86_64 interpreter can only load x86_64 extension
+  modules. So an ARM handheld running a stock Decky Loader needs the
+  **`x86_64`** ZIP. `uname -m` in a terminal says `aarch64` and is the wrong
+  signal here — inside FEX the same command reports `x86_64`.
+- The **`aarch64`** ZIP is for a Decky Loader that runs natively on ARM.
+
+If you are unsure, install either and read the log: a mismatch now refuses to
+start and names both architectures, rather than failing later with an
+`ImportError` about a file that is plainly present. **Settings -> Capture
+Logs** reports the build architecture (`bin/ARCH`) and the runtime one side by
+side.
+
+Once the matching ZIP is installed the rest follows automatically, keyed to the
+same runtime architecture: the in-app updater only offers releases built for it,
+and GE-Proton and umu's Steam Runtime are fetched to match.
 
 What is different on ARM:
 
 - **Windows games run through x86 emulation** (FEX on SteamOS), on top of
   Proton. Expect a performance cost and a wider spread of per-title results
   than the compatibility notes here describe — those were gathered on x86_64.
+- **A native-ARM Decky Loader is the exception, not the rule.** Today the
+  common ARM setup runs the whole Decky stack emulated, which is why the
+  `x86_64` ZIP is usually the right one there; the `aarch64` build exists for
+  when that stops being true.
 - **Microsoft Edge is x86_64-only on Flathub**, so the store sign-in flows that
   need it and Xbox Cloud Gaming depend on an emulated Edge being available.
   Unifideck says so in the log rather than failing silently.
