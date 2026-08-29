@@ -16,6 +16,7 @@ A Decky Loader plugin that brings together Steam, Epic Games Store, GOG, Amazon 
 - [Getting Started](#getting-started)
 - [Documentation](#documentation)
 - [Known Limitations](#known-limitations)
+- [ARM Support](#arm-support)
 - [Troubleshooting](#troubleshooting)
 - [Languages](#languages)
 - [Building](#building)
@@ -52,12 +53,13 @@ Unifideck brings your games from other stores into Steam, so they show up in you
 - **Decky Loader** must be installed on your Steam Deck.
 - **Microsoft Edge** is required for store sign-in and Xbox Cloud Gaming. If it is missing, Unifideck will prompt you to install it.
 - All other store CLIs and helper tooling are bundled with the plugin.
+- Unifideck is published for **x86_64** and **aarch64 (64-bit ARM)**. The bundled store CLIs and Python libraries are native code, so the ZIP has to match the architecture **Decky Loader runs as** — which on ARM handhelds is _not_ the architecture of the CPU. See [ARM support](#arm-support) before downloading.
 
 [Decky Loader Installation Guide](https://github.com/SteamDeckHomebrew/decky-loader)
 
 ## Installation
 
-1. Download the latest plugin ZIP from the [Releases](https://github.com/mubaraknumann/unifideck/releases) page.
+1. Download the latest plugin ZIP for your architecture from the [Releases](https://github.com/mubaraknumann/unifideck/releases) page (`...x86_64.zip` or `...aarch64.zip` — see [ARM support](#arm-support) for which one, and do **not** pick it with `uname -m`).
 2. Open **Quick Access Menu** (three dots button).
 3. Navigate to **Decky** -> **Settings** (gear icon).
 4. Enable **Developer Mode** if it is not already enabled.
@@ -107,6 +109,68 @@ Installed games are playable immediately after install. The Steam restart is sti
 - **Proton version and launch options are configured through Steam's native shortcut Properties** (Compatibility tab / Launch Options field) — there is no in-plugin picker. Wrapper-style launch options and LSFG are **not yet wired up**; see the [Launch Options guide](docs/launch-options.md).
 - Not every game has SteamGridDB artwork or complete metadata.
 - For **Ubisoft**, choose your Proton version **before** installing. Changing Proton after install can invalidate the prefix and force a reinstall. See the [Ubisoft store spec](docs/ubisoft-store-spec.md) for details.
+
+## ARM Support
+
+Unifideck is published for x86_64 and for 64-bit ARM (`aarch64`). The plugin
+is not architecture-neutral: the bundled store CLIs (legendary, gogdl, nile,
+comet) and the Python wheels inside `py_modules/` are compiled per
+architecture, so the wrong ZIP gives you a plugin that cannot start.
+
+### Which ZIP to install
+
+**Not the one matching your CPU — the one matching the process Decky Loader
+runs as.** On ARM handhelds these differ, and the difference decides which
+build works:
+
+- Decky Loader ships an **x86_64** build. On ARM hardware it runs under **FEX**
+  emulation, and an emulated x86_64 interpreter can only load x86_64 extension
+  modules. So an ARM handheld running a stock Decky Loader needs the
+  **`x86_64`** ZIP. `uname -m` in a terminal says `aarch64` and is the wrong
+  signal here — inside FEX the same command reports `x86_64`.
+- The **`aarch64`** ZIP is for a Decky Loader that runs natively on ARM.
+
+If you are unsure, install either and read the log: a mismatch now refuses to
+start and names both architectures, rather than failing later with an
+`ImportError` about a file that is plainly present. **Settings -> Capture
+Logs** reports the build architecture (`bin/ARCH`) and the runtime one side by
+side.
+
+Once the matching ZIP is installed the rest follows automatically, keyed to the
+same runtime architecture: the in-app updater only offers releases built for it,
+and GE-Proton and umu's Steam Runtime are fetched to match.
+
+What is different on ARM:
+
+- **Windows games run through x86 emulation** (FEX on SteamOS), on top of
+  Proton. Expect a performance cost and a wider spread of per-title results
+  than the compatibility notes here describe — those were gathered on x86_64.
+- **A native-ARM Decky Loader is the exception, not the rule.** Today the
+  common ARM setup runs the whole Decky stack emulated, which is why the
+  `x86_64` ZIP is usually the right one there; the `aarch64` build exists for
+  when that stops being true.
+- **Microsoft Edge is x86_64-only on Flathub**, so the store sign-in flows that
+  need it and Xbox Cloud Gaming depend on an emulated Edge being available.
+  Unifideck says so in the log rather than failing silently.
+- **Native Linux GOG titles** are x86/x86_64 builds and go through the same
+  emulation as the Windows ones.
+
+To build for an architecture other than your own, pass `--arch`:
+
+```bash
+./build-plugin.sh prod --arch=aarch64
+```
+
+Nothing in the build executes a target binary, so cross-building works from
+either machine; downloads that cannot be run to validate them are verified
+against the checksums in `package.json` instead.
+
+For an ARM build you intend to install, prefer CI or a native build over a
+cross-build. The `Build plugin artifact` workflow runs each architecture on
+a runner of that architecture and then executes what it packaged — every
+bundled CLI and every vendored wheel — so a zip that cannot run on the
+machine it targets fails the build instead of the install. Download the
+`Unifideck-aarch64` artifact from the workflow run.
 
 ## Troubleshooting
 
@@ -165,6 +229,7 @@ Common flows (`build-plugin.sh`):
 - `./build-plugin.sh prod install` - build, install into Decky, and restart it.
 - `./build-plugin.sh dev` / `./build-plugin.sh dev install` - development build (build number auto-incremented).
 - `./build-plugin.sh dev quick-install` - fast rsync of backend/config to the live install, no full repackage (run `pnpm run build` first if you changed the frontend).
+- `./build-plugin.sh prod --arch=aarch64` - build for 64-bit ARM instead of this machine's architecture. See [ARM support](#arm-support).
 - `pnpm run build` / `pnpm run watch` - frontend bundle only.
 
 **Tests & checks:** `npm run test:all` (backend + frontend), `npm run test:backend`, `npm run test:coverage`, `npm run typecheck`, `npm run lint`.

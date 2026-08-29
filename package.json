@@ -89,7 +89,8 @@
       ],
       "cpu": [
         "current",
-        "x64"
+        "x64",
+        "arm64"
       ],
       "libc": [
         "current",
@@ -123,6 +124,33 @@
     {
       "sha256hash": "2d6694d544fd3155d90d540e70bc1be767a6b9fdda130275f2b79616ff14e843",
       "url": "https://github.com/imLinguin/comet/releases/download/v0.3.2/comet-x86_64-unknown-linux-gnu",
+      "name": "comet"
+    }
+  ],
+  "remote_binary_aarch64": [
+    {
+      "sha256hash": "e28d4bed5d7635e22093d62ed4686a4d66e9c1d8bc4f1b731f834cd16d43c86a",
+      "url": "https://github.com/Heroic-Games-Launcher/legendary/releases/download/0.20.43/legendary_linux_arm64",
+      "name": "legendary"
+    },
+    {
+      "sha256hash": "269361006f25023032058f0447bcc5028b05f419b0416501d32c8b1dd695f3cd",
+      "url": "https://github.com/Heroic-Games-Launcher/heroic-gogdl/releases/download/v1.2.2/gogdl_linux_arm64",
+      "name": "gogdl"
+    },
+    {
+      "sha256hash": "431f82fc74000e6c864409f1d8fb495d696c03928808e3e8acffc45179312a7b",
+      "url": "https://raw.githubusercontent.com/Winetricks/winetricks/20260125/src/winetricks",
+      "name": "winetricks"
+    },
+    {
+      "sha256hash": "f5ba63cfeb415ec1f07a980d6a2bbcdf8fc11411e5fa224f838a88fe78ad0008",
+      "url": "https://github.com/imLinguin/nile/releases/download/v1.1.2/nile_linux_arm64",
+      "name": "nile"
+    },
+    {
+      "sha256hash": "c8cd850a03ba66c10bf620eee2735946ddf0b5969cd38cae02c6bede6d15c5b8",
+      "url": "https://github.com/imLinguin/comet/releases/download/v0.3.2/comet-aarch64-unknown-linux-gnu",
       "name": "comet"
     }
   ]

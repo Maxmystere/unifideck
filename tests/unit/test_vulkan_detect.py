@@ -196,3 +196,48 @@ def test_as_dict_maps_the_verdict_to_a_tri_state_flag(
 
     assert payload["has_32bit"] is None
     assert payload["verdict"] == "unknown"
+
+
+# --------------------------------------------------------------------------
+# non-x86 hosts
+# --------------------------------------------------------------------------
+
+
+def test_an_arm_host_reports_unknown_however_the_scan_went(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 64-bit-only ICD set on ARM is not evidence of anything.
+
+    "32-bit" means i386, and an i386 client on ARM runs under x86
+    emulation with its own userspace — the driver that matters is not in
+    these directories at all. Reading the host's aarch64 ICDs and
+    answering ABSENT would arm the Battle.net stall watchdog and warn the
+    user about a driver the probe never looked for.
+    """
+    icd_dir = tmp_path / "vulkan" / "icd.d"
+    (tmp_path / "drivers").mkdir(parents=True)
+    (tmp_path / "drivers" / "libvulkan_radeon.so").write_bytes(_ELF64)
+    _icd(icd_dir, "radeon_icd.json", str(tmp_path / "drivers" / "libvulkan_radeon.so"))
+    _isolate(monkeypatch, tmp_path)
+    monkeypatch.setenv("UNIFIDECK_ARCH", "x86_64")
+    assert vulkan.detect_32bit_vulkan().verdict is vulkan.Vulkan32.ABSENT
+
+    monkeypatch.setenv("UNIFIDECK_ARCH", "aarch64")
+    report = vulkan.detect_32bit_vulkan()
+    assert report.verdict is vulkan.Vulkan32.UNKNOWN
+    # The evidence is still collected — the support bundle wants it.
+    assert report.icds
+
+
+def test_an_arm_host_keeps_a_positive_answer_out_of_the_verdict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Even a genuine 32-bit ELF on ARM says nothing about the emulator's."""
+    icd_dir = tmp_path / "vulkan" / "icd.d"
+    (tmp_path / "drivers").mkdir(parents=True)
+    (tmp_path / "drivers" / "libvulkan_vendor.so").write_bytes(_ELF32)
+    _icd(icd_dir, "vendor_icd.json", str(tmp_path / "drivers" / "libvulkan_vendor.so"))
+    _isolate(monkeypatch, tmp_path)
+    monkeypatch.setenv("UNIFIDECK_ARCH", "aarch64")
+
+    assert vulkan.detect_32bit_vulkan().verdict is vulkan.Vulkan32.UNKNOWN

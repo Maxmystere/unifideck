@@ -10,8 +10,15 @@
 #   3. RTL-safety lint (scripts/lint_rtl.py)
 #   4. pnpm install + ESLint + TypeScript type check
 #   5. Rollup frontend build (pnpm run build → dist/index.js)
-#   6. Decky CLI plugin packaging (cli/decky plugin build → out/Unifideck.zip)
-#   7. Upload plugin artifact for download from the PR
+#   6. Packaging via build-plugin.sh (bundled binaries + vendored wheels
+#      for the target architecture, then the zip)
+#   7. Execute the packaged artifact on the target architecture
+#   8. Upload plugin artifact for download from the PR, one per architecture
+#
+# The job runs once per architecture, each on a runner of that
+# architecture, so step 8 can run what step 7 packaged. The lint/typecheck/
+# i18n gates are architecture-neutral and are simply repeated, which keeps
+# the workflow one job rather than two.
 #
 # ESLint cohabits with Prettier: ESLint catches semantic bugs
 # (React hooks in conditions, unused vars, a11y violations),
@@ -30,10 +37,38 @@ on:
       - staging
   pull_request:
     types: [opened, synchronize, reopened]
+  # Manual "Run workflow" button, so an architecture-specific zip can be
+  # produced from any branch without opening a pull request first — the
+  # normal way to get an ARM build onto ARM hardware for testing.
+  #
+  # GitHub only renders the button for workflows whose file on the DEFAULT
+  # branch declares this trigger, so it stays invisible until this change
+  # merges. Until then the pull_request trigger above is the way in.
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      # Each architecture builds on a runner of that architecture, so the
+      # zip is produced natively rather than cross-built. That matters for
+      # more than tidiness: it is the only arrangement in which the
+      # verification step below can EXECUTE what was packaged. A zip whose
+      # store CLIs and compiled wheels are never run on the machine they
+      # target is a zip whose architecture is an assertion, not a fact —
+      # and an unrunnable ARM build is invisible until someone installs it.
+      #
+      # arm64 runners are GitHub-hosted and generally available: free in
+      # public repositories, and drawing on the plan's included minutes in
+      # private ones.
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
 
     # The whole job historically runs in ~70s. Without this it
     # inherits GitHub's 6-hour default, so one stalled network
@@ -117,7 +152,11 @@ jobs:
         # repo. Commits any locale JSONs or generated TS that
         # were updated by the translate/gen steps above. With
         # DeepL skipped only locales.generated.ts can change.
-        if: github.event_name == 'push'
+        #
+        # One matrix leg only: locale files have nothing to do with the
+        # architecture, and two legs racing to push the same commit means
+        # one of them fails on a non-fast-forward.
+        if: github.event_name == 'push' && matrix.arch == 'x86_64'
         run: |
           git config user.name "unifideck-bot"
           git config user.email "bot@unifideck.invalid"
@@ -166,25 +205,115 @@ jobs:
       - name: Build frontend
         run: pnpm run build
 
-      # ── Decky CLI: package the plugin zip ──────────────────
+      # ── Package the plugin zip ─────────────────────────────
+      #
+      # Via build-plugin.sh rather than the Decky CLI directly, because the
+      # CLI alone does not produce an installable plugin: cryptography,
+      # aiohttp and jsonschema are NOT committed to py_modules/, they are
+      # vendored by build-plugin.sh's vendor_deps, and a zip without them
+      # leaves the backend dependent on Decky Loader pip-installing
+      # requirements.txt at install time — which this project's own build
+      # script calls unreliable across Loader versions. CI has always
+      # produced that thinner artifact; asking it for a runnable one is what
+      # surfaced it.
+      #
+      # The script still uses the Decky CLI where the CLI works (x86_64) and
+      # packages locally where it cannot (arm64 — the builder image is
+      # amd64-only). Either way the wheels it vendors are for --arch, so the
+      # artifact matches the leg that built it.
 
-      - name: Download Decky CLI
+      - name: Install Decky CLI (used by build-plugin.sh on x86_64)
+        # The CLI runs on the RUNNER, so its asset is the runner's
+        # architecture — not the plugin's. Asset names spell the arch the
+        # way uname does (x86_64 / aarch64).
         run: |
           mkdir -p cli
-          curl -L -o cli/decky https://github.com/SteamDeckHomebrew/cli/releases/download/0.0.8/decky-linux-x86_64
+          case "$(uname -m)" in
+            aarch64|arm64) cli_arch=aarch64 ;;
+            *)             cli_arch=x86_64 ;;
+          esac
+          curl -L -o cli/decky "https://github.com/SteamDeckHomebrew/cli/releases/download/0.0.8/decky-linux-${cli_arch}"
           chmod +x cli/decky
 
-      - name: Build plugin with Decky CLI
-        run: cli/decky plugin build .
+      - name: Build the plugin for ${{ matrix.arch }}
+        # Fetches the bundled store CLIs for this architecture, vendors the
+        # Python wheels for it, and packages the zip. Prod mode so the
+        # filename carries the version and the architecture.
+        run: ./build-plugin.sh prod --arch=${{ matrix.arch }}
 
       - name: Extract plugin zip for artifact
         run: |
+          set -euo pipefail
+          zip=$(ls out/unifideck.prod.*.${{ matrix.arch }}.zip)
+          echo "packaged $zip ($(du -h "$zip" | cut -f1))"
           mkdir -p out/Unifideck
-          unzip out/Unifideck.zip -d out/Unifideck
+          unzip -q "$zip" -d out/Unifideck
+
+      # ── Prove the artifact runs on the architecture it claims ──
+      #
+      # Everything above this point would pass just as happily on a zip
+      # full of the other architecture's binaries: the Decky CLI zips what
+      # it is given, and a checksum only says the download matched the
+      # manifest, not that the manifest was the right one. This step is the
+      # first that would notice, because it is the first that runs the
+      # contents.
+      #
+      # Written to fail rather than warn. A zip that cannot execute here
+      # cannot execute on a user's device either, and the failure it
+      # produces there is an ImportError eleven frames deep in an unrelated
+      # module — the kind that reads as a corrupt install.
+      - name: Verify the packaged plugin runs on ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          root=out/Unifideck/Unifideck
+
+          echo "runner is $(uname -m); artifact claims $(cat "$root/bin/ARCH")"
+          test "$(cat "$root/bin/ARCH")" = "${{ matrix.arch }}"
+
+          # 1. Every ELF in the tree targets this machine. Catches a stray
+          #    binary from the other architecture that nothing else looks at.
+          python3 - "$root" <<'PY'
+          import pathlib
+          import platform
+          import sys
+
+          WANT = {"x86_64": 0x3E, "aarch64": 0xB7}[platform.machine()]
+          bad = []
+          for path in pathlib.Path(sys.argv[1]).rglob("*"):
+              if not path.is_file():
+                  continue
+              with path.open("rb") as fh:
+                  head = fh.read(20)
+              if len(head) < 20 or not head.startswith(b"\x7fELF"):
+                  continue
+              if int.from_bytes(head[18:20], "little") != WANT:
+                  bad.append(str(path))
+          print("checked every ELF; wrong-machine count: %d" % len(bad))
+          if bad:
+              sys.exit("wrong-architecture binaries: " + ", ".join(bad))
+          PY
+
+          # 2. The vendored wheels import. This is the exact failure a user
+          #    hit: cryptography's binding is the first thing the backend
+          #    touches, and a foreign one dies on "cannot open shared object
+          #    file" while naming a file that is present.
+          PYTHONPATH="$root/py_modules" python3 -c "
+          import cryptography.exceptions, aiohttp.http_parser, jsonschema
+          print('vendored wheels import OK')
+          "
+
+          # 3. The bundled store CLIs actually execute. Same probes
+          #    build-plugin.sh uses for a native build.
+          "$root/bin/legendary" --version >/dev/null
+          "$root/bin/gogdl" --version --auth-config-path /dev/null >/dev/null
+          "$root/bin/nile" --version >/dev/null
+          "$root/bin/comet" --version >/dev/null
+          grep -q WINETRICKS_VERSION "$root/bin/winetricks"
+          echo "all five bundled CLIs ran on $(uname -m)"
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Unifideck
+          name: Unifideck-${{ matrix.arch }}
           path: out/Unifideck/
           if-no-files-found: error

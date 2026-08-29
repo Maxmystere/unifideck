@@ -58,9 +58,10 @@ class GOGCloudSaveStrategy(GOGStateMixin, CloudSaveStrategy):
         # SIBLING of py_modules, so naive dirname-walking from this file
         # lands on py_modules and misses bin/, falling back to a bare
         # "gogdl" that isn't on the launcher's PATH.
+        from unifideck.core.binaries import bundled_binary_path
         from unifideck.core.paths import resolve_plugin_dir
         plugin_dir = str(resolve_plugin_dir(start=Path(__file__)))
-        self.gogdl_bin = os.path.join(plugin_dir, "bin", "gogdl")
+        self.gogdl_bin = str(bundled_binary_path(plugin_dir, "gogdl"))
         if not os.path.exists(self.gogdl_bin):
             self.gogdl_bin = "gogdl"
 

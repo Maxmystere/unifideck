@@ -32,13 +32,19 @@ log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 # ── Argument parsing ─────────────────────────────────────────
 usage() {
     cat <<'EOF'
-Usage: ./build-plugin.sh [dev|prod] [install|quick-install] [push]
+Usage: ./build-plugin.sh [dev|prod] [install|quick-install] [push] [--arch=ARCH]
 
 The mode is optional and defaults to dev, so it can be left off entirely.
 If you do name one, it must come first.
 
   dev (default)     development build; stays entirely on this machine
   prod              production build (uses package.json version)
+
+  --arch=ARCH       CPU architecture to build FOR: x86_64 or aarch64.
+                    Defaults to this machine's own. The zip is named after
+                    it, because the store CLIs and the vendored Python
+                    wheels inside are architecture-specific. Also settable
+                    as UNIFIDECK_TARGET_ARCH.
 
   install           after build, full reinstall to ~/homebrew/plugins/Unifideck
                     (rm -rf + unzip + chown - ~30s)
@@ -53,6 +59,7 @@ If you do name one, it must come first.
 
 Examples:
   ./build-plugin.sh                  # local dev zip, no install, no upload
+  ./build-plugin.sh prod --arch=aarch64   # release zip for ARM handhelds
   ./build-plugin.sh quick-install    # fastest deploy to the live plugin
   ./build-plugin.sh install push     # rebuild, install, publish for testers
   ./build-plugin.sh push             # dev build, publish it for testers
@@ -83,6 +90,7 @@ case "${1:-}" in
 esac
 INSTALL_AFTER=""
 PUSH_DEV_RELEASE=0
+ARCH_ARG=""
 
 # Every argument is validated. Silently ignoring an unrecognised one (as this
 # used to for $2) costs a full build cycle to notice - a typo'd "instal" simply
@@ -104,6 +112,9 @@ for arg in "$@"; do
             ;;
         push)
             PUSH_DEV_RELEASE=1
+            ;;
+        --arch=*)
+            ARCH_ARG="${arg#--arch=}"
             ;;
         dev|prod)
             # Only reachable when the mode is misplaced ("push dev"), since a
@@ -132,6 +143,40 @@ if [ "$PUSH_DEV_RELEASE" = "1" ] && [ "$INSTALL_AFTER" = "quick-install" ]; then
     exit 1
 fi
 
+# ── Target architecture ──────────────────────────────────────
+# A Unifideck zip is NOT architecture-neutral. It carries the store CLIs
+# (legendary and gogdl as zipapps with native wheels inside, nile and comet
+# as plain ELFs) and the Python wheels vendored into py_modules/ - every one
+# of which is built for one machine. So the build has to be told which, and
+# the answer is stamped into the zip (bin/ARCH) and into its filename.
+#
+# Cross-building is a first-class case: the maintainer's own machine is
+# x86_64 and the ARM zip has to come from somewhere. Nothing here executes a
+# target binary, and the one step that did (prebuild_binaries' `--version`
+# probe) verifies checksums instead when the target is not the host.
+_normalize_arch() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        x86_64|amd64|x64)      echo "x86_64"  ;;
+        aarch64|arm64|armv8l)  echo "aarch64" ;;
+        *)                     echo ""        ;;
+    esac
+}
+HOST_ARCH="$(_normalize_arch "$(uname -m)")"
+if [ -z "$HOST_ARCH" ]; then
+    log_warn "Unrecognised host architecture '$(uname -m)' - assuming x86_64."
+    HOST_ARCH="x86_64"
+fi
+TARGET_ARCH="$(_normalize_arch "${ARCH_ARG:-${UNIFIDECK_TARGET_ARCH:-$HOST_ARCH}}")"
+if [ -z "$TARGET_ARCH" ]; then
+    log_error "Unknown architecture: ${ARCH_ARG:-$UNIFIDECK_TARGET_ARCH}"
+    log_error "  Supported: x86_64, aarch64."
+    exit 1
+fi
+# The backend reads this too (utils/arch.py), so a build helper that shells
+# out to Python resolves the same architecture the zip is being built for
+# rather than the one it happens to be running on.
+export UNIFIDECK_ARCH="$TARGET_ARCH"
+
 # Parse the base version from package.json (the JS/UI project).
 # We use grep/sed here instead of `jq` so we don't require the user to have `jq` installed.
 PACKAGE_VERSION=$(grep '"version"' "$SCRIPT_DIR/package.json" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
@@ -139,7 +184,7 @@ PACKAGE_VERSION=$(grep '"version"' "$SCRIPT_DIR/package.json" | head -1 | sed 's
 if [[ "$ENV_MODE" == "prod" ]]; then
     # Production builds use exact version numbers.
     VERSION_TAG="v$PACKAGE_VERSION"
-    ZIP_NAME="unifideck.prod.$VERSION_TAG.zip"
+    ZIP_NAME="unifideck.prod.$VERSION_TAG.$TARGET_ARCH.zip"
     PLUGIN_VERSION="$PACKAGE_VERSION"
     # Empty on purpose (see _write_dev_build_json): a prod zip still
     # ships a dev_build.json, just with a blank build_id, so installing
@@ -207,7 +252,11 @@ elif [[ "$ENV_MODE" == "dev" ]]; then
     fi
 
     VERSION_TAG="$DEV_BUILD_ID"
-    ZIP_NAME="unifideck.dev.$DEV_BUILD_ID.zip"
+    # The architecture is the last segment before .zip, which is exactly
+    # where PluginUpdater.tsx's DEV_ASSET_NAME_RE expects to strip it - so
+    # the in-app "Reinstall vs Update" label keeps matching dev_build.json's
+    # build id, which has no architecture in it.
+    ZIP_NAME="unifideck.dev.$DEV_BUILD_ID.$TARGET_ARCH.zip"
     PLUGIN_VERSION="$PACKAGE_VERSION-dev.$DEV_BUILD_ID"
     log_info "Building in DEVELOPMENT mode ($VERSION_TAG)"
 else
@@ -224,27 +273,123 @@ echo "========================================="
 echo "Unifideck Plugin Build Script (v0.7+)"
 echo "========================================="
 echo "Mode:   $ENV_MODE"
+echo "Arch:   $TARGET_ARCH$([ "$TARGET_ARCH" != "$HOST_ARCH" ] && echo " (cross-built on $HOST_ARCH)")"
 echo "Target: $OUTPUT_FILE"
 echo ""
 
 # ── Binary versions (sourced from package.json remote_binary) ─
 # To add a new binary:
-#   1. Add it to "remote_binary" in package.json.
-#   2. Add the URL below.
+#   1. Add it to "remote_binary" AND "remote_binary_aarch64" in package.json.
+#   2. Add both URLs below, and its name to _select_binary_urls.
 #   3. Add a check step inside the `prebuild_binaries` function.
-# These must stay in sync with package.json "remote_binary" entries:
+# These must stay in sync with package.json's two manifests:
 # tests/unit/_tooling/test_binary_manifest_sync.py fails the build if they drift.
 #
 # NOTE: legendary >=0.20.40 and gogdl >=1.2.2 ship a Python ZIPAPP for Linux,
 # not a PyInstaller ELF. They need a `python3` on PATH (shebang) and a writable
 # HOME - they extract native modules to ~/.cache/{legendary,heroic_gogdl}/
 # on first run. That applies to this build host too, since _download_bin
-# validates by executing the file it just downloaded.
-LEGENDARY_URL="https://github.com/Heroic-Games-Launcher/legendary/releases/download/0.20.43/legendary_linux_x86_64"
-GOGDL_URL="https://github.com/Heroic-Games-Launcher/heroic-gogdl/releases/download/v1.2.2/gogdl_linux_x86_64"
-NILE_URL="https://github.com/imLinguin/nile/releases/download/v1.1.2/nile_linux_x86_64"
-COMET_URL="https://github.com/imLinguin/comet/releases/download/v0.3.2/comet-x86_64-unknown-linux-gnu"
-WINETRICKS_URL="https://raw.githubusercontent.com/Winetricks/winetricks/20260125/src/winetricks"
+# validates a native-architecture download by executing it. A zipapp is a ZIP
+# either way, but the wheels inside it are not: the arm64 asset is a different
+# file from the x86_64 one, which is why every tool here has two URLs.
+#
+# One pair of URLs per tool, one per architecture, mirroring package.json's
+# ``remote_binary`` (x86_64) and ``remote_binary_aarch64`` arrays. Upstream
+# spells ARM "arm64" for the Heroic tools and "aarch64" for comet; the
+# variables use OUR spelling so the selection below can be mechanical.
+# winetricks is the same shell script on both — it is listed twice rather
+# than special-cased so nothing has to remember that it is the exception.
+LEGENDARY_URL_X86_64="https://github.com/Heroic-Games-Launcher/legendary/releases/download/0.20.43/legendary_linux_x86_64"
+LEGENDARY_URL_AARCH64="https://github.com/Heroic-Games-Launcher/legendary/releases/download/0.20.43/legendary_linux_arm64"
+GOGDL_URL_X86_64="https://github.com/Heroic-Games-Launcher/heroic-gogdl/releases/download/v1.2.2/gogdl_linux_x86_64"
+GOGDL_URL_AARCH64="https://github.com/Heroic-Games-Launcher/heroic-gogdl/releases/download/v1.2.2/gogdl_linux_arm64"
+NILE_URL_X86_64="https://github.com/imLinguin/nile/releases/download/v1.1.2/nile_linux_x86_64"
+NILE_URL_AARCH64="https://github.com/imLinguin/nile/releases/download/v1.1.2/nile_linux_arm64"
+COMET_URL_X86_64="https://github.com/imLinguin/comet/releases/download/v0.3.2/comet-x86_64-unknown-linux-gnu"
+COMET_URL_AARCH64="https://github.com/imLinguin/comet/releases/download/v0.3.2/comet-aarch64-unknown-linux-gnu"
+WINETRICKS_URL_X86_64="https://raw.githubusercontent.com/Winetricks/winetricks/20260125/src/winetricks"
+WINETRICKS_URL_AARCH64="https://raw.githubusercontent.com/Winetricks/winetricks/20260125/src/winetricks"
+
+# Resolve <TOOL>_URL for the architecture being built. Deliberately indirect
+# rather than five more literal assignments: a new tool needs one pair of
+# URLs above and its name in this list, and there is no third place where an
+# architecture can be forgotten.
+_select_binary_urls() {
+    local suffix tool var
+    suffix=$(printf '%s' "$TARGET_ARCH" | tr '[:lower:]' '[:upper:]')
+    for tool in LEGENDARY GOGDL NILE COMET WINETRICKS; do
+        var="${tool}_URL_${suffix}"
+        if [ -z "${!var:-}" ]; then
+            log_error "No $tool URL for $TARGET_ARCH (expected \$$var)."
+            exit 1
+        fi
+        printf -v "${tool}_URL" '%s' "${!var}"
+    done
+}
+_select_binary_urls
+
+# The sha256 package.json publishes for one bundled binary at the
+# architecture being built. Empty when the manifest has no such entry.
+# Reads the JSON with python3 rather than grep: the two arrays have the same
+# shape and a regex over both would happily return the other one's hash.
+_manifest_sha256() {
+    UD_ENTRY="$1" UD_ARCH="$TARGET_ARCH" python3 - "$SCRIPT_DIR/package.json" <<'PY'
+import json
+import os
+import sys
+
+arch = os.environ["UD_ARCH"]
+key = "remote_binary" if arch == "x86_64" else f"remote_binary_{arch}"
+with open(sys.argv[1], encoding="utf-8") as fh:
+    manifest = json.load(fh).get(key) or []
+for entry in manifest:
+    if entry.get("name") == os.environ["UD_ENTRY"]:
+        print((entry.get("sha256hash") or "").lower())
+        break
+PY
+}
+
+# Last word on what is actually in bin/, after every download attempt.
+#
+# ``_download_bin`` deliberately keeps the existing binary when a download
+# fails, which is right when that binary is the correct one and wrong when
+# it is the other architecture's. Only a full pass over the manifest can
+# tell those apart, and it is the one check that covers BOTH build paths -
+# ``_stage_skip_cli_binary_download`` guards the containerised build, and
+# until this existed the local build had nothing at all.
+#
+# Fatal only for a non-x86_64 target. An x86_64 build still has the Decky
+# CLI's own download as a fallback (see _stage_skip_cli_binary_download),
+# so a mismatch there is a warning; nothing can rescue a foreign binary in
+# an ARM zip, so that one stops the build.
+_verify_bundled_binaries() {
+    local name expected actual bad=0
+    for name in legendary gogdl nile comet winetricks; do
+        expected=$(_manifest_sha256 "$name")
+        [ -n "$expected" ] || continue
+        if [ ! -f "$SCRIPT_DIR/bin/$name" ]; then
+            log_error "$name is missing from bin/"
+            bad=$((bad + 1))
+            continue
+        fi
+        actual=$(sha256sum "$SCRIPT_DIR/bin/$name" | cut -d" " -f1)
+        if [ "$actual" != "$expected" ]; then
+            log_error "$name does not match the $TARGET_ARCH manifest:"
+            log_error "  expected $expected"
+            log_error "  on disk  $actual"
+            bad=$((bad + 1))
+        fi
+    done
+    [ "$bad" -eq 0 ] && return 0
+    if [ "$TARGET_ARCH" = "x86_64" ]; then
+        log_warn "$bad bundled binar(y/ies) unverified - the Decky CLI build"
+        log_warn "  path will re-fetch them; a local build will ship these."
+        return 0
+    fi
+    log_error "Refusing to build a $TARGET_ARCH zip with unverified binaries."
+    log_error "  Delete bin/<tool> and bin/<tool>.url, then re-run."
+    exit 1
+}
 
 # ── Pre-build: download/verify bundled binaries ───────────────
 # Decky Loader expects all dependencies to be included in the zip file.
@@ -267,20 +412,66 @@ prebuild_binaries() {
     # 274 s, while the same assets can arrive in seconds on a good day). That
     # single step was dominating total build time and made it look like the
     # whole script had regressed.
+
+    # How a fresh download is proved good.
+    #
+    # A native build runs it: the exec probe also catches the host-side
+    # prerequisites a zipapp needs (a python3 on PATH, a writable HOME) and
+    # so answers "will this actually work here", not just "is this the right
+    # file". A cross-built one cannot be run at all, so it is checked against
+    # the sha256 package.json publishes for the TARGET architecture - the
+    # same value Decky verifies at install time. No checksum, no build: a
+    # silently unverified foreign binary in the zip is exactly the failure
+    # this whole path exists to prevent.
+    _validate_download() {
+        local name="$1" file="$2" validate_cmd="$3"
+        if [ "$TARGET_ARCH" = "$HOST_ARCH" ]; then
+            eval "$validate_cmd" > /dev/null 2>&1
+            return
+        fi
+        local expected actual
+        expected=$(_manifest_sha256 "$name")
+        if [ -z "$expected" ]; then
+            log_warn "$name: package.json declares no $TARGET_ARCH checksum,"
+            log_warn "  and a cross-built binary cannot be run to check it."
+            return 1
+        fi
+        actual=$(sha256sum "$file" | cut -d" " -f1)
+        [ "$actual" = "$expected" ]
+    }
+
     _download_bin() {
         local name="$1" url="$2" dest="$3" validate_cmd="$4"
         local stamp="$dest.url"
         log_info "Checking $name..."
 
-        # Cache hit: binary present, executable, and stamped with this URL.
+        # Cache hit: binary present, executable, stamped with this URL, AND
+        # still matching the checksum package.json publishes for this
+        # architecture.
+        #
+        # The stamp alone is a claim about where the file CAME FROM, not
+        # about what it now IS, and the two drift: a git checkout of the
+        # committed bin/legendary and bin/nile, a hand-copy, an interrupted
+        # build. Before --arch existed that cost you a stale version; now it
+        # can silently put the other architecture's binary in the zip, which
+        # is exactly what happened the first time this was tested. The hash
+        # is the fact, so it decides. (Tools with no declared hash keep the
+        # old stamp-only behaviour.)
         if [ -x "$dest" ] && [ "$(cat "$stamp" 2>/dev/null)" = "$url" ]; then
-            log_success "$name up to date (cached)"
-            return 0
+            local cached_expected
+            cached_expected=$(_manifest_sha256 "$name")
+            if [ -z "$cached_expected" ] \
+                    || [ "$(sha256sum "$dest" | cut -d" " -f1)" = "$cached_expected" ]; then
+                log_success "$name up to date (cached)"
+                return 0
+            fi
+            log_warn "$name: on-disk file does not match the $TARGET_ARCH"
+            log_warn "  checksum despite its URL stamp - re-downloading."
         fi
 
         if curl -fsSL "$url" -o "$dest.new"; then
             chmod +x "$dest.new"
-            if eval "$validate_cmd" > /dev/null 2>&1; then
+            if _validate_download "$name" "$dest.new" "$validate_cmd"; then
                 mv "$dest.new" "$dest"
                 printf '%s\n' "$url" > "$stamp"
                 log_success "$name downloaded/verified"
@@ -331,6 +522,15 @@ prebuild_binaries() {
     else
         log_warn "winetricks: download failed, keeping existing"
     fi
+
+    _verify_bundled_binaries
+
+    # Stamp the tree with the architecture these binaries are for. It ships
+    # inside the zip and is the only thing in an installed plugin that can
+    # answer "was this built for this machine?" once the binaries are in
+    # place - core/binaries/bundled.py reads it, and the support bundle
+    # reports it next to the host's own architecture.
+    printf '%s\n' "$TARGET_ARCH" > "$SCRIPT_DIR/bin/ARCH"
 
     echo ""
 }
@@ -385,7 +585,52 @@ DECK_PYTHON_VERSION="3.11"
 # Keep this range in sync with ACCEPTED_VERSIONS in
 # py_modules/unifideck/launcher/proton/infrastructure/selector.py.
 LAUNCHER_PYTHON_VERSIONS=(3.10 3.11 3.12 3.13 3.14)
-DECK_PLATFORM_TAG="manylinux2014_x86_64"
+# The wheel platform pip is told to resolve for. This follows --arch, not the
+# build host: a wheel is as architecture-specific as the store CLIs are, and
+# vendoring x86_64 wheels into an ARM zip breaks cryptography/cffi at import
+# time - which on the launcher side is the cloud-save path, and on the backend
+# side is every token read. ``--platform`` + ``--only-binary`` means pip never
+# consults the host interpreter, so this is a pure cross-vendor.
+DECK_PLATFORM_TAG="manylinux2014_$TARGET_ARCH"
+
+# Drop every compiled extension vendored into py_modules/.
+#
+# Only called when --arch changes. A ``.so`` is the one thing in there that
+# is built for a specific machine; the pure-python files beside it are
+# byte-identical everywhere. Deleting just the extensions, and letting the
+# --force-reinstall pip run that follows write the new ones, is what makes
+# an --arch switch produce a clean tree.
+#
+# Files only, never directories. An earlier version removed the whole
+# package instead, which is both unnecessary and destructive: some of the
+# vendored packages (websockets, requests, urllib3, certifi, vdf, ...) are
+# COMMITTED to this repo, so a purge that walks the tree deleting packages
+# takes tracked source with it and leaves the checkout dirty. It also broke
+# its own walk — ``rglob`` is lazy, so removing a directory mid-iteration
+# made the next step descend into something that was no longer there.
+#
+# py_modules/unifideck/ is our own source and is skipped outright; it
+# contains no extensions, and this is a belt-and-braces guard.
+_purge_foreign_extensions() {
+    UD_PY_MODULES="$SCRIPT_DIR/py_modules" python3 - <<'PYPURGE'
+import os
+import pathlib
+
+root = pathlib.Path(os.environ["UD_PY_MODULES"])
+# Materialise the scan before unlinking: rglob is a lazy walker.
+extensions = [
+    so for so in sorted(root.rglob("*.so"))
+    if so.relative_to(root).parts[0] != "unifideck"
+]
+for so in extensions:
+    so.unlink(missing_ok=True)
+if extensions:
+    print(f"removed {len(extensions)} compiled extension(s)")
+PYPURGE
+    # Force vendor_launcher_cffi to rebuild its per-interpreter backends: the
+    # ones it left behind were for the architecture we just purged.
+    rm -f "$SCRIPT_DIR/.cache/cffi-backend-version"
+}
 
 vendor_deps() {
     [ -f "$SCRIPT_DIR/requirements.txt" ] || {
@@ -393,6 +638,23 @@ vendor_deps() {
         return 0
     }
     log_info "Vendoring Python deps into py_modules/ (Python $DECK_PYTHON_VERSION, $DECK_PLATFORM_TAG)..."
+
+    # py_modules/ is a single tree with no room for two architectures. Some
+    # extensions carry the arch in their filename
+    # (``*.cpython-311-x86_64-linux-gnu.so``) and could coexist, but
+    # cryptography's abi3 binding is a bare ``_rust.abi3.so`` that would just
+    # overwrite its counterpart — and ``--upgrade-strategy only-if-needed``
+    # would keep every package whose VERSION is already right while its
+    # extension stayed built for the other machine. So an --arch switch drops
+    # every vendored extension and reinstalls the whole set outright.
+    local arch_stamp="$SCRIPT_DIR/.cache/vendored-arch" reinstall=""
+    if [ -f "$arch_stamp" ] && [ "$(cat "$arch_stamp" 2>/dev/null)" != "$TARGET_ARCH" ]; then
+        log_warn "py_modules/ holds $(cat "$arch_stamp") wheels - re-vendoring for $TARGET_ARCH"
+        _purge_foreign_extensions
+        reinstall="--force-reinstall"
+    fi
+    mkdir -p "$(dirname "$arch_stamp")"
+    printf '%s\n' "$TARGET_ARCH" > "$arch_stamp"
 
     # Use a quiet cache dir so repeated builds don't re-download.
     local cache_dir="$SCRIPT_DIR/.cache/pip-vendor"
@@ -410,6 +672,7 @@ vendor_deps() {
             --only-binary ":all:" \
             --upgrade \
             --upgrade-strategy only-if-needed \
+            ${reinstall:+"$reinstall"} \
             --cache-dir "$cache_dir" \
             -r "$SCRIPT_DIR/requirements.txt" 2>&1 | tail -20; then
         log_success "Python deps vendored"
@@ -756,25 +1019,35 @@ _stage_plugin_files() {
 #
 # The CLI's download step is also what verified those binaries' checksums, so we
 # do it here instead, against the same ``sha256hash`` values from the same
-# manifest. If ANY binary is missing or mismatched we leave ``remote_binary``
-# alone and let the CLI fetch it the slow way - correctness first, speed second.
+# manifest - the one for the architecture being built. If ANY binary is missing
+# or mismatched we leave ``remote_binary`` alone and let the CLI fetch it the
+# slow way - correctness first, speed second.
+#
+# That fallback is only safe for an x86_64 build. The CLI knows nothing about
+# architectures and would fetch the x86_64 manifest into an ARM zip, producing
+# an artifact that installs cleanly and then fails at every store call. So a
+# non-x86_64 build treats a verification failure as fatal instead.
 _stage_skip_cli_binary_download() {
     local staged="$1"
     local pkg="$staged/package.json"
     [ -f "$pkg" ] || return 0
 
     local verified
-    if ! verified=$(STAGED_BIN_DIR="$staged/bin" python3 - "$pkg" <<'PY'
+    if ! verified=$(STAGED_BIN_DIR="$staged/bin" TARGET_ARCH="$TARGET_ARCH" \
+            python3 - "$pkg" <<'PY'
 import hashlib, json, os, sys
 
 pkg_path = sys.argv[1]
 bin_dir = os.environ["STAGED_BIN_DIR"]
+arch = os.environ["TARGET_ARCH"]
+manifest_key = "remote_binary" if arch == "x86_64" else f"remote_binary_{arch}"
 with open(pkg_path) as fh:
     pkg = json.load(fh)
 
-entries = pkg.get("remote_binary") or []
+entries = pkg.get(manifest_key) or []
 if not entries:
-    raise SystemExit(1)  # nothing to strip; let the CLI do whatever it does
+    print("no " + manifest_key + " manifest", file=sys.stderr)
+    raise SystemExit(1)  # nothing to verify against; let the CLI decide
 
 for entry in entries:
     path = os.path.join(bin_dir, entry["name"])
@@ -793,18 +1066,54 @@ for entry in entries:
         print("checksum mismatch: " + entry["name"], file=sys.stderr)
         raise SystemExit(1)
 
-pkg.pop("remote_binary")
+# Both manifests go: the staged copy is a throwaway, and leaving the ARM one
+# behind would only invite the CLI to fetch a second set of binaries.
+pkg.pop("remote_binary", None)
+for key in [k for k in pkg if k.startswith("remote_binary_")]:
+    pkg.pop(key)
 with open(pkg_path, "w") as fh:
     json.dump(pkg, fh, indent=2)
     fh.write("\n")
 print(len(entries))
 PY
     ); then
+        if [ "$TARGET_ARCH" != "x86_64" ]; then
+            log_error "Staged $TARGET_ARCH binaries failed verification."
+            log_error "  Refusing to let the Decky CLI substitute x86_64 ones."
+            log_error "  Re-run prebuild_binaries, or check package.json's"
+            log_error "  remote_binary_$TARGET_ARCH checksums."
+            return 1
+        fi
         log_warn "Staged binaries failed verification - letting the Decky CLI"
         log_warn "  re-download them (slower, but guaranteed correct)."
         return 0
     fi
     log_success "Verified $verified bundled binaries (sha256); skipping the CLI re-download"
+}
+
+# Remove a staging dir that may hold root-owned files from the CLI container.
+#
+# The Decky CLI is invoked with --build-as-root. Under ROOTLESS podman — a
+# Steam Deck, and how this script has always been exercised — container root
+# maps to the invoking user, so the files come out owned by that user and a
+# plain rm clears them. Under ROOTFUL docker, which is what a GitHub runner
+# provides, container root is real root: the files are root's, rm fails with
+# "Permission denied", and under `set -e` that killed the build AFTER the zip
+# had already been produced.
+#
+# Never fatal. This is a temp directory; failing to delete it is untidy, not
+# a build failure, and treating it as one throws away a good artifact.
+_remove_staging() {
+    local dir="$1"
+    [ -n "$dir" ] && [ -d "$dir" ] || return 0
+    rm -rf "$dir" 2>/dev/null && return 0
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+        sudo rm -rf "$dir" 2>/dev/null && return 0
+    fi
+    log_warn "Could not fully remove the staging dir $dir"
+    log_warn "  (root-owned container output). Harmless - it is a temp dir"
+    log_warn "  and the built zip is unaffected."
+    return 0
 }
 
 # ── Build with Decky CLI (Docker/Podman) ─────────────────────
@@ -828,7 +1137,7 @@ build_with_cli() {
     # a full source copy into /tmp. The path is baked into the trap now since
     # function-locals are not visible to the EXIT trap.
     local staging; staging=$(mktemp -d)
-    trap "rm -rf '$staging'" EXIT
+    trap "_remove_staging '$staging'" EXIT
     local staging_plugin="$staging/unifideck-staging"
     _stage_plugin_files "$staging_plugin"
     _stage_skip_cli_binary_download "$staging_plugin"
@@ -849,7 +1158,7 @@ build_with_cli() {
         --build-as-root
 
     # Clean up staging dir (and disarm the trap set above)
-    rm -rf "$staging"
+    _remove_staging "$staging"
     trap - EXIT
 
     # The CLI hardcodes the output name to "Unifideck.zip". We rename it to our versioned format.
@@ -926,6 +1235,7 @@ build_local() {
         "py_modules/unifideck/core/binaries/__init__.py"
         "py_modules/unifideck/core/binaries/binary_resolver.py"
         "py_modules/unifideck/core/binaries/binary_signatures.py"
+        "py_modules/unifideck/core/binaries/bundled.py"
         "py_modules/unifideck/core/binaries/cli_timeouts.py"
 
         # EventBus - Message queue and event routing
@@ -1023,6 +1333,7 @@ build_local() {
         "py_modules/unifideck/metadata/metacritic.py"
         "py_modules/unifideck/metadata/unifidb.py"
         "py_modules/unifideck/utils/__init__.py"
+        "py_modules/unifideck/utils/arch.py"
         "py_modules/unifideck/utils/paths.py"
         "py_modules/unifideck/utils/locale.py"
         "py_modules/unifideck/launcher/__init__.py"
@@ -1038,7 +1349,10 @@ build_local() {
         "py_modules/cryptography/__init__.py"
         "py_modules/jsonschema/__init__.py"
 
-        # Native binaries
+        # Native binaries. Which architecture they are is not visible from
+        # here, so the stamp prebuild_binaries writes is critical too: without
+        # it an installed plugin cannot say what it was built for.
+        "bin/ARCH"
         "bin/legendary"
         "bin/gogdl"
         "bin/nile"
@@ -1610,8 +1924,26 @@ main() {
     _phase "locales" gen_locales
     sync_version
 
+    # The Decky CLI does its work inside ghcr.io/steamdeckhomebrew/builder,
+    # which upstream publishes for linux/amd64 only. On an arm64 host Docker
+    # pulls it anyway and the run dies with "exec /entrypoint.sh: exec format
+    # error" — a container-level failure the CLI reports as "Failed to build
+    # frontend", which points at the wrong thing entirely. So a non-x86_64
+    # host packages locally instead; build_local produces the same zip
+    # without needing a container at all.
+    #
+    # Cross-building ARM *on* x86_64 still uses the CLI: the container only
+    # ever zips files, and the architecture of what goes in is decided long
+    # before it runs.
+    if [ "$HOST_ARCH" != "x86_64" ]; then
+        log_info "Host is $HOST_ARCH; the Decky CLI's builder image is"
+        log_info "  amd64-only, so packaging locally instead."
+        _phase "local build" build_local
+    elif [ -n "${UNIFIDECK_FORCE_LOCAL_BUILD:-}" ]; then
+        log_info "UNIFIDECK_FORCE_LOCAL_BUILD set - packaging locally."
+        _phase "local build" build_local
     # Attempt Decky CLI containerized build first
-    if check_decky_cli; then
+    elif check_decky_cli; then
         ENGINE=$(check_container_engine || true)
         if [ -n "$ENGINE" ]; then
             chmod -R a+rwX "$SCRIPT_DIR" || true

@@ -34,6 +34,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+# Stdlib-only itself, so importing it keeps this module usable from the
+# minimal launcher bootstrap — same reasoning as selector.py's vdf_compat.
+from unifideck.utils.arch import host_arch
+
 logger = logging.getLogger(__name__)
 
 GE_REPO = "GloriousEggroll/proton-ge-custom"
@@ -248,32 +252,57 @@ def _write_marker(tag: str) -> None:
         logger.warning("[ge_installer] could not write marker: %s", e)
 
 
-def _select_tarball(assets: list[dict[str, Any]], tag: str | None = None) -> str | None:
-    """Pick the GE-Proton x86_64 ``.tar.gz`` asset URL.
+#: Arch markers a GE-Proton asset name may carry. GE spells both the way
+#: uname does, but the deny-list scan below has to recognise "arm64" too:
+#: it is what an unmarked-means-x86_64 fallback must never match.
+_GE_ARCH_MARKERS = ("x86_64", "aarch64", "arm64")
+
+
+def _select_tarball(
+    assets: list[dict[str, Any]],
+    tag: str | None = None,
+    arch: str | None = None,
+) -> str | None:
+    """Pick the GE-Proton ``.tar.gz`` asset URL for ``arch`` (default: host).
 
     GE's asset naming changed at GE-Proton11-4: the x86_64 build went from
     a bare ``<tag>.tar.gz`` to ``<tag>-x86_64.tar.gz``, alongside the
     aarch64 build that had already started shipping. Both spellings are
-    matched by exact name first, then by the ``-x86_64`` suffix.
+    matched by exact name first, then by the ``-<arch>`` suffix.
+
+    The unmarked fallback is x86_64-only, and that asymmetry is the whole
+    ARM story here: on x86_64 a bare ``<tag>.tar.gz`` is the build we
+    want (every GE-Proton before 11-4 is named that way), while on ARM
+    the same file is the *wrong* architecture wearing no label. Returning
+    it would install a Proton that cannot execute, so an ARM host with no
+    aarch64 asset gets ``None`` and the caller falls back to whatever
+    Proton Steam already has.
 
     The deny-list scan is kept last as a safety net, but it is only
     correct while every non-x86 asset carries one of the arch markers it
     knows about — a future ``riscv64``/``ppc64le`` build would slip
     through it — so the positive matches deliberately run first.
     """
+    want = arch or host_arch().value
     urls = {a.get("name", ""): a.get("browser_download_url") for a in assets}
 
-    if tag:
-        for expected in (f"{tag}-x86_64.tar.gz", f"{tag}.tar.gz"):
-            if urls.get(expected):
-                return urls[expected]
+    if tag and urls.get(f"{tag}-{want}.tar.gz"):
+        return urls[f"{tag}-{want}.tar.gz"]
 
     for name, url in urls.items():
-        if name.endswith("-x86_64.tar.gz"):
+        if name.endswith(f"-{want}.tar.gz"):
             return url
 
+    if want != "x86_64":
+        return None
+
+    if tag and urls.get(f"{tag}.tar.gz"):
+        return urls[f"{tag}.tar.gz"]
+
     for name, url in urls.items():
-        if name.endswith(".tar.gz") and not any(k in name for k in ("sha512", "aarch64", "arm64")):
+        if name.endswith(".tar.gz") and not any(
+            k in name for k in ("sha512", *_GE_ARCH_MARKERS)
+        ):
             return url
     return None
 
@@ -489,7 +518,10 @@ def ensure_latest_ge(
 
     url = _select_tarball(release.get("assets", []), tag)
     if not url:
-        logger.warning("[ge_installer] no .tar.gz asset found for %s", tag)
+        logger.warning(
+            "[ge_installer] %s ships no %s .tar.gz asset — staying on the "
+            "Proton already installed", tag, host_arch().value,
+        )
         return None
 
     logger.info("[ge_installer] downloading GE-Proton %s", tag)

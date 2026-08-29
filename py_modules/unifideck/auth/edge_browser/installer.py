@@ -24,6 +24,8 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from unifideck.utils.arch import Arch, host_arch, host_arch_name
+
 from .detection import find_edge_cmd, flatpak_remote_names, is_edge_installed
 
 if TYPE_CHECKING:
@@ -272,6 +274,19 @@ class EdgeInstaller:
         """
         if not shutil.which("flatpak"):
             return {"success": False, "error": "microsoft.flatpakNotFound"}
+        if host_arch() is not Arch.X86_64:
+            # Not a refusal: the install below is still attempted, and if
+            # Flathub ever publishes an ARM branch it simply starts working.
+            # But Edge is x86_64-only there today, so flatpak fails with a
+            # "no compatible architecture" error that reaches the user as
+            # the generic "installation failed" toast. One line here is the
+            # difference between that and a support thread.
+            logger.warning(
+                "[Edge] host is %s; Flathub publishes %s for x86_64 only, so "
+                "this install is expected to fail. Store sign-in and xCloud "
+                "need an x86_64 Edge or an emulated one.",
+                host_arch_name(), _EDGE_FLATPAK_APP,
+            )
         if self.is_installed:
             return {
                 "success": True,

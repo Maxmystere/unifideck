@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from unifideck.core.binaries import bundled_binary_path
 from unifideck.launcher.proton.infrastructure.umu_runtime import (
     run_umu_with_retry,
 )
@@ -90,7 +91,7 @@ def start_comet(plan: ProtonLaunchPlan) -> subprocess.Popen[bytes] | None:
 
     Best-effort: missing binary/tokens just means no online features.
     """
-    comet = plan.context.plugin_dir / "bin" / "comet"
+    comet = bundled_binary_path(plan.context.plugin_dir, "comet")
     if not comet.is_file():
         return None
     tokens = _read_gog_tokens()

@@ -15,7 +15,10 @@ Strategy:
 3. User-local binaries in ~/.local/bin/<name>
 Only executable regular files are returned. Non-executable matches are
 skipped so a read-only script file never shadows a real binary later
-in PATH.
+in PATH, and so is a Tier-1 binary built for another architecture (see
+:func:`_is_foreign_arch`) — bundled binaries are the only tier where
+that can happen, since Tiers 2 and 3 come from the host's own package
+manager.
 Reference: Technical Document v1.0 — Section 3.4.2 (BinaryResolver +
 ExeFinder), Figure 12.
 """
@@ -28,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from unifideck.core.types.domain import CLITool
+from unifideck.utils.arch import elf_arch, host_arch
 
 from .binary_signatures import verify_bundled_binary
 from .cli_env import clean_cli_env
@@ -62,6 +66,32 @@ def _log_signature_mismatch(name: str, path: str) -> None:
             "plugin to restore the bundled binary.",
             name, path,
         )
+
+
+def _is_foreign_arch(path: str) -> bool:
+    """True only when ``path`` is provably an ELF for another architecture.
+
+    A wrong-architecture binary is executable, readable and the right
+    size — every test in this module passes it — and fails at ``exec``
+    with ``Errno 8: Exec format error``, which reaches the user as "the
+    store is unavailable". Skipping it here means the search continues to
+    PATH and ``~/.local/bin``, where a user-installed native build may
+    well be waiting, and the log says which architecture we actually
+    have.
+
+    Only ELFs answer. legendary and gogdl are Python zipapps and
+    winetricks is a shell script; :func:`~unifideck.utils.arch.elf_arch`
+    returns ``None`` for all of them and they stay eligible.
+    """
+    built_for = elf_arch(path)
+    if built_for is None or built_for is host_arch():
+        return False
+    logger.error(
+        "[BinaryResolver] %s is built for %s but this host is %s — skipping "
+        "it. Install the %s build of the plugin.",
+        path, built_for.value, host_arch().value, host_arch().value,
+    )
+    return True
 
 
 def _is_executable(path: str) -> bool:
@@ -119,6 +149,7 @@ class BinaryResolver:
             if (
                 Path(expanded).is_absolute()
                 and _is_executable(expanded)
+                and not _is_foreign_arch(expanded)
             ):
                 logger.debug(
                     "[BinaryResolver] %s found in search_paths: "

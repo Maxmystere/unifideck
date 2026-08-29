@@ -189,6 +189,22 @@ Contains **only** compiled binaries and shell wrappers. All old `bin/*.py` helpe
 | `vcruntime_fix.reg`             | 1 KB    | Windows registry patch for VC runtime in Wine prefix                                     |
 | `stubs/GalaxyCommunication.exe` | binary  | GOG Galaxy overlay stub (copied into Wine prefix by the GOG store)                       |
 | `umu/`                          | dir     | `umu-run` runtime bundle (upstream project)                                              |
+| `ARCH`                          | 8 bytes | The architecture this tree was built for — written by the prebuild step                  |
+
+### Architecture
+
+`legendary`, `gogdl`, `nile` and `comet` are per-architecture builds: the
+first two are zipapps carrying native wheels, the last two are plain ELFs.
+`winetricks`, the umu zipapp and the Windows helper EXEs are the same file
+everywhere.
+
+A build targets one architecture and writes it to `bin/ARCH`. An install tree
+may additionally carry `bin/<tool>-<arch>` copies, which
+`core/binaries/bundled.py` prefers over the canonical path when they match the
+host — that is what lets one directory serve both architectures.
+`utils/arch.py` answers "what machine is this", and reads a binary's own ELF
+header so a foreign one is skipped with an explanation rather than handed to a
+store and failing at `exec`.
 
 ---
 
@@ -255,6 +271,7 @@ Key architectural landmarks post-restructure:
 ./build-plugin.sh quick-install  # no build; rsync source into the live install
 ./build-plugin.sh push           # dev build + publish it as a Dev-* prerelease
 ./build-plugin.sh install push   # all three
+./build-plugin.sh prod --arch=aarch64   # release zip for 64-bit ARM
 ```
 
 The mode is optional and defaults to `dev`, so `install`, `quick-install` and
@@ -263,6 +280,15 @@ is named it must come first.
 
 Every argument is validated; an unrecognised one exits 1 with the usage banner
 rather than being silently ignored. `-h` / `--help` prints the same banner.
+
+`--arch` (or `UNIFIDECK_TARGET_ARCH`) names the architecture to build **for**,
+defaulting to this machine's. It selects the bundled-binary URLs, the pip wheel
+platform tag, and the architecture segment in the zip filename, and it is
+stamped into `bin/ARCH`. Cross-building is supported — nothing in the build
+executes a target binary, and a download that cannot be run to validate it is
+verified against `package.json`'s checksum for that architecture instead.
+Switching `--arch` re-vendors any `py_modules/` package carrying a compiled
+extension, since one tree cannot hold both.
 
 `push` is the only argument that contacts GitHub, and it is dev-only. Without it
 a build stays entirely local. With it, the zip is published as a **new**
@@ -278,7 +304,9 @@ build-plugin.sh
     │
     ├─ prebuild_binaries()
     │       Download/verify: legendary, gogdl, nile, comet, winetricks
-    │       Source of truth: package.json "remote_binary" array + SHA-256 hashes
+    │       Source of truth: package.json "remote_binary" (x86_64) or
+    │       "remote_binary_aarch64" array + SHA-256 hashes
+    │       Stamps bin/ARCH with the target architecture
     │
     ├─ check_requirements()
     │       Ensure requirements.txt exists (fallback: copy from requirements.in)

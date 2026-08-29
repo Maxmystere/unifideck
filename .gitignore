@@ -92,6 +92,16 @@ bin/nile
 bin/winetricks
 bin/comet
 
+# Architecture variants of the same tools, for a tree carrying both builds.
+bin/legendary-*
+bin/gogdl-*
+bin/nile-*
+bin/comet-*
+
+# Written by the prebuild step: the architecture the binaries above were
+# fetched for. Build output, not source - it changes with --arch.
+bin/ARCH
+
 # Per-binary download stamps. Each holds the version-pinned URL the adjacent
 # binary came from, so a rebuild skips re-fetching ~28 MB it already has.
 bin/*.url
