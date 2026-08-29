@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+import platform
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -62,6 +63,61 @@ sys.path.insert(0, str(Path(DECKY_PLUGIN_DIR) / "py_modules"))
 # (``urllib3``, ``packaging``, ``attrs``, …) still resolve their
 # ``from typing_extensions import …`` imports correctly.
 sys.path.insert(0, str(Path(DECKY_PLUGIN_DIR) / "py_modules" / "_vendor"))
+
+def _assert_architecture_matches() -> None:
+    """Fail loudly, and in one line, when this build is for another machine.
+
+    A Unifideck zip is architecture-specific: ``py_modules/`` holds
+    compiled wheels (cryptography's ``_rust.abi3.so``, cffi, aiohttp's
+    parser) and ``bin/`` holds native store CLIs. Install the wrong one
+    and the plugin dies eleven frames deep in an unrelated import with::
+
+        ImportError: .../cryptography/hazmat/bindings/_rust.abi3.so:
+                     cannot open shared object file: No such file or directory
+
+    which names a file that is right there on disk. Nothing in that
+    message says "wrong architecture", so it reads as a corrupt install
+    and the honest next step — reinstalling the same wrong zip — cannot
+    work. Decky's uninstall then has no loaded plugin to unload and
+    appears to hang, which is how one bad download becomes an evening.
+
+    ``bin/ARCH`` records what the build targeted, so the mismatch is
+    knowable before the first vendored import. Stdlib only, and it runs
+    before them: this check exists precisely for the case where those
+    imports cannot work.
+
+    Deliberately raises rather than warning. The plugin cannot function
+    with foreign wheels, so the only question is which error the user
+    reads, and a caught ImportError further down would lose the one
+    fact that explains it.
+    """
+    stamp = Path(DECKY_PLUGIN_DIR) / "bin" / "ARCH"
+    try:
+        built_for = stamp.read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        # No stamp: a build from before ARM support, which is x86_64 by
+        # construction. Silence is right — this must never fail an
+        # install that predates the file it is looking for.
+        return
+    aliases = {
+        "x86_64": "x86_64", "amd64": "x86_64", "x64": "x86_64",
+        "aarch64": "aarch64", "arm64": "aarch64", "armv8l": "aarch64",
+    }
+    host = aliases.get(platform.machine().strip().lower(), platform.machine())
+    if not built_for or aliases.get(built_for, built_for) == host:
+        return
+    message = (
+        f"Unifideck was built for {built_for} but this machine is {host}. "
+        f"The bundled store CLIs and Python libraries are native code and "
+        f"cannot run here, so the plugin is refusing to load rather than "
+        f"failing later with an unrelated-looking ImportError. Install the "
+        f"{host} build of the plugin."
+    )
+    logging.getLogger(__name__).error("[Unifideck] %s", message)
+    raise RuntimeError(message)
+
+
+_assert_architecture_matches()
 
 # E402 noqa on the unifideck imports below: ``sys.path.insert``
 # MUST run before these so Python can resolve the package — Decky

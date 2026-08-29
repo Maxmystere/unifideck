@@ -178,3 +178,80 @@ def test_a_zipapp_stays_runnable_because_we_cannot_tell(
     zipapp = tmp_path / "legendary"
     zipapp.write_bytes(b"PK\x03\x04" + b"\x00" * 40)
     assert runnable_here(zipapp)
+
+
+# --------------------------------------------------------------------------
+# The entry-point preflight
+# --------------------------------------------------------------------------
+
+
+def _run_preflight(tmp_path: Path, stamp: str | None, machine: str) -> str | None:
+    """Import main.py's guard in a subprocess; return its error, or None.
+
+    A subprocess because ``main.py`` runs the check at module scope and
+    then imports the whole plugin — neither of which belongs in this
+    interpreter.
+    """
+    import subprocess
+    import sys as _sys
+
+    from tests.unit._repo_root import find_repo_file
+
+    main_py = find_repo_file("main.py")
+    if main_py is None:
+        pytest.skip("main.py not found (set UNIFIDECK_REPO_ROOT)")
+    plugin = tmp_path / "plugin"
+    (plugin / "bin").mkdir(parents=True)
+    (plugin / "main.py").write_bytes(main_py.read_bytes())
+    if stamp is not None:
+        (plugin / "bin" / "ARCH").write_text(stamp, encoding="utf-8")
+
+    script = (
+        "import platform, sys\n"
+        f"platform.machine = lambda: {machine!r}\n"
+        f"sys.path.insert(0, {str(plugin)!r})\n"
+        "try:\n"
+        "    import main\n"
+        "except RuntimeError as e:\n"
+        "    print('GUARD:' + str(e))\n"
+        "except Exception:\n"
+        "    pass\n"
+    )
+    out = subprocess.run(
+        [_sys.executable, "-c", script],
+        capture_output=True, text=True, timeout=60,
+        env={"DECKY_PLUGIN_DIR": str(plugin), "PATH": "/usr/bin:/bin"},
+        check=False,
+    ).stdout
+    for line in out.splitlines():
+        if line.startswith("GUARD:"):
+            return line[len("GUARD:"):]
+    return None
+
+
+def test_a_foreign_build_refuses_to_load_and_says_why(tmp_path: Path) -> None:
+    """The real incident: an aarch64 zip installed on an x86_64 machine.
+
+    Without this the plugin died eleven frames down on
+    ``_rust.abi3.so: cannot open shared object file`` — naming a file
+    that is present — which reads as a corrupt install rather than the
+    wrong download.
+    """
+    error = _run_preflight(tmp_path, "aarch64\n", "x86_64")
+    assert error is not None, "the guard did not fire on a foreign build"
+    assert "aarch64" in error and "x86_64" in error
+    assert "Install the x86_64 build" in error
+
+
+def test_a_matching_build_loads(tmp_path: Path) -> None:
+    assert _run_preflight(tmp_path, "x86_64\n", "x86_64") is None
+
+
+def test_a_build_predating_the_stamp_is_never_blocked(tmp_path: Path) -> None:
+    """Every 0.7.4-and-earlier install has no bin/ARCH. Silence is required."""
+    assert _run_preflight(tmp_path, None, "x86_64") is None
+
+
+def test_an_alias_spelling_in_the_stamp_still_matches(tmp_path: Path) -> None:
+    """A hand-written ``arm64`` stamp must not read as a mismatch on ARM."""
+    assert _run_preflight(tmp_path, "arm64\n", "aarch64") is None
