@@ -1,18 +1,21 @@
 """scripts/fetch_bundled_binaries.py — put the right store CLIs in bin/.
 
-``build-plugin.sh`` does this for a local build. CI does not run that
-script — it drives the Decky CLI directly — and the Decky CLI's own
-``remote_binary`` download knows nothing about architectures: it reads
-one array from package.json and fetches it, whatever machine the plugin
-is being built for. On an ARM build that produces a zip that installs
-cleanly and then fails at every store call.
+``build-plugin.sh`` fetches these as part of a full build, and CI now
+goes through that script, so this is the standalone path: populate
+``bin/`` for one architecture without running a build.
 
-So this script does the fetch instead, for the architecture named by
-``UNIFIDECK_TARGET_ARCH`` (default: this machine's), verifying every
-download against the ``sha256hash`` the manifest publishes for that
-architecture — the same value Decky verifies at install time. It then
-strips the manifests from package.json so the CLI finds nothing left to
-download and simply zips what is already in ``bin/``.
+It exists because the Decky CLI's own ``remote_binary`` download knows
+nothing about architectures — it reads one array from package.json and
+fetches it, whatever machine the plugin is being built for, which on an
+ARM build produces a zip that installs cleanly and then fails at every
+store call. Every download here is verified against the ``sha256hash``
+the manifest publishes for the architecture named by
+``UNIFIDECK_TARGET_ARCH`` (default: this machine's) — the same value
+Decky verifies at install time.
+
+``--keep-manifest`` leaves package.json alone; without it the
+``remote_binary`` arrays are stripped, which is what stops the Decky CLI
+re-downloading over the top of a set that was chosen deliberately.
 
 Stdlib only, and deliberately not importing anything from ``py_modules``:
 it runs before the plugin tree is assembled, in a CI step whose Python is

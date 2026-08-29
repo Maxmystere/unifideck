@@ -10,10 +10,10 @@
 #   3. RTL-safety lint (scripts/lint_rtl.py)
 #   4. pnpm install + ESLint + TypeScript type check
 #   5. Rollup frontend build (pnpm run build → dist/index.js)
-#   6. Per-architecture bundled binaries (scripts/fetch_bundled_binaries.py)
-#   7. Decky CLI plugin packaging (cli/decky plugin build → out/Unifideck.zip)
-#   8. Execute the packaged artifact on the target architecture
-#   9. Upload plugin artifact for download from the PR, one per architecture
+#   6. Packaging via build-plugin.sh (bundled binaries + vendored wheels
+#      for the target architecture, then the zip)
+#   7. Execute the packaged artifact on the target architecture
+#   8. Upload plugin artifact for download from the PR, one per architecture
 #
 # The job runs once per architecture, each on a runner of that
 # architecture, so step 8 can run what step 7 packaged. The lint/typecheck/
@@ -205,9 +205,24 @@ jobs:
       - name: Build frontend
         run: pnpm run build
 
-      # ── Decky CLI: package the plugin zip ──────────────────
+      # ── Package the plugin zip ─────────────────────────────
+      #
+      # Via build-plugin.sh rather than the Decky CLI directly, because the
+      # CLI alone does not produce an installable plugin: cryptography,
+      # aiohttp and jsonschema are NOT committed to py_modules/, they are
+      # vendored by build-plugin.sh's vendor_deps, and a zip without them
+      # leaves the backend dependent on Decky Loader pip-installing
+      # requirements.txt at install time — which this project's own build
+      # script calls unreliable across Loader versions. CI has always
+      # produced that thinner artifact; asking it for a runnable one is what
+      # surfaced it.
+      #
+      # The script still uses the Decky CLI where the CLI works (x86_64) and
+      # packages locally where it cannot (arm64 — the builder image is
+      # amd64-only). Either way the wheels it vendors are for --arch, so the
+      # artifact matches the leg that built it.
 
-      - name: Download Decky CLI
+      - name: Install Decky CLI (used by build-plugin.sh on x86_64)
         # The CLI runs on the RUNNER, so its asset is the runner's
         # architecture — not the plugin's. Asset names spell the arch the
         # way uname does (x86_64 / aarch64).
@@ -220,26 +235,19 @@ jobs:
           curl -L -o cli/decky "https://github.com/SteamDeckHomebrew/cli/releases/download/0.0.8/decky-linux-${cli_arch}"
           chmod +x cli/decky
 
-      # ── Bundled binaries: one set per architecture ─────────
-
-      - name: Fetch bundled store CLIs for ${{ matrix.arch }}
-        # The zip is architecture-specific: legendary and gogdl are
-        # zipapps carrying native wheels, nile and comet are plain ELFs.
-        # Decky's own remote_binary download knows nothing about
-        # architectures, so the binaries are fetched here — against the
-        # checksums package.json publishes for this arch — and the staged
-        # manifest is stripped so the CLI does not put x86_64 ones back.
-        run: |
-          UNIFIDECK_TARGET_ARCH='${{ matrix.arch }}' \
-            python3 scripts/fetch_bundled_binaries.py
-
-      - name: Build plugin with Decky CLI
-        run: cli/decky plugin build .
+      - name: Build the plugin for ${{ matrix.arch }}
+        # Fetches the bundled store CLIs for this architecture, vendors the
+        # Python wheels for it, and packages the zip. Prod mode so the
+        # filename carries the version and the architecture.
+        run: ./build-plugin.sh prod --arch=${{ matrix.arch }}
 
       - name: Extract plugin zip for artifact
         run: |
+          set -euo pipefail
+          zip=$(ls out/unifideck.prod.*.${{ matrix.arch }}.zip)
+          echo "packaged $zip ($(du -h "$zip" | cut -f1))"
           mkdir -p out/Unifideck
-          unzip out/Unifideck.zip -d out/Unifideck
+          unzip -q "$zip" -d out/Unifideck
 
       # ── Prove the artifact runs on the architecture it claims ──
       #

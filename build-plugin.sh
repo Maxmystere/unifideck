@@ -1899,8 +1899,26 @@ main() {
     _phase "locales" gen_locales
     sync_version
 
+    # The Decky CLI does its work inside ghcr.io/steamdeckhomebrew/builder,
+    # which upstream publishes for linux/amd64 only. On an arm64 host Docker
+    # pulls it anyway and the run dies with "exec /entrypoint.sh: exec format
+    # error" — a container-level failure the CLI reports as "Failed to build
+    # frontend", which points at the wrong thing entirely. So a non-x86_64
+    # host packages locally instead; build_local produces the same zip
+    # without needing a container at all.
+    #
+    # Cross-building ARM *on* x86_64 still uses the CLI: the container only
+    # ever zips files, and the architecture of what goes in is decided long
+    # before it runs.
+    if [ "$HOST_ARCH" != "x86_64" ]; then
+        log_info "Host is $HOST_ARCH; the Decky CLI's builder image is"
+        log_info "  amd64-only, so packaging locally instead."
+        _phase "local build" build_local
+    elif [ -n "${UNIFIDECK_FORCE_LOCAL_BUILD:-}" ]; then
+        log_info "UNIFIDECK_FORCE_LOCAL_BUILD set - packaging locally."
+        _phase "local build" build_local
     # Attempt Decky CLI containerized build first
-    if check_decky_cli; then
+    elif check_decky_cli; then
         ENGINE=$(check_container_engine || true)
         if [ -n "$ENGINE" ]; then
             chmod -R a+rwX "$SCRIPT_DIR" || true
