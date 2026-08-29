@@ -147,6 +147,13 @@ Nothing in the build executes a target binary, so cross-building works from
 either machine; downloads that cannot be run to validate them are verified
 against the checksums in `package.json` instead.
 
+For an ARM build you intend to install, prefer CI or a native build over a
+cross-build. The `Build plugin artifact` workflow runs each architecture on
+a runner of that architecture and then executes what it packaged — every
+bundled CLI and every vendored wheel — so a zip that cannot run on the
+machine it targets fails the build instead of the install. Download the
+`Unifideck-aarch64` artifact from the workflow run.
+
 ## Troubleshooting
 
 For a longer list of release-specific problems and fixes, see the **[FAQ](docs/faq.md)**.

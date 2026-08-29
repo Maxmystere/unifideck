@@ -12,11 +12,13 @@
 #   5. Rollup frontend build (pnpm run build → dist/index.js)
 #   6. Per-architecture bundled binaries (scripts/fetch_bundled_binaries.py)
 #   7. Decky CLI plugin packaging (cli/decky plugin build → out/Unifideck.zip)
-#   8. Upload plugin artifact for download from the PR, one per architecture
+#   8. Execute the packaged artifact on the target architecture
+#   9. Upload plugin artifact for download from the PR, one per architecture
 #
-# The job runs once per architecture in the matrix. Only steps 6-8 differ
-# between them; the lint/typecheck/i18n gates are architecture-neutral and
-# are simply repeated, which keeps the workflow one job rather than two.
+# The job runs once per architecture, each on a runner of that
+# architecture, so step 8 can run what step 7 packaged. The lint/typecheck/
+# i18n gates are architecture-neutral and are simply repeated, which keeps
+# the workflow one job rather than two.
 #
 # ESLint cohabits with Prettier: ESLint catches semantic bugs
 # (React hooks in conditions, unused vars, a11y violations),
@@ -38,17 +40,27 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
 
     strategy:
-      # Both architectures are built from the same x86_64 runner. Nothing
-      # in the pipeline executes a bundled binary, and the only
-      # architecture-specific steps (fetching the store CLIs, stripping
-      # the manifest the Decky CLI would otherwise re-download from) are
-      # driven by UNIFIDECK_TARGET_ARCH.
+      # Each architecture builds on a runner of that architecture, so the
+      # zip is produced natively rather than cross-built. That matters for
+      # more than tidiness: it is the only arrangement in which the
+      # verification step below can EXECUTE what was packaged. A zip whose
+      # store CLIs and compiled wheels are never run on the machine they
+      # target is a zip whose architecture is an assertion, not a fact —
+      # and an unrunnable ARM build is invisible until someone installs it.
+      #
+      # arm64 runners are GitHub-hosted and generally available: free in
+      # public repositories, and drawing on the plan's included minutes in
+      # private ones.
       fail-fast: false
       matrix:
-        arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
 
     # The whole job historically runs in ~70s. Without this it
     # inherits GitHub's 6-hour default, so one stalled network
@@ -220,6 +232,68 @@ jobs:
         run: |
           mkdir -p out/Unifideck
           unzip out/Unifideck.zip -d out/Unifideck
+
+      # ── Prove the artifact runs on the architecture it claims ──
+      #
+      # Everything above this point would pass just as happily on a zip
+      # full of the other architecture's binaries: the Decky CLI zips what
+      # it is given, and a checksum only says the download matched the
+      # manifest, not that the manifest was the right one. This step is the
+      # first that would notice, because it is the first that runs the
+      # contents.
+      #
+      # Written to fail rather than warn. A zip that cannot execute here
+      # cannot execute on a user's device either, and the failure it
+      # produces there is an ImportError eleven frames deep in an unrelated
+      # module — the kind that reads as a corrupt install.
+      - name: Verify the packaged plugin runs on ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          root=out/Unifideck/Unifideck
+
+          echo "runner is $(uname -m); artifact claims $(cat "$root/bin/ARCH")"
+          test "$(cat "$root/bin/ARCH")" = "${{ matrix.arch }}"
+
+          # 1. Every ELF in the tree targets this machine. Catches a stray
+          #    binary from the other architecture that nothing else looks at.
+          python3 - "$root" <<'PY'
+          import pathlib
+          import platform
+          import sys
+
+          WANT = {"x86_64": 0x3E, "aarch64": 0xB7}[platform.machine()]
+          bad = []
+          for path in pathlib.Path(sys.argv[1]).rglob("*"):
+              if not path.is_file():
+                  continue
+              with path.open("rb") as fh:
+                  head = fh.read(20)
+              if len(head) < 20 or not head.startswith(b"\x7fELF"):
+                  continue
+              if int.from_bytes(head[18:20], "little") != WANT:
+                  bad.append(str(path))
+          print("checked every ELF; wrong-machine count: %d" % len(bad))
+          if bad:
+              sys.exit("wrong-architecture binaries: " + ", ".join(bad))
+          PY
+
+          # 2. The vendored wheels import. This is the exact failure a user
+          #    hit: cryptography's binding is the first thing the backend
+          #    touches, and a foreign one dies on "cannot open shared object
+          #    file" while naming a file that is present.
+          PYTHONPATH="$root/py_modules" python3 -c "
+          import cryptography.exceptions, aiohttp.http_parser, jsonschema
+          print('vendored wheels import OK')
+          "
+
+          # 3. The bundled store CLIs actually execute. Same probes
+          #    build-plugin.sh uses for a native build.
+          "$root/bin/legendary" --version >/dev/null
+          "$root/bin/gogdl" --version --auth-config-path /dev/null >/dev/null
+          "$root/bin/nile" --version >/dev/null
+          "$root/bin/comet" --version >/dev/null
+          grep -q WINETRICKS_VERSION "$root/bin/winetricks"
+          echo "all five bundled CLIs ran on $(uname -m)"
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
