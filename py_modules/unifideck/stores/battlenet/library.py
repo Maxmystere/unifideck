@@ -142,10 +142,49 @@ def family_from_catalog(catalog: MergedCatalog, uid: str) -> str | None:
     Only used on the install path, where a title may not have been through a
     sync yet; :func:`record_families` covers the whole library at once.
     """
+    wanted = normalize_uid(uid)
     for entry in catalog.entries.values():
-        if entry.uid_for() == uid:
+        candidate = entry.uid_for()
+        if candidate and normalize_uid(candidate) == wanted:
             return entry.program_id
     return None
+
+
+def normalize_uid(uid: str) -> str:
+    """The join key for a Battle.net uid, case-folded.
+
+    Blizzard's own catalog is internally inconsistent about uid case. The PUB
+    fragments spell Diablo's retail uid ``D1``, Warcraft I's ``W1`` and
+    Warcraft II's ``W2``, while everything the *client* writes — ``product.db``,
+    ``aggregate.json``, the Agent logs — is lowercase throughout. Joining the
+    two case-sensitively reports exactly those titles as never installed: a
+    real Diablo install finished on disk at 13:04, ``detect()`` never fired
+    because ``product.db`` says ``d1`` and we asked for ``D1``, and five
+    minutes later the watchdog failed it with "The install was never finished
+    in Battle.net".
+
+    **Only the join is normalized.** The uid we emit as ``store_game_id`` keeps
+    its original case, because that string is what every released user's Steam
+    shortcut is keyed on (see :mod:`unifideck.services.shortcut.games_map`) —
+    re-keying it would strand their playtime, categories and artwork. The id
+    map keeps its case for the same reason and needs no change: it is looked up
+    with the same catalog uid it was written with, so it is already
+    self-consistent, and the out-of-process launcher reads it the same way.
+    """
+    return uid.lower()
+
+
+def install_row_for(
+    state: dict[str, InstalledGame], uid: str,
+) -> InstalledGame | None:
+    """Look one uid up in an :func:`install_state_by_uid` mapping.
+
+    Exists so the lookup side of the join can only be spelled once. Both
+    callers — the library's ``install_row`` and the install watcher's ``row``
+    — must normalize identically, and a second hand-written ``state.get(...)``
+    is how that silently stops being true.
+    """
+    return state.get(normalize_uid(uid))
 
 
 def _index_by_uid(installed: dict[str, InstalledGame]) -> dict[str, InstalledGame]:
@@ -155,11 +194,14 @@ def _index_by_uid(installed: dict[str, InstalledGame]) -> dict[str, InstalledGam
     (``hsb``) while the catalog addresses titles by uid (``hs_beta``). The
     uid is the only field common to both, so the join has to go through it —
     matching on code silently reports every installed game as not installed.
+
+    Keys are normalized through :func:`normalize_uid`; look them up with
+    :func:`install_row_for`, never with a bare ``.get``.
     """
     by_uid: dict[str, InstalledGame] = {}
     for game in installed.values():
         if game.uid:
-            by_uid[game.uid] = game
+            by_uid[normalize_uid(game.uid)] = game
     return by_uid
 
 
@@ -185,7 +227,7 @@ async def install_row(
     if drive_c is None:
         return None
     state = await asyncio.to_thread(install_state_by_uid, drive_c, prefix)
-    return state.get(game_id)
+    return install_row_for(state, game_id)
 
 
 def install_state_by_uid(drive_c: Path, prefix: Path) -> dict[str, InstalledGame]:
@@ -248,7 +290,7 @@ def build_library(
         )
     by_uid = _index_by_uid(installed)
     games = _granted_games(granted, catalog, by_uid, launcher_path)
-    seen = {g.store_game_id for g in games}
+    seen = {normalize_uid(g.store_game_id) for g in games}
     games.extend(_orphan_installed(installed, catalog, seen, launcher_path))
     return games
 
@@ -267,7 +309,7 @@ def _granted_games(
             program,
             entry,
             catalog,
-            by_uid.get(uid) if uid else None,
+            install_row_for(by_uid, uid) if uid else None,
             free_to_play=any(p.is_free_to_play for p in products),
             launcher_path=launcher_path,
         )
@@ -293,7 +335,11 @@ def _orphan_installed(
             continue
         entry = catalog.entry_for(code)
         uid = state.uid or (entry.uid_for() if entry else None) or code
-        if uid in seen_uids:
+        # Normalized both sides: the granted tile carries the catalog's ``D1``
+        # while ``state.uid`` is the client's ``d1``, and a case-sensitive
+        # miss here re-adds the same game as a second tile — with a family
+        # taken from the product code, which launches nothing.
+        if normalize_uid(uid) in seen_uids:
             continue
         logger.info(
             "[Battlenet] %s is installed but not granted by the rules — "

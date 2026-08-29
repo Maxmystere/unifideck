@@ -113,7 +113,7 @@ class BattlenetInstallProbe:
                 self._prefix, exc_info=True,
             )
             return None
-        return state.get(self._uid)
+        return library_mod.install_row_for(state, self._uid)
 
     def snapshot(self) -> None:
         """No baseline needed — the probe asks about one uid by name.
@@ -152,7 +152,13 @@ class BattlenetInstallProbe:
         drive_c = paths.drive_c(self._prefix)
         if drive_c is None:
             return None
-        return agent_status.describe_wait(drive_c, self.started_at, self._uid)
+        # Normalized for the same reason ``row`` is: the Agent writes its log
+        # lines with the client's lowercase uid, so an uppercase catalog uid
+        # matches nothing and this title never gets its "queued behind the
+        # updater" explanation.
+        return agent_status.describe_wait(
+            drive_c, self.started_at, library_mod.normalize_uid(self._uid),
+        )
 
     def is_complete(self, install_dir: str) -> bool | None:
         """``product.db``'s verdict for this uid — never a size heuristic.
