@@ -37,6 +37,14 @@ on:
       - staging
   pull_request:
     types: [opened, synchronize, reopened]
+  # Manual "Run workflow" button, so an architecture-specific zip can be
+  # produced from any branch without opening a pull request first — the
+  # normal way to get an ARM build onto ARM hardware for testing.
+  #
+  # GitHub only renders the button for workflows whose file on the DEFAULT
+  # branch declares this trigger, so it stays invisible until this change
+  # merges. Until then the pull_request trigger above is the way in.
+  workflow_dispatch:
 
 jobs:
   build:
