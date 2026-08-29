@@ -1091,6 +1091,31 @@ PY
     log_success "Verified $verified bundled binaries (sha256); skipping the CLI re-download"
 }
 
+# Remove a staging dir that may hold root-owned files from the CLI container.
+#
+# The Decky CLI is invoked with --build-as-root. Under ROOTLESS podman — a
+# Steam Deck, and how this script has always been exercised — container root
+# maps to the invoking user, so the files come out owned by that user and a
+# plain rm clears them. Under ROOTFUL docker, which is what a GitHub runner
+# provides, container root is real root: the files are root's, rm fails with
+# "Permission denied", and under `set -e` that killed the build AFTER the zip
+# had already been produced.
+#
+# Never fatal. This is a temp directory; failing to delete it is untidy, not
+# a build failure, and treating it as one throws away a good artifact.
+_remove_staging() {
+    local dir="$1"
+    [ -n "$dir" ] && [ -d "$dir" ] || return 0
+    rm -rf "$dir" 2>/dev/null && return 0
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+        sudo rm -rf "$dir" 2>/dev/null && return 0
+    fi
+    log_warn "Could not fully remove the staging dir $dir"
+    log_warn "  (root-owned container output). Harmless - it is a temp dir"
+    log_warn "  and the built zip is unaffected."
+    return 0
+}
+
 # ── Build with Decky CLI (Docker/Podman) ─────────────────────
 # This is the primary build path. It stages files, runs the Decky CLI inside
 # a container, compiles the frontend using Rollup, and generates a clean ZIP.
@@ -1112,7 +1137,7 @@ build_with_cli() {
     # a full source copy into /tmp. The path is baked into the trap now since
     # function-locals are not visible to the EXIT trap.
     local staging; staging=$(mktemp -d)
-    trap "rm -rf '$staging'" EXIT
+    trap "_remove_staging '$staging'" EXIT
     local staging_plugin="$staging/unifideck-staging"
     _stage_plugin_files "$staging_plugin"
     _stage_skip_cli_binary_download "$staging_plugin"
@@ -1133,7 +1158,7 @@ build_with_cli() {
         --build-as-root
 
     # Clean up staging dir (and disarm the trap set above)
-    rm -rf "$staging"
+    _remove_staging "$staging"
     trap - EXIT
 
     # The CLI hardcodes the output name to "Unifideck.zip". We rename it to our versioned format.
