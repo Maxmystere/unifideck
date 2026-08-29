@@ -493,6 +493,13 @@ def count_exempt_vendor_salvage() -> int:
 SHARED_HELPERS: dict[str, str] = {
     "merge_install_status": "stores/shared/install_status.py",
     "dir_size_bytes": "stores/shared/installed_size.py",
+    # Its sparse-aware twin. Deliberately a second function rather than a flag
+    # on the first: the two answer different questions and the wrong one is a
+    # live defect in each direction. Apparent size sizes a *finished* install
+    # (and survives btrfs compression); allocated size measures one *in
+    # flight*, where a vendor client's pre-allocation makes apparent size
+    # constant from the first minute.
+    "dir_allocated_bytes": "stores/shared/installed_size.py",
     "_rebuild_auth_after_injection": "stores/shared/browser_auth_rebuild.py",
     "rsync_clone": "stores/shared/prefix_clone.py",
     "write_marker": "stores/shared/prefix_clone.py",

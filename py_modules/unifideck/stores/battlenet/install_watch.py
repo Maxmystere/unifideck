@@ -37,7 +37,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from unifideck.stores.shared.installed_size import dir_size_bytes
+from unifideck.stores.shared.installed_size import dir_allocated_bytes
 
 from . import agent_status, paths
 from . import library as library_mod
@@ -129,7 +129,15 @@ class BattlenetInstallProbe:
         return install_dir_of(self.row())
 
     def measure(self, install_dir: str) -> int:
-        return dir_size_bytes(install_dir)
+        """Bytes actually committed so far — never the apparent size.
+
+        Only feeds the "Installing… (N GB)" tick here, since ``is_complete``
+        answers from ``product.db`` and never defers to size. It still has to
+        be the allocated figure: the Agent pre-allocates like UPC does, so
+        apparent size would show a 22 GB download sitting at 22 GB from the
+        first minute.
+        """
+        return dir_allocated_bytes(install_dir)
 
     def status_message(self) -> str | None:
         """Why this game is not downloading yet, in the Agent's own words.
