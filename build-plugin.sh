@@ -349,6 +349,48 @@ for entry in manifest:
 PY
 }
 
+# Last word on what is actually in bin/, after every download attempt.
+#
+# ``_download_bin`` deliberately keeps the existing binary when a download
+# fails, which is right when that binary is the correct one and wrong when
+# it is the other architecture's. Only a full pass over the manifest can
+# tell those apart, and it is the one check that covers BOTH build paths -
+# ``_stage_skip_cli_binary_download`` guards the containerised build, and
+# until this existed the local build had nothing at all.
+#
+# Fatal only for a non-x86_64 target. An x86_64 build still has the Decky
+# CLI's own download as a fallback (see _stage_skip_cli_binary_download),
+# so a mismatch there is a warning; nothing can rescue a foreign binary in
+# an ARM zip, so that one stops the build.
+_verify_bundled_binaries() {
+    local name expected actual bad=0
+    for name in legendary gogdl nile comet winetricks; do
+        expected=$(_manifest_sha256 "$name")
+        [ -n "$expected" ] || continue
+        if [ ! -f "$SCRIPT_DIR/bin/$name" ]; then
+            log_error "$name is missing from bin/"
+            bad=$((bad + 1))
+            continue
+        fi
+        actual=$(sha256sum "$SCRIPT_DIR/bin/$name" | cut -d" " -f1)
+        if [ "$actual" != "$expected" ]; then
+            log_error "$name does not match the $TARGET_ARCH manifest:"
+            log_error "  expected $expected"
+            log_error "  on disk  $actual"
+            bad=$((bad + 1))
+        fi
+    done
+    [ "$bad" -eq 0 ] && return 0
+    if [ "$TARGET_ARCH" = "x86_64" ]; then
+        log_warn "$bad bundled binar(y/ies) unverified - the Decky CLI build"
+        log_warn "  path will re-fetch them; a local build will ship these."
+        return 0
+    fi
+    log_error "Refusing to build a $TARGET_ARCH zip with unverified binaries."
+    log_error "  Delete bin/<tool> and bin/<tool>.url, then re-run."
+    exit 1
+}
+
 # ── Pre-build: download/verify bundled binaries ───────────────
 # Decky Loader expects all dependencies to be included in the zip file.
 # This function pulls down the large third-party store clients.
@@ -403,12 +445,28 @@ prebuild_binaries() {
         local stamp="$dest.url"
         log_info "Checking $name..."
 
-        # Cache hit: binary present, executable, and stamped with this URL.
-        # The URL encodes the architecture as well as the version, so
-        # switching --arch re-downloads on its own.
+        # Cache hit: binary present, executable, stamped with this URL, AND
+        # still matching the checksum package.json publishes for this
+        # architecture.
+        #
+        # The stamp alone is a claim about where the file CAME FROM, not
+        # about what it now IS, and the two drift: a git checkout of the
+        # committed bin/legendary and bin/nile, a hand-copy, an interrupted
+        # build. Before --arch existed that cost you a stale version; now it
+        # can silently put the other architecture's binary in the zip, which
+        # is exactly what happened the first time this was tested. The hash
+        # is the fact, so it decides. (Tools with no declared hash keep the
+        # old stamp-only behaviour.)
         if [ -x "$dest" ] && [ "$(cat "$stamp" 2>/dev/null)" = "$url" ]; then
-            log_success "$name up to date (cached)"
-            return 0
+            local cached_expected
+            cached_expected=$(_manifest_sha256 "$name")
+            if [ -z "$cached_expected" ] \
+                    || [ "$(sha256sum "$dest" | cut -d" " -f1)" = "$cached_expected" ]; then
+                log_success "$name up to date (cached)"
+                return 0
+            fi
+            log_warn "$name: on-disk file does not match the $TARGET_ARCH"
+            log_warn "  checksum despite its URL stamp - re-downloading."
         fi
 
         if curl -fsSL "$url" -o "$dest.new"; then
@@ -464,6 +522,8 @@ prebuild_binaries() {
     else
         log_warn "winetricks: download failed, keeping existing"
     fi
+
+    _verify_bundled_binaries
 
     # Stamp the tree with the architecture these binaries are for. It ships
     # inside the zip and is the only thing in an installed plugin that can
@@ -533,38 +593,39 @@ LAUNCHER_PYTHON_VERSIONS=(3.10 3.11 3.12 3.13 3.14)
 # consults the host interpreter, so this is a pure cross-vendor.
 DECK_PLATFORM_TAG="manylinux2014_$TARGET_ARCH"
 
-# Drop the vendored packages that carry a compiled extension.
+# Drop every compiled extension vendored into py_modules/.
 #
-# Only called when --arch changes. A pure-python package is byte-identical on
-# every machine and is left alone; anything with a ``.so`` in it is not, and
-# pip's ``--upgrade-strategy only-if-needed`` would keep the already-correct
-# *version* while its extension stayed built for the other architecture. So
-# those packages are removed outright and reinstalled by the pip run that
-# follows. py_modules/unifideck/ is our own source and is never touched.
-_purge_vendored_deps() {
+# Only called when --arch changes. A ``.so`` is the one thing in there that
+# is built for a specific machine; the pure-python files beside it are
+# byte-identical everywhere. Deleting just the extensions, and letting the
+# --force-reinstall pip run that follows write the new ones, is what makes
+# an --arch switch produce a clean tree.
+#
+# Files only, never directories. An earlier version removed the whole
+# package instead, which is both unnecessary and destructive: some of the
+# vendored packages (websockets, requests, urllib3, certifi, vdf, ...) are
+# COMMITTED to this repo, so a purge that walks the tree deleting packages
+# takes tracked source with it and leaves the checkout dirty. It also broke
+# its own walk — ``rglob`` is lazy, so removing a directory mid-iteration
+# made the next step descend into something that was no longer there.
+#
+# py_modules/unifideck/ is our own source and is skipped outright; it
+# contains no extensions, and this is a belt-and-braces guard.
+_purge_foreign_extensions() {
     UD_PY_MODULES="$SCRIPT_DIR/py_modules" python3 - <<'PYPURGE'
 import os
 import pathlib
-import shutil
 
 root = pathlib.Path(os.environ["UD_PY_MODULES"])
-removed = []
-for so in root.rglob("*.so"):
-    relative = so.relative_to(root)
-    if relative.parts[0] == "unifideck":
-        continue
-    if len(relative.parts) == 1:
-        # A bare extension module, e.g. _cffi_backend.cpython-311-*.so.
-        so.unlink(missing_ok=True)
-        removed.append(relative.parts[0])
-        continue
-    package = root / relative.parts[0]
-    shutil.rmtree(package, ignore_errors=True)
-    for info in root.glob(relative.parts[0] + "-*.dist-info"):
-        shutil.rmtree(info, ignore_errors=True)
-    removed.append(relative.parts[0])
-if removed:
-    print("removed: " + ", ".join(sorted(set(removed))))
+# Materialise the scan before unlinking: rglob is a lazy walker.
+extensions = [
+    so for so in sorted(root.rglob("*.so"))
+    if so.relative_to(root).parts[0] != "unifideck"
+]
+for so in extensions:
+    so.unlink(missing_ok=True)
+if extensions:
+    print(f"removed {len(extensions)} compiled extension(s)")
 PYPURGE
     # Force vendor_launcher_cffi to rebuild its per-interpreter backends: the
     # ones it left behind were for the architecture we just purged.
@@ -578,16 +639,19 @@ vendor_deps() {
     }
     log_info "Vendoring Python deps into py_modules/ (Python $DECK_PYTHON_VERSION, $DECK_PLATFORM_TAG)..."
 
-    # py_modules/ is a single tree with no room for two architectures: the
-    # extension modules that carry the arch in their filename
-    # (``*.cpython-311-x86_64-linux-gnu.so``) could coexist, but cryptography's
-    # abi3 binding is a bare ``_rust.abi3.so`` and would simply overwrite its
-    # counterpart. So a switch of --arch re-vendors from scratch rather than
-    # layering one architecture's wheels on top of another's leftovers.
-    local arch_stamp="$SCRIPT_DIR/.cache/vendored-arch"
+    # py_modules/ is a single tree with no room for two architectures. Some
+    # extensions carry the arch in their filename
+    # (``*.cpython-311-x86_64-linux-gnu.so``) and could coexist, but
+    # cryptography's abi3 binding is a bare ``_rust.abi3.so`` that would just
+    # overwrite its counterpart — and ``--upgrade-strategy only-if-needed``
+    # would keep every package whose VERSION is already right while its
+    # extension stayed built for the other machine. So an --arch switch drops
+    # every vendored extension and reinstalls the whole set outright.
+    local arch_stamp="$SCRIPT_DIR/.cache/vendored-arch" reinstall=""
     if [ -f "$arch_stamp" ] && [ "$(cat "$arch_stamp" 2>/dev/null)" != "$TARGET_ARCH" ]; then
         log_warn "py_modules/ holds $(cat "$arch_stamp") wheels - re-vendoring for $TARGET_ARCH"
-        _purge_vendored_deps
+        _purge_foreign_extensions
+        reinstall="--force-reinstall"
     fi
     mkdir -p "$(dirname "$arch_stamp")"
     printf '%s\n' "$TARGET_ARCH" > "$arch_stamp"
@@ -608,6 +672,7 @@ vendor_deps() {
             --only-binary ":all:" \
             --upgrade \
             --upgrade-strategy only-if-needed \
+            ${reinstall:+"$reinstall"} \
             --cache-dir "$cache_dir" \
             -r "$SCRIPT_DIR/requirements.txt" 2>&1 | tail -20; then
         log_success "Python deps vendored"
