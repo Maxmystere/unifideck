@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, cast
 from unifideck.auth.browser import OAuthBrowserMonitor
 from unifideck.auth.edge_browser import EdgeBrowser
 from unifideck.auth.orchestrator import AuthOrchestrator
+from unifideck.core.binaries import bundled_binary_path
 from unifideck.core.safe_delete import canonical_prefix, safe_rmtree
 from unifideck.core.types import (
     AuthResult,
@@ -480,7 +481,7 @@ class GOGStore(StoreBase):
                 "[GOGStore] no plugin_dir; gogdl path unresolvable",
             )
             return ""
-        path = str(Path(self._plugin_dir) / "bin" / "gogdl")
+        path = str(bundled_binary_path(self._plugin_dir, "gogdl"))
         if not Path(path).is_file():
             logger.warning(
                 "[GOGStore] gogdl binary not found at %s",

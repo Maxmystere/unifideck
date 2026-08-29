@@ -5,7 +5,11 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
-from unifideck.core.binaries import binary_resolver, clean_cli_env
+from unifideck.core.binaries import (
+    binary_resolver,
+    bundled_binary_search_paths,
+    clean_cli_env,
+)
 from unifideck.core.exe_finder import exe_finder
 from unifideck.core.types import (
     AuthResult,
@@ -133,12 +137,18 @@ class StoreBase(ABC):
         ``<plugin>/bin/`` is silently skipped and the resolver
         falls through to ``PATH`` / ``~/.local/bin`` where the
         binary doesn't exist.
+
+        A relative ``bin/<tool>`` also expands to the architecture
+        variants of that path (``bin/<tool>-aarch64`` and friends, most
+        specific first) via
+        :func:`~unifideck.core.binaries.bundled.bundled_binary_search_paths`,
+        so a store descriptor never has to know which machine it is on.
         """
         if self._plugin_dir:
             absolutised = [
-                p if Path(p).is_absolute()
-                else str(Path(self._plugin_dir) / p)
+                candidate
                 for p in tool.search_paths
+                for candidate in self._expand_search_path(p)
             ]
             tool = CLITool(
                 name=tool.name,
@@ -147,6 +157,27 @@ class StoreBase(ABC):
                 min_version=tool.min_version,
             )
         return binary_resolver.resolve(tool)
+
+    def _expand_search_path(self, declared: str) -> list[str]:
+        """One declared search path → the absolute paths to actually try.
+
+        An absolute path is taken as written: a store that hardcodes one
+        means that exact file. A relative ``bin/<tool>`` is resolved
+        against the plugin root *and* against this host's architecture,
+        so a universal install tree hands back its ``-aarch64`` copy on
+        ARM and its canonical one everywhere else. Anything else relative
+        (no such shape exists today, but the resolver's contract is
+        "absolute or ignored") is simply absolutised.
+        """
+        path = Path(declared)
+        if path.is_absolute():
+            return [declared]
+        if len(path.parts) == 2 and path.parts[0] == "bin":
+            return bundled_binary_search_paths(
+                str(self._plugin_dir), path.parts[1],
+            )
+        return [str(Path(str(self._plugin_dir)) / path)]
+
     def _find_exe(
         self,
         install_path: str,

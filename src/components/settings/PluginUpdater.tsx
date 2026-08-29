@@ -51,12 +51,19 @@ const getDeckyBackend = (): Window["DeckyBackend"] | null =>
 const INSTALL_WATCHDOG_TIMEOUT_MS = 45_000;
 
 // Parses the maintainer's dev-build filename convention (e.g.
-// "unifideck.dev.0.7.1.g3f9a1c2.zip", or the legacy
+// "unifideck.dev.0.7.1.g3f9a1c2.x86_64.zip", or the legacy
 // "unifideck.dev.v524.zip") into a display-friendly build id. Returns
 // null when asset_name is absent or doesn't match — callers fall back
 // to the generic "vDev" label in that case (e.g. a release built
 // before this feature shipped, or a malformed manual upload).
-const DEV_ASSET_NAME_RE = /^unifideck\.dev\.(.+)\.zip$/i;
+//
+// The trailing architecture segment is stripped rather than kept: it is
+// part of the filename because one build id now produces one zip per
+// architecture, but dev_build.json records the build id WITHOUT it, and
+// this value is compared against that to tell "Reinstall" from "Update".
+// Older assets have no such segment, hence the optional group.
+const DEV_ASSET_NAME_RE =
+  /^unifideck\.dev\.(.+?)(?:\.(?:x86_64|aarch64))?\.zip$/i;
 const extractDevBuildId = (assetName: string | undefined): string | null => {
   if (!assetName) return null;
   const m = assetName.match(DEV_ASSET_NAME_RE);

@@ -24,6 +24,13 @@ and any future additions):
                           — system binaries trusted by the OS
                           package manager are out of scope.
 
+  - bundled : where a bundled tool lives on THIS
+                          machine. Owns the ``bin/<tool>`` vs
+                          ``bin/<tool>-<arch>`` layout, so a tree
+                          built for one architecture (or carrying
+                          both) resolves to a binary this host can
+                          actually execute.
+
   - cli_timeouts : ``read_cli_timeouts(config)`` returns
                           the per-operation timeout dict
                           (``auth_check``, ``version_check``,
@@ -61,6 +68,12 @@ from .binary_signatures import (
     compute_sha256,
     verify_bundled_binary,
 )
+from .bundled import (
+    ARCH_SPECIFIC_TOOLS,
+    build_arch,
+    bundled_binary_path,
+    bundled_binary_search_paths,
+)
 from .cli_env import (
     SCRUBBED_VARS,
     clean_cli_env,
@@ -69,11 +82,16 @@ from .cli_env import (
 from .cli_timeouts import read_cli_timeouts
 
 __all__ = [
+    # bundled.py
+    "ARCH_SPECIFIC_TOOLS",
     # cli_env.py
     "SCRUBBED_VARS",
     # binary_resolver.py
     "BinaryResolver",
     "binary_resolver",
+    "build_arch",
+    "bundled_binary_path",
+    "bundled_binary_search_paths",
     "clean_cli_env",
     # binary_signatures.py
     "compute_sha256",

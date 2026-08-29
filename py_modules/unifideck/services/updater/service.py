@@ -14,6 +14,9 @@ This service does NOT perform the actual installation — that's
 handled by the frontend calling Decky Loader's built-in
 ``utilities/install_plugin`` route with the asset URL returned
 by this service.
+
+A release now carries one zip per architecture, so "the asset" is a
+choice rather than a lookup — see :func:`_select_asset`.
 """
 from __future__ import annotations
 
@@ -30,7 +33,36 @@ from typing import Any
 import aiohttp
 import certifi
 
+from unifideck.utils.arch import Arch, host_arch
+
 logger = logging.getLogger(__name__)
+
+#: Architecture markers a release asset filename may carry, e.g.
+#: ``unifideck.prod.v0.7.4.aarch64.zip``. Releases cut before ARM support
+#: carry none, and those stay installable everywhere — the marker is what
+#: makes an asset *exclusive* to one machine, so its absence cannot.
+_ASSET_ARCH_TOKENS: dict[Arch, tuple[str, ...]] = {
+    Arch.X86_64: ("x86_64", "amd64"),
+    Arch.AARCH64: ("aarch64", "arm64"),
+}
+
+
+def _asset_arch(name: str) -> Arch | None:
+    """The architecture a release asset is built for, per its filename.
+
+    ``None`` when the name carries no marker at all. Matched on
+    dot/hyphen-delimited segments so a future ``unifideck.prod.v1.2.3.zip``
+    can never be mistaken for one.
+    """
+    segments = {
+        segment.lower()
+        for chunk in name.split(".")
+        for segment in chunk.split("-")
+    }
+    for arch, tokens in _ASSET_ARCH_TOKENS.items():
+        if segments & set(tokens):
+            return arch
+    return None
 
 
 @dataclass
@@ -60,6 +92,35 @@ _TAG_VERSION_RE = re.compile(
     r"(?:Release[-_]?)?"    # optional "Release-" or "Release_" prefix
     r"(\d+\.\d+(?:\.\d+)?)"  # capture X.Y or X.Y.Z
 )
+
+
+def _select_asset(assets: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The one downloadable zip in a release that this machine can install.
+
+    A release is cut per architecture, so picking "the first .zip" would
+    hand an ARM device the x86_64 build about half the time — an install
+    that succeeds and then fails at every store call, which is far worse
+    than not offering the update at all.
+
+    Preference order: an asset marked with this host's architecture, then
+    an unmarked one (every release cut before ARM support existed). An
+    asset marked for *another* architecture is never returned, so a
+    release built only for the other machine reports as having nothing
+    installable, and the UI leaves it out.
+    """
+    ours: dict[str, Any] | None = None
+    unmarked: dict[str, Any] | None = None
+    here = host_arch()
+    for asset in assets:
+        name = asset.get("name", "")
+        if not name.endswith(".zip") or "source" in name.lower():
+            continue
+        marked = _asset_arch(name)
+        if marked is None:
+            unmarked = unmarked or asset
+        elif marked is here:
+            ours = ours or asset
+    return ours or unmarked
 
 
 def _parse_version_from_tag(tag: str) -> str:
@@ -319,18 +380,11 @@ class UpdaterService:
     def _parse_release(entry: dict[str, Any]) -> ReleaseInfo | None:
         """Parse a single GitHub release JSON object.
 
-        Returns None if the release has no installable .zip asset
-        (only source archives, or body-linked downloads).
+        Returns None if the release has no .zip asset installable on this
+        machine (only source archives, body-linked downloads, or builds
+        for another architecture).
         """
-        assets = entry.get("assets", [])
-        # Find the first .zip asset that is NOT a source archive
-        zip_asset = None
-        for asset in assets:
-            name = asset.get("name", "")
-            if name.endswith(".zip") and "source" not in name.lower():
-                zip_asset = asset
-                break
-
+        zip_asset = _select_asset(entry.get("assets", []))
         if zip_asset is None:
             return None
 

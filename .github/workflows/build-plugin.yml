@@ -10,8 +10,13 @@
 #   3. RTL-safety lint (scripts/lint_rtl.py)
 #   4. pnpm install + ESLint + TypeScript type check
 #   5. Rollup frontend build (pnpm run build → dist/index.js)
-#   6. Decky CLI plugin packaging (cli/decky plugin build → out/Unifideck.zip)
-#   7. Upload plugin artifact for download from the PR
+#   6. Per-architecture bundled binaries (scripts/fetch_bundled_binaries.py)
+#   7. Decky CLI plugin packaging (cli/decky plugin build → out/Unifideck.zip)
+#   8. Upload plugin artifact for download from the PR, one per architecture
+#
+# The job runs once per architecture in the matrix. Only steps 6-8 differ
+# between them; the lint/typecheck/i18n gates are architecture-neutral and
+# are simply repeated, which keeps the workflow one job rather than two.
 #
 # ESLint cohabits with Prettier: ESLint catches semantic bugs
 # (React hooks in conditions, unused vars, a11y violations),
@@ -34,6 +39,16 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    strategy:
+      # Both architectures are built from the same x86_64 runner. Nothing
+      # in the pipeline executes a bundled binary, and the only
+      # architecture-specific steps (fetching the store CLIs, stripping
+      # the manifest the Decky CLI would otherwise re-download from) are
+      # driven by UNIFIDECK_TARGET_ARCH.
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
 
     # The whole job historically runs in ~70s. Without this it
     # inherits GitHub's 6-hour default, so one stalled network
@@ -117,7 +132,11 @@ jobs:
         # repo. Commits any locale JSONs or generated TS that
         # were updated by the translate/gen steps above. With
         # DeepL skipped only locales.generated.ts can change.
-        if: github.event_name == 'push'
+        #
+        # One matrix leg only: locale files have nothing to do with the
+        # architecture, and two legs racing to push the same commit means
+        # one of them fails on a non-fast-forward.
+        if: github.event_name == 'push' && matrix.arch == 'x86_64'
         run: |
           git config user.name "unifideck-bot"
           git config user.email "bot@unifideck.invalid"
@@ -169,10 +188,30 @@ jobs:
       # ── Decky CLI: package the plugin zip ──────────────────
 
       - name: Download Decky CLI
+        # The CLI runs on the RUNNER, so its asset is the runner's
+        # architecture — not the plugin's. Asset names spell the arch the
+        # way uname does (x86_64 / aarch64).
         run: |
           mkdir -p cli
-          curl -L -o cli/decky https://github.com/SteamDeckHomebrew/cli/releases/download/0.0.8/decky-linux-x86_64
+          case "$(uname -m)" in
+            aarch64|arm64) cli_arch=aarch64 ;;
+            *)             cli_arch=x86_64 ;;
+          esac
+          curl -L -o cli/decky "https://github.com/SteamDeckHomebrew/cli/releases/download/0.0.8/decky-linux-${cli_arch}"
           chmod +x cli/decky
+
+      # ── Bundled binaries: one set per architecture ─────────
+
+      - name: Fetch bundled store CLIs for ${{ matrix.arch }}
+        # The zip is architecture-specific: legendary and gogdl are
+        # zipapps carrying native wheels, nile and comet are plain ELFs.
+        # Decky's own remote_binary download knows nothing about
+        # architectures, so the binaries are fetched here — against the
+        # checksums package.json publishes for this arch — and the staged
+        # manifest is stripped so the CLI does not put x86_64 ones back.
+        run: |
+          UNIFIDECK_TARGET_ARCH='${{ matrix.arch }}' \
+            python3 scripts/fetch_bundled_binaries.py
 
       - name: Build plugin with Decky CLI
         run: cli/decky plugin build .
@@ -185,6 +224,6 @@ jobs:
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Unifideck
+          name: Unifideck-${{ matrix.arch }}
           path: out/Unifideck/
           if-no-files-found: error

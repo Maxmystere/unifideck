@@ -39,6 +39,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
+from unifideck.utils.arch import Arch, host_arch, host_arch_name
+
 logger = logging.getLogger(__name__)
 
 # e_ident[EI_CLASS]: 1 = ELFCLASS32, 2 = ELFCLASS64.
@@ -47,13 +49,18 @@ _ELFCLASS32 = 1
 _ELFCLASS64 = 2
 
 # Where a bare soname (``libvulkan_radeon.so`` with no directory) may live.
-# 32-bit first: this module exists to find those.
+# 32-bit first: this module exists to find those. The 64-bit entries are
+# listed for every architecture we run on, so a manifest that names a bare
+# soname still resolves on ARM — the verdict there is UNKNOWN either way
+# (see :func:`detect_32bit_vulkan`), but an unresolved library makes the
+# support bundle's ICD list useless rather than merely inconclusive.
 _LIB_DIRS = (
     "/usr/lib32",
     "/usr/lib/i386-linux-gnu",
     "/usr/lib",
     "/usr/lib64",
     "/usr/lib/x86_64-linux-gnu",
+    "/usr/lib/aarch64-linux-gnu",
 )
 
 # Last resort when a manifest's library cannot be resolved on disk. This is
@@ -241,6 +248,14 @@ def detect_32bit_vulkan() -> Vulkan32Report:
     to a library we could classify — the caller must treat that as "carry
     on", never as "no". Refusing to install because we could not tell is
     the failure this module was written to end.
+
+    On a non-x86 host it is ALWAYS ``UNKNOWN``, whatever the scan found.
+    "32-bit" here means i386, and an i386 client on ARM runs under x86
+    emulation, which brings its own userspace: the driver that matters
+    lives in the emulator's rootfs, not in the host ICD directories this
+    walks. Reading the host's aarch64 ICDs and concluding ABSENT would be
+    the filename heuristic's mistake all over again — a confident wrong
+    answer from evidence that never spoke to the question.
     """
     dirs = [str(path) for path in icd_search_dirs()]
     try:
@@ -248,6 +263,14 @@ def detect_32bit_vulkan() -> Vulkan32Report:
     except OSError:
         logger.warning("[vulkan] ICD scan failed — reporting unknown", exc_info=True)
         return Vulkan32Report(Vulkan32.UNKNOWN, dirs, [])
+
+    if host_arch() is not Arch.X86_64:
+        logger.info(
+            "[vulkan] host is %s — the i386 driver would come from the x86 "
+            "emulation layer, not from these ICDs; reporting unknown",
+            host_arch_name(),
+        )
+        return Vulkan32Report(Vulkan32.UNKNOWN, dirs, icds)
 
     if any(icd.is_32bit for icd in icds):
         verdict = Vulkan32.PRESENT

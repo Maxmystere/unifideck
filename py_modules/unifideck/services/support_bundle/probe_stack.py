@@ -24,6 +24,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+from unifideck.core.binaries import build_arch, bundled_binary_path
+from unifideck.utils.arch import elf_arch, host_arch_name
+
 from . import procscan
 
 logger = logging.getLogger(__name__)
@@ -79,17 +82,28 @@ def _read_json(path: Path) -> dict[str, Any] | None:
 
 
 def _mode_of(path: Path) -> dict[str, Any]:
-    """Size, mode and executability of one file."""
+    """Size, mode, executability and target architecture of one file.
+
+    ``built_for`` is the ELF machine when the file is an ELF and absent
+    otherwise (a zipapp or a shell script says nothing about
+    architecture). It is the difference between "nile is present, 10 MB,
+    executable — so why does Amazon report the CLI as unavailable?" and
+    one line saying the file is an x86_64 build on an ARM host.
+    """
     try:
         info = path.stat()
     except OSError:
         return {"present": False}
-    return {
+    block: dict[str, Any] = {
         "present": True,
         "size": info.st_size,
         "mode": oct(info.st_mode & 0o7777),
         "executable": os.access(path, os.X_OK),
     }
+    built_for = elf_arch(path)
+    if built_for is not None:
+        block["built_for"] = built_for.value
+    return block
 
 
 def identity_block() -> dict[str, Any]:
@@ -130,8 +144,12 @@ def plugin_block(plugin_dir: str | None) -> dict[str, Any]:
         return {"resolved": False}
     base = Path(plugin_dir)
     package = _read_json(base / "package.json") or {}
+    # Report the binary this host would actually resolve, not the
+    # canonical name: on a universal tree those differ, and the one the
+    # store will run is the only one worth statting.
     binaries = {
-        name: _mode_of(base / "bin" / name) for name in _BUNDLED_BINARIES
+        name: _mode_of(bundled_binary_path(base, name))
+        for name in _BUNDLED_BINARIES
     }
     binaries["unifideck-launcher"] = _mode_of(base / "bin" / "unifideck-launcher")
     return {
@@ -142,6 +160,11 @@ def plugin_block(plugin_dir: str | None) -> dict[str, Any]:
         "defaults_config": (base / "defaults" / "config.json").is_file(),
         "flattened_config": (base / "config.json").is_file(),
         "binaries": binaries,
+        # Two architectures, both worth having: the machine we are on and
+        # the one this install was built for. A mismatch is the single
+        # most explanatory line a bundle from an ARM device can carry.
+        "host_arch": host_arch_name(),
+        "build_arch": build_arch(base).value,
         "umu_version": _bundled_umu_version(base),
     }
 

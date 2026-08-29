@@ -16,6 +16,7 @@ A Decky Loader plugin that brings together Steam, Epic Games Store, GOG, Amazon 
 - [Getting Started](#getting-started)
 - [Documentation](#documentation)
 - [Known Limitations](#known-limitations)
+- [ARM Support](#arm-support)
 - [Troubleshooting](#troubleshooting)
 - [Languages](#languages)
 - [Building](#building)
@@ -52,12 +53,13 @@ Unifideck brings your games from other stores into Steam, so they show up in you
 - **Decky Loader** must be installed on your Steam Deck.
 - **Microsoft Edge** is required for store sign-in and Xbox Cloud Gaming. If it is missing, Unifideck will prompt you to install it.
 - All other store CLIs and helper tooling are bundled with the plugin.
+- Unifideck is published for **x86_64** and **aarch64 (64-bit ARM)**. The bundled store CLIs and Proton builds differ between them, so download the ZIP whose name ends in your device's architecture — `x86_64` for the Steam Deck and every other AMD/Intel handheld or PC, `aarch64` for ARM hardware. See [ARM support](#arm-support).
 
 [Decky Loader Installation Guide](https://github.com/SteamDeckHomebrew/decky-loader)
 
 ## Installation
 
-1. Download the latest plugin ZIP from the [Releases](https://github.com/mubaraknumann/unifideck/releases) page.
+1. Download the latest plugin ZIP for your architecture from the [Releases](https://github.com/mubaraknumann/unifideck/releases) page (`...x86_64.zip` or `...aarch64.zip` — run `uname -m` in a terminal if you are unsure).
 2. Open **Quick Access Menu** (three dots button).
 3. Navigate to **Decky** -> **Settings** (gear icon).
 4. Enable **Developer Mode** if it is not already enabled.
@@ -107,6 +109,43 @@ Installed games are playable immediately after install. The Steam restart is sti
 - **Proton version and launch options are configured through Steam's native shortcut Properties** (Compatibility tab / Launch Options field) — there is no in-plugin picker. Wrapper-style launch options and LSFG are **not yet wired up**; see the [Launch Options guide](docs/launch-options.md).
 - Not every game has SteamGridDB artwork or complete metadata.
 - For **Ubisoft**, choose your Proton version **before** installing. Changing Proton after install can invalidate the prefix and force a reinstall. See the [Ubisoft store spec](docs/ubisoft-store-spec.md) for details.
+
+## ARM Support
+
+Unifideck runs on 64-bit ARM (`aarch64`) hardware as well as on x86_64, and a
+separate ZIP is published for each. The plugin is not architecture-neutral:
+the bundled store CLIs (legendary, gogdl, nile, comet) and the Python wheels
+inside `py_modules/` are compiled per architecture, so installing the wrong ZIP
+gives you a plugin that loads and then reports every store as unavailable. The
+architecture the ZIP was built for is recorded in `bin/ARCH`, the plugin
+detects the machine it is running on, and **Settings -> Capture Logs** reports
+both — a mismatch is the first line of that report.
+
+Once the right ZIP is installed, the rest follows automatically: the in-app
+updater only offers releases built for your machine, and Unifideck fetches the
+`aarch64` GE-Proton build and umu's ARM Steam Runtime rather than the x86_64
+ones.
+
+What is different on ARM:
+
+- **Windows games run through x86 emulation** (FEX on SteamOS), on top of
+  Proton. Expect a performance cost and a wider spread of per-title results
+  than the compatibility notes here describe — those were gathered on x86_64.
+- **Microsoft Edge is x86_64-only on Flathub**, so the store sign-in flows that
+  need it and Xbox Cloud Gaming depend on an emulated Edge being available.
+  Unifideck says so in the log rather than failing silently.
+- **Native Linux GOG titles** are x86/x86_64 builds and go through the same
+  emulation as the Windows ones.
+
+To build for an architecture other than your own, pass `--arch`:
+
+```bash
+./build-plugin.sh prod --arch=aarch64
+```
+
+Nothing in the build executes a target binary, so cross-building works from
+either machine; downloads that cannot be run to validate them are verified
+against the checksums in `package.json` instead.
 
 ## Troubleshooting
 
@@ -165,6 +204,7 @@ Common flows (`build-plugin.sh`):
 - `./build-plugin.sh prod install` - build, install into Decky, and restart it.
 - `./build-plugin.sh dev` / `./build-plugin.sh dev install` - development build (build number auto-incremented).
 - `./build-plugin.sh dev quick-install` - fast rsync of backend/config to the live install, no full repackage (run `pnpm run build` first if you changed the frontend).
+- `./build-plugin.sh prod --arch=aarch64` - build for 64-bit ARM instead of this machine's architecture. See [ARM support](#arm-support).
 - `pnpm run build` / `pnpm run watch` - frontend bundle only.
 
 **Tests & checks:** `npm run test:all` (backend + frontend), `npm run test:backend`, `npm run test:coverage`, `npm run typecheck`, `npm run lint`.
