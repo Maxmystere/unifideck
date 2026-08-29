@@ -267,20 +267,23 @@ def _apply_icu_dll_overrides(env: dict[str, str], game_id: str | None) -> None:
     appends its own long default list, and battlenet may already have put
     ``locationapi=d`` here); a user's explicit ``ctx.env_overrides`` still
     wins, since that is applied afterwards.
+
+    The guard is PER DLL. It used to be a single ``"icuuc" in existing``
+    test, which was fine while the constant named one library; now that it
+    names both ``icuuc`` and ``icuin``, that test would see a user override
+    mentioning only ``icuuc`` and skip ``icuin`` along with it — exactly the
+    half-applied state that let Cyberpunk 2077 abort on ``icuin.dll``.
     """
-    from unifideck.launcher.proton.fixes.game_fixes import (
-        ICU_NATIVE_WINEDLLOVERRIDES,
-    )
+    from unifideck.launcher.proton.fixes.game_fixes import ICU_NATIVE_DLLS
     existing = env.get("WINEDLLOVERRIDES", "")
-    if "icuuc" in existing:
+    missing = [dll for dll in ICU_NATIVE_DLLS if dll not in existing]
+    if not missing:
         return
-    env["WINEDLLOVERRIDES"] = (
-        f"{existing};{ICU_NATIVE_WINEDLLOVERRIDES}"
-        if existing else ICU_NATIVE_WINEDLLOVERRIDES
-    )
+    added = ";".join(f"{dll}=n,b" for dll in missing)
+    env["WINEDLLOVERRIDES"] = f"{existing};{added}" if existing else added
     logger.info(
         "[launcher.proton.core] native-ICU title (%s): WINEDLLOVERRIDES+=%s",
-        game_id, ICU_NATIVE_WINEDLLOVERRIDES,
+        game_id, added,
     )
 
 
@@ -328,6 +331,7 @@ def _build_umu_env(
     import os
 
     from unifideck.launcher.proton.fixes.game_fixes import is_rockstar_egs
+    from unifideck.steam.window_env import build_steam_window_env
     env = dict(os.environ)
     had_ld_preload_orig = "LD_PRELOAD_ORIG" in env
     # Strip the Decky PluginLoader's PyInstaller LD_LIBRARY_PATH pollution so
@@ -378,15 +382,25 @@ def _build_umu_env(
     # one on atomic hosts.
     env.pop("STEAM_COMPAT_CLIENT_INSTALL_PATH", None)
     env["PROTON_VERB"] = "waitforexitandrun"
+    # Tell umu which Steam app this is. Without it umu defaults the identity
+    # to 0, gamescope reports ``steam app id: 0`` for the game's window and
+    # the Deck session never adopts it — the launch screen sits on top of a
+    # game that is already running. See unifideck.steam.window_env.
+    env.update(
+        build_steam_window_env(ctx.steam_app_id, log_tag="launcher.proton.core"),
+    )
     _apply_per_title_env(
         env, ctx, umu_id=umu_id, exe_name=exe_name, rockstar_egs=rockstar_egs,
     )
+    # LAST, so a user's explicit LaunchOptions env still beats everything
+    # above — including the identity block.
     env.update(ctx.env_overrides)
     logger.info(
         "[launcher.proton.core] plan ready: store=%s umu_store=%s "
-        "umu_id=%s prefix=%s proton=%s ld_preload=%r had_ld_preload_orig=%s",
+        "umu_id=%s prefix=%s proton=%s steam_app_id=%s ld_preload=%r "
+        "had_ld_preload_orig=%s",
         ctx.store, umu_store, umu_id, prefix_path, proton_tool_id,
-        env.get("LD_PRELOAD"), had_ld_preload_orig,
+        env.get("SteamAppId"), env.get("LD_PRELOAD"), had_ld_preload_orig,
     )
     return env
 

@@ -501,32 +501,16 @@ class UbisoftInstaller:
         self,
         store_game_id: str | None,
     ) -> dict[str, str]:
-        """Build steam window env."""
+        """Build steam window env.
+
+        The encoding lives in :mod:`unifideck.steam.window_env` — the game
+        launch path needs the same block, and it went years without one
+        (games launched behind Steam's loading screen as a result), so there
+        is exactly one implementation now.
+        """
+        from unifideck.steam.window_env import build_steam_window_env
+
         appid = self._shortcut_registry.resolve_shortcut_appid(
             store_game_id,
         )
-        if appid:
-            encoded = str(
-                (appid << 32) | 0x02000000,
-            )
-            logger.info(
-                "[UbisoftInstaller] Steam window env: appid=%d store_game_id=%s",
-                appid,
-                store_game_id or "<none>",
-            )
-            appid_str = str(appid)
-            return {
-                "SteamGameId": appid_str,
-                "STEAM_COMPAT_APP_ID": appid_str,
-                "SteamAppId": appid_str,
-                "UMU_STEAM_GAME_ID": encoded,
-            }
-        logger.info(
-            "[UbisoftInstaller] Steam window env: no shortcut appid resolved, using 0",
-        )
-        return {
-            "SteamGameId": "0",
-            "STEAM_COMPAT_APP_ID": "0",
-            "SteamAppId": "0",
-            "UMU_STEAM_GAME_ID": "0",
-        }
+        return build_steam_window_env(appid, log_tag="UbisoftInstaller")
